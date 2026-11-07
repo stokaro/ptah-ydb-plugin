@@ -427,3 +427,122 @@ func TestAuthoredDefaultPoolSetsWhatItNames_HappyPath(t *testing.T) {
 	c.Assert(text.Units, qt.HasLen, 1)
 	c.Assert(text.Units[0].GetSql(), qt.Equals, "ALTER RESOURCE POOL `default` SET (QUERY_MEMORY_LIMIT_PERCENT_PER_NODE = 50);")
 }
+
+// pathFixtures are authored objects the path tests declare, each by the
+// object it is and the path it takes.
+func pathFixtures(c *qt.C) map[string]*protocol.Envelope {
+	c.Helper()
+	at := func(kind, directory, name string) *protocol.Reference {
+		return &protocol.Reference{Engine: "ydb", Kind: kind, Schema: directory, Name: name}
+	}
+	secret, err := schema.CaptureSecretIntent(at(schema.SecretProperties, "ext", "pw"), &native.SecretIntent{ValueEnv: "PTAH_SECRET_PW"})
+	c.Assert(err, qt.IsNil)
+	topicIntent, err := topics.Intent(ydbdecl.Topic{})
+	c.Assert(err, qt.IsNil)
+	topic, err := schema.CaptureTopicIntent(at(schema.TopicProperties, "app", "events"), topicIntent)
+	c.Assert(err, qt.IsNil)
+	sourceIntent, err := externals.SourceIntent(ydbdecl.ExternalDataSource{SourceType: "ObjectStorage", Location: "https://example.com/bucket", AuthMethod: "NONE"})
+	c.Assert(err, qt.IsNil)
+	source, err := schema.CaptureExternalIntent(at(schema.ExternalSourceProperties, "app", "notes"), sourceIntent)
+	c.Assert(err, qt.IsNil)
+	bucket, err := schema.CaptureExternalIntent(at(schema.ExternalSourceProperties, "ext", "bucket"), sourceIntent)
+	c.Assert(err, qt.IsNil)
+	tableIntent, err := externals.TableIntent(ydbdecl.ExternalTable{DataSource: "ext/bucket", Location: "events/", Columns: []ydbdecl.ExternalColumn{{Name: "id", Type: "Uint64"}}})
+	c.Assert(err, qt.IsNil)
+	table, err := schema.CaptureExternalIntent(at(schema.ExternalTableProperties, "ext", "pw"), tableIntent)
+	c.Assert(err, qt.IsNil)
+	return map[string]*protocol.Envelope{"secret ext/pw": secret, "topic app/events": topic, "data source app/notes": source,
+		"data source ext/bucket": bucket, "external table ext/pw": table}
+}
+
+// declaredTableAt is the table the schema declares at directory/name, as the
+// host hands a declared table to planning: a key and no features.
+func declaredTableAt(directory, name string) *protocol.ValidationTable {
+	empty := func() *protocol.ComparisonState {
+		return &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}}
+	}
+	return &protocol.ValidationTable{Subject: &protocol.ComparisonIdentity{Kind: "table", Schema: testcomparison.Part(directory), Name: testcomparison.Part(name)},
+		Declaration: &protocol.DeclaredTable{Schema: directory, Name: name, PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}},
+			Features: &protocol.CapturedFeatures{Objects: empty(), Facets: empty()}}}
+}
+
+// An authored object at the path of a table the same schema declares, or at
+// the path of another authored object, is refused before anything is planned,
+// naming the object's model: YDB keeps one object at a path (`unexpected path
+// type`). Ported from the host's TestSecretDeclarations_RefusesAPathATableTakes,
+// TestTopicDeclarations_RefusesAPathATableTakes, TestRender_Topic_FailurePath
+// and TestRender_External_FailurePath.
+func TestAuthoredObjectAtATakenPath_FailurePath(t *testing.T) {
+	fixtures := pathFixtures(testcheck.New(t))
+	for _, test := range []struct {
+		name    string
+		objects []string
+		tables  []*protocol.ValidationTable
+		kind    string
+		want    string
+	}{
+		{name: "a secret at a declared table's path", objects: []string{"secret ext/pw"}, tables: []*protocol.ValidationTable{declaredTableAt("ext", "pw")},
+			kind: schema.SecretProperties, want: "authored native object conflicts with a declared table path"},
+		{name: "a topic at a declared table's path", objects: []string{"topic app/events"}, tables: []*protocol.ValidationTable{declaredTableAt("app", "events")},
+			kind: schema.TopicProperties, want: "authored native object conflicts with a declared table path"},
+		{name: "a data source at a declared table's path", objects: []string{"data source app/notes"}, tables: []*protocol.ValidationTable{declaredTableAt("app", "notes")},
+			kind: schema.ExternalSourceProperties, want: "authored native object conflicts with a declared table path"},
+		{name: "an external table at a declared secret's path", objects: []string{"secret ext/pw", "data source ext/bucket", "external table ext/pw"},
+			kind: schema.ExternalTableProperties, want: "authored native objects share or contain one scheme path"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			var values []*protocol.Envelope
+			for _, name := range test.objects {
+				values = append(values, fixtures[name])
+			}
+			request := declarationRequest(c, values...)
+			request.Capabilities["secrets"], request.Capabilities["external_data_source_secret_paths"] = true, true
+			request.Tables = test.tables
+
+			result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, 1)
+			c.Assert(result.Diagnostics[0].Problem.Kind, qt.Equals, test.kind)
+			c.Assert(result.Diagnostics[0].Problem.Message, qt.Equals, test.want)
+			c.Assert(result.Contributions, qt.HasLen, 0)
+			c.Assert(result.Declarations, qt.HasLen, 0)
+		})
+	}
+}
+
+// The control: the same objects beside a table at another path, and each on
+// its own path, are planned.
+func TestAuthoredObjectBesideATableAtAnotherPath_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	fixtures := pathFixtures(c)
+	request := declarationRequest(c, fixtures["secret ext/pw"], fixtures["topic app/events"], fixtures["data source app/notes"])
+	request.Capabilities["secrets"] = true
+	request.Tables = []*protocol.ValidationTable{declaredTableAt("app", "other")}
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Declarations, qt.HasLen, 3)
+}
+
+// A refused declaration names the object by its index in the request, not by
+// its place in the order the planner reads the objects in, which sorts them by
+// identity. Ported from the host's
+// TestWorkloadDeclarationRefusalKeepsOriginalObjectIndex.
+func TestAuthoredDeclarationRefusalNamesTheObjectsIndex_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := declarationRequest(c, declaredNode(c, "zeta", nil), declaredNode(c, "middle", nil), declaredNode(c, "alpha", &native.AccessIntent{Owner: new("user")}))
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].GetObject(), qt.Equals, uint32(2))
+	c.Assert(result.Diagnostics[0].Problem.Kind, qt.Equals, schema.CoordinationProperties)
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(result.Declarations, qt.HasLen, 0)
+}

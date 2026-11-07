@@ -136,6 +136,24 @@ func TestCoordinationComparisonCoverage(t *testing.T) {
 			r.Current = observed.Current
 			r.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
 		}, preserved: 1},
+		// Ported from the host's TestCoordinationComparisonNeedsNoTableAndRespectsEvidence.
+		{name: "unknown current subject withholds removal", mutate: func(r *protocol.CompareModelsRequest) {
+			r.Desired.Records, r.Current = nil, nodeReadSide(coordinationObserved())
+			nodeKnowledge(r.Current, protocol.ModelKnowledge_UNREPRESENTABLE)
+		}, undecided: 1},
+		{name: "unknown current subject without value", mutate: func(r *protocol.CompareModelsRequest) {
+			r.Desired.Records = nil
+			nodeKnowledge(r.Current, protocol.ModelKnowledge_UNREPRESENTABLE)
+		}, undecided: 1},
+		{name: "unknown desired subject withholds alteration", mutate: func(r *protocol.CompareModelsRequest) {
+			r.Current = nodeReadSide(&Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{ReadConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT}})
+			nodeKnowledge(r.Desired, protocol.ModelKnowledge_UNREPRESENTABLE)
+		}, undecided: 1},
+		{name: "explicit absence removes despite an incomplete source", mutate: func(r *protocol.CompareModelsRequest) {
+			r.Desired.Records, r.Current = nil, nodeReadSide(coordinationObserved())
+			r.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+			nodeKnowledge(r.Desired, protocol.ModelKnowledge_ABSENT)
+		}, changes: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

@@ -88,6 +88,17 @@ func TestReadSources_FailurePath(t *testing.T) {
 		{name: "a write", text: "SELECT 1; DELETE FROM `t`", want: `the objects a YDB query reads cannot be named from its text: a YDB statement is proved read-only only when it is one SELECT`},
 		{name: "a source hidden behind a number", text: "SELECT 1uFROM `t`", want: `.*is written against the number 1u`},
 		{name: "nothing after FROM", text: "SELECT * FROM", want: `.*: a source position holds nothing`},
+		// The rows below are ported from the host's
+		// TestValidateCheckAssertionStatically_YDB_FailurePath.
+		{name: "a file listing", text: `SELECT ListLength(Files("dir"))`, want: `the query calls FILES, whose effects cannot be proved local to the database`},
+		{name: "a file read in a join condition", text: "SELECT * FROM `t` AS a JOIN `t` AS b ON FileContent(\"secret\") = a.v",
+			want: `the query calls FILECONTENT, whose effects cannot be proved local to the database`},
+		{name: "evaluated code in a join condition", text: "SELECT * FROM `t` AS a JOIN `t` AS b ON EvaluateCode(QuoteCode(1)) = a.v",
+			want: `the query calls EVALUATECODE, whose effects cannot be proved local to the database`},
+		{name: "an external source after ANY", text: "SELECT * FROM ANY ext.`bucket/path` AS a JOIN `t` AS b ON a.id = b.id",
+			want: `.*: ext names a cluster or an external source`},
+		{name: "a join written against a number", text: "SELECT * FROM `t` AS a JOIN `t` AS b ON a.id = b.id + 0uJOIN ext.`p` AS c ON a.id = c.id",
+			want: `.*is written against the number 0u`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

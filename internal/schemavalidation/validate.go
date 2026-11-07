@@ -54,10 +54,11 @@ func Validate(ctx context.Context, request *protocol.ValidateSchemaRequest) (*pr
 	add := func(code protocol.SchemaDiagnostic_Code, kind, object, feature, format string, args ...any) {
 		result.Diagnostics = append(result.Diagnostics, &protocol.SchemaDiagnostic{Code: code, Kind: kind, Object: object, Feature: feature, Message: fmt.Sprintf(format, args...)})
 	}
-	if err := validateTables(ctx, request.Tables, request.TargetFeatures, request.Capabilities, add); err != nil {
+	tablePaths, err := validateTables(ctx, request.Tables, request.TargetFeatures, request.Capabilities, add)
+	if err != nil {
 		return nil, err
 	}
-	validateCommonObjects(request.GetCommonObjects(), add)
+	validateCommonObjects(request.GetCommonObjects(), tablePaths, add)
 	validateNamespaces(request, add)
 	validateEnums(request, add)
 	if err := validateObjects(ctx, request, add); err != nil {
@@ -77,13 +78,15 @@ type addFunc func(code protocol.SchemaDiagnostic_Code, kind, object, feature, fo
 // validateTables checks each table declaration. Where the host negotiated
 // the common wire, carried, a comment a table declares on itself, a column or
 // an index is the comment's own change: it is held to what YDB keeps in a
-// table attribute, and the table is checked without it.
-func validateTables(ctx context.Context, tables []*protocol.ValidationTable, features []string, caps map[string]bool, add addFunc) error {
+// table attribute, and the table is checked without it. It returns the path
+// of each valid table relative to its database, keyed by the database the
+// table names, with the table's name.
+func validateTables(ctx context.Context, tables []*protocol.ValidationTable, features []string, caps map[string]bool, add addFunc) (map[string]map[string]string, error) {
 	carried := slices.Contains(features, provider.CommonObjectsFeature)
 	paths := make(map[string]map[string]string)
 	for _, table := range tables {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 		name := tableName(table.GetDeclaration())
 		code := protocol.SchemaDiagnostic_INVALID_SCHEMA
@@ -127,7 +130,7 @@ func validateTables(ctx context.Context, tables []*protocol.ValidationTable, fea
 			}
 		}
 	}
-	return nil
+	return paths, nil
 }
 
 func tableName(table *protocol.DeclaredTable) string {
@@ -138,8 +141,11 @@ func tableName(table *protocol.DeclaredTable) string {
 }
 
 // validateCommonObjects checks the views a declaration holds against what a
-// YDB view can be. The SDK has refused every kind the engine does not carry.
-func validateCommonObjects(declared *protocol.DeclaredCommonObjects, add addFunc) {
+// YDB view can be, and against tablePaths, the paths of the declared tables
+// by database: YDB keeps one object at a path, so CREATE VIEW at a table's
+// path fails (`unexpected path type`). The SDK has refused every kind the
+// engine does not carry.
+func validateCommonObjects(declared *protocol.DeclaredCommonObjects, tablePaths map[string]map[string]string, add addFunc) {
 	for _, role := range declared.GetRoles() {
 		if err := commonobject.DeclaredRoleRefusal(role, declared.GetRoles()); err != nil {
 			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "role", role.GetName(), "", "%s", err)
@@ -153,6 +159,14 @@ func validateCommonObjects(declared *protocol.DeclaredCommonObjects, add addFunc
 	for _, view := range declared.GetViews() {
 		if err := commonobject.Refusal(view); err != nil {
 			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, kindView, tableName(&protocol.DeclaredTable{Schema: view.GetSchema(), Name: view.GetName()}), "", "%s", err)
+		}
+		path := commonobject.ViewPath(view)
+		for _, taken := range tablePaths {
+			if _, held := taken[path]; held {
+				add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, kindView, path, "",
+					"view %s has the path of a declared table, and YDB keeps one object at a path (`unexpected path type`)", path)
+				break
+			}
 		}
 	}
 }

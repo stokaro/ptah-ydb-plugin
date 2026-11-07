@@ -9,8 +9,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -53,6 +55,8 @@ func TestDottedLimits_HappyPath(t *testing.T) {
 		{name: "a limit with a slash keeps the topic", directory: "app", path: "events", kept: 1},
 		{name: "a limit without a dot", path: "events", drops: 1},
 		{name: "a dotted limit naming a topic the database holds", path: "app.events", roots: []string{"app.events"}, drops: 1, kept: 1},
+		// Ported from the host's TestTopicComparison_ALimitReadAsAPath.
+		{name: "a leading dot names no directory", path: ".events", roots: []string{"events"}, drops: 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -86,6 +90,17 @@ func TestDottedLimits_FailurePath(t *testing.T) {
 		c.Assert(result, qt.IsNil)
 		c.Assert(proto.Equal(request, before), qt.IsTrue)
 	})
+	// Ported from the host's
+	// TestTopicComparison_FailurePath_ADottedLimitBesideItsDirectoryForm.
+	t.Run("a topic of a nested directory", func(t *testing.T) {
+		c := testcheck.New(t)
+		request := topicRequest(c, nil, nil)
+		addObject(c, request.Current, topicReadAt(c, "a/b", "events"))
+		limited(request, schema.TopicProperties, "a", "b.events")
+		result, err := backend.New().CompareModels(c.Context(), request)
+		c.Assert(err, qt.ErrorMatches, `.*the topic limit "a/b\.events" names a/b\.events at the database root, .* Write the limit as "a/b/events" to keep that topic`)
+		c.Assert(result, qt.IsNil)
+	})
 	t.Run("a secret", func(t *testing.T) {
 		c := testcheck.New(t)
 		request := secretRequest(c, secretPresent)
@@ -104,4 +119,64 @@ func TestDottedLimits_FailurePath(t *testing.T) {
 			`Write the limit as "app/bucket" to keep that external data source`)
 		c.Assert(result, qt.IsNil)
 	})
+}
+
+// limitedAs adds what the source knows of the object of kind the path name
+// names at the database root, as a source header writes it.
+func limitedAs(request *protocol.CompareModelsRequest, kind, name string, knowledge protocol.ModelKnowledge_State) {
+	limitSubject(request.Desired, kind, "", "", name, knowledge)
+}
+
+// Ported from the host's TestTopicComparison_ADottedLimitBesideAPlannedTopic:
+// beside a dotted limit only a planned drop of the object its directory form
+// names is refused. The creation and the change of the declared topic at that
+// path are planned, and so is its drop where the source says the root topic
+// the limit names is absent rather than limiting it.
+func TestDottedLimitsBesideAPlannedTopic_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		knowledge protocol.ModelKnowledge_State
+		declared  []ydbdecl.Topic
+		read      []*native.DescribeTopicResult
+		want      []string
+	}{
+		{name: "a creation", knowledge: protocol.ModelKnowledge_UNINSPECTED, declared: []ydbdecl.Topic{{RetentionPeriod: "PT3H"}}, want: []string{"app/events ADDITIVE"}},
+		{name: "a change", knowledge: protocol.ModelKnowledge_UNINSPECTED, declared: []ydbdecl.Topic{{RetentionPeriod: "PT3H", Consumers: []ydbdecl.Consumer{{Name: "worker"}}}},
+			read: []*native.DescribeTopicResult{readTopic()},
+			want: []string{"app/events BEHAVIORAL"}},
+		{name: "an absent root topic", knowledge: protocol.ModelKnowledge_ABSENT, read: []*native.DescribeTopicResult{readTopic()}, want: []string{"app/events DESTRUCTIVE"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := topicRequest(c, nil, nil)
+			for _, spec := range test.declared {
+				addObject(c, request.Desired, topicDeclaredAt(c, "app", "events", spec))
+			}
+			for range test.read {
+				addObject(c, request.Current, topicReadAt(c, "app", "events"))
+			}
+			limitedAs(request, schema.TopicProperties, "app.events", test.knowledge)
+
+			result, err := backend.New().CompareModels(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+			c.Assert(changedPaths(result), qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// Ported from the host's TestSecretComparison_ADottedLimitBesideADeclaredSecret:
+// the declared secret app/pg.pw is created beside the limit "app.pg.pw", which
+// names a root secret the database does not hold: only a planned drop beside
+// a dotted limit is refused.
+func TestDottedLimitBesideADeclaredSecret_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := secretRequest(c, secretAbsent)
+	limited(request, schema.SecretProperties, "", "app.pg.pw")
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(changedPaths(result), qt.DeepEquals, []string{"app/pg.pw ADDITIVE"})
 }

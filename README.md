@@ -670,6 +670,19 @@ embedded engine writes it from its own:
   path when the rollback runs.
 - A changed streaming query text keeps `allow_state_reset` in the reverse,
   which resets the query's checkpoint again.
+- The reverse asks for the nearest state YDB reaches in place, and the down
+  file says what it keeps. A topic keeps the partitions the forward change
+  added, and keeps auto-partitioning, paused, once the change turned it on.
+  An async replication or a transfer keeps a credential the change added.
+  A replication failed over before the forward change dropped it is not
+  created again, since its tables stayed as ordinary tables. A reverse that
+  leaves nothing YDB can run has no statement, only its recovery limit.
+- What the forward change leaves of a replication or a transfer runs in the
+  state the change found it in, so the reverse of a paused replication's
+  connection change is an ALTER that YDB takes.
+- A change on a target without the capability its forward change needed,
+  such as `secrets` or `external_data_sources`, is not reversed: the reversal
+  refuses it, as the host's embedded engine did.
 
 The service also undoes a change of a table's own settings: a row table's
 properties, such as its TTL and its partitioning, and a column table's
@@ -2575,8 +2588,10 @@ topic or the changefeed of a table. It names the changefeed as the changefeed
 planner does, so the host creates it after a changefeed the plan adds; a
 dropped transfer names the topic by the topic's identity rather than its path,
 so the drop comes before the topic's even where the plan creates another object
-at that path. A drop of a failed-over replication runs without `CASCADE` and
-keeps its tables. The provider never pauses, resumes or fails over an object.
+at that path. A creation or a change of either object reads the secret its
+connection names by path, so the plan creates the secret first,
+and a source that drops the secret while it declares the object is refused. A
+drop of a failed-over replication runs without `CASCADE` and keeps its tables. The provider never pauses, resumes or fails over an object.
 
 A grant names a replication or a transfer by its directory and name
 (`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
@@ -2670,8 +2685,13 @@ and `database_load_cpu_threshold`, the three `*_percent_per_node` limits and
 `resource_weight` as percentages from 0 to 100; a setting left out has no
 limit, and zero is a limit. A queue needs a query limit or a load threshold
 beside it, and the pool `default` takes neither of those. A classifier names
-its pool and its rank, and its member when it matches one user or group. Each
-rule refuses with the host's words.
+its pool and its rank, and its member when it matches one user or group.
+Planning declarations without a read of the database, as `schema render` does,
+refuses a classifier whose pool the declarations neither hold nor name
+`default`: YDB takes such a classifier and runs the member's queries in
+`default` without a word. A migration keeps a classifier routing to
+a pool the plan drops, which YDB takes too. Each rule refuses with the host's
+words.
 
 A source declares the pools and classifiers it manages, not every one of the
 database, so the comparison keeps one a source leaves out, as the host does;
@@ -3411,8 +3431,8 @@ of an absent declared secret creates it. A rotation request must name a
 secret retained by the selected desired schema. An omitted secret is removed
 only when desired and current coverage establish that removal. A declaration
 that omits a secret a declared object still reads by its path is refused: YDB
-drops a secret an external data source names and keeps the source, which then
-names a secret that is gone.
+drops a secret an external data source, an async replication or a transfer
+names and keeps the object, which then names a secret that is gone.
 
 The `units.sensitive-inputs` service reports input names before approval.
 Previews and saved operations contain references only. Immediately before
@@ -3435,7 +3455,11 @@ remain unknown observations; they cannot become planned removals.
 External data source planning records its old and new secret-path
 dependencies. Creation follows its secret's creation, and a reference is
 removed before its old secret is dropped. Absolute references must resolve
-inside the selected database or dev realm.
+inside the selected database or dev realm. The creation or change of an async
+replication or a transfer reads the secret its connection names by path,
+since YDB looks the secret up when it creates the object or changes its
+connection, so it follows the secret's creation; a path outside the database
+is refused.
 
 ## Native table alteration
 

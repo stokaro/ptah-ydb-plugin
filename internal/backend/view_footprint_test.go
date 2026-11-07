@@ -105,3 +105,81 @@ func TestNodeAtThePathOfACreatedView_FailurePath(t *testing.T) {
 	c.Assert(result.Diagnostics[0].GetMessage(), qt.Matches, `.*conflicts with a common occupant at its path.*`)
 	c.Assert(result.Contributions, qt.HasLen, 0)
 }
+
+// commonViewAt is commonView for the view the host names name in directory,
+// which YDB keeps at the path directory/name.
+func commonViewAt(directory, name string) *protocol.CommonPlanningStep {
+	step := commonView(name, createView)
+	step.CommonObject.GetCreateView().View.Schema = directory
+	subject := step.Metadata.Effects[0].Subject
+	subject.Schema = testcomparison.Part(directory)
+	return step
+}
+
+// planTopicBesideView plans the creation of the topic app/events beside the
+// host's creation of the view name in directory.
+func planTopicBesideView(c *qt.C, directory, name string) (*protocol.PlanFeaturesRequest, *protocol.PlannedFeatures) {
+	c.Helper()
+	request := topicPlanRequest(map[string]bool{"topics": true, "transactional_ddl": false}, []*protocol.CommonPlanningStep{commonViewAt(directory, name)},
+		plannedTopic(c, "app", "events", "create"))
+	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.PlanningLifecycleFeature}
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	return request, result
+}
+
+// A topic created at the path of a view the run creates is refused: one path
+// holds one object. The host resolves how a view's name is spelled into its
+// directory and name before it hands the step over. Ported from the host's
+// TestYDBSharedPaths_RefusesAViewAtATopicsPath.
+func TestTopicAtThePathOfACreatedView_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+
+	_, result := planTopicBesideView(c, "app", "events")
+
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].GetMessage(), qt.Equals, "topic operation conflicts with a common occupant at its path")
+	c.Assert(result.Contributions, qt.HasLen, 0)
+}
+
+// A view whose dotted name is one path segment at the root, and one whose
+// name differs from the topic's only in case, are at paths of their own: YDB
+// paths are case-sensitive, and a dot inside a name is not a separator. The
+// topic plans beside either with no order against it. Ported from the host's
+// TestYDBSharedPaths_KeepDistinctPaths.
+func TestTopicBesideAViewAtAnotherPath_HappyPath(t *testing.T) {
+	for _, test := range []struct{ name, directory, view string }{
+		{name: "a dotted name at the root", view: "app.events"},
+		{name: "a name in another case", directory: "app", view: "Events"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			request, result := planTopicBesideView(c, test.directory, test.view)
+
+			c.Assert(result.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
+			c.Assert(result.Contributions, qt.HasLen, 1)
+			c.Assert(stepEdges(result), qt.HasLen, 0)
+		})
+	}
+}
+
+// A coordination node at app/locks plans beside a view whose dotted name
+// "app.locks" is one path segment at the root: they are two paths. The node
+// follows only the last common step, as it does beside any view. Ported from
+// the host's TestValidateSchema_YDBTakesACoordinationNodeBesideOtherObjects.
+func TestNodeBesideAViewWithADottedName_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := nativePlan(c, "create")
+	request.Changes = []*protocol.PlanningChange{createdNode(c, "node", "app", "locks")}
+	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.PlanningLifecycleFeature}
+	request.CommonSteps = []*protocol.CommonPlanningStep{commonViewAt("", "app.locks")}
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
+	c.Assert(stepEdges(result), qt.DeepEquals, []string{"view -> coordination/000000"})
+}

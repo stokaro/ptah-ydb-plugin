@@ -16,7 +16,6 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
-	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretsource"
@@ -24,6 +23,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -401,6 +401,12 @@ func coordinationValue(document *protocol.SourceDocument, fragment *protocol.Sou
 	}, nil
 }
 
+// coordinationEntry reads the owner and the settings of one declared node.
+// The settings are read and checked as a YQL declaration of the node is, so a
+// refusal says what the setting takes in the words of the host's embedded
+// engine: an empty setting, a period that is no ISO 8601 duration or not whole
+// milliseconds, a mode YDB does not take, and periods YDB would move into its
+// range.
 func coordinationEntry(entry *protocol.SourceEntry) (*protocol.Reference, schema.CoordinationIntent, error) {
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Name: entry.Key}
 	var intent schema.CoordinationIntent
@@ -408,6 +414,7 @@ func coordinationEntry(entry *protocol.SourceEntry) (*protocol.Reference, schema
 	if mapping == nil {
 		return nil, intent, fmt.Errorf("node settings require a mapping")
 	}
+	settings := make(map[string]string)
 	for _, field := range mapping.Entries {
 		value, ok := field.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
@@ -420,28 +427,33 @@ func coordinationEntry(entry *protocol.SourceEntry) (*protocol.Reference, schema
 			owner.Schema = value.Text
 		case "struct_name":
 			intent.StructName = value.Text
-		case "self_check_period", "session_grace_period":
-			period, err := declaration.CoordinationPeriod(value.Text)
-			if err != nil {
-				return nil, intent, fmt.Errorf("%s: %w", field.Key, err)
-			}
-			if field.Key == "self_check_period" {
-				intent.SelfCheckPeriodMillis = &period
-			} else {
-				intent.SessionGracePeriodMillis = &period
-			}
-		case "read_consistency_mode":
-			mode := strings.ToLower(strings.TrimSpace(value.Text))
-			intent.ReadConsistencyMode = &mode
-		case "attach_consistency_mode":
-			mode := strings.ToLower(strings.TrimSpace(value.Text))
-			intent.AttachConsistencyMode = &mode
-		case "rate_limiter_counters_mode":
-			mode := strings.ToLower(strings.TrimSpace(value.Text))
-			intent.RateLimiterCountersMode = &mode
+		case ydbdecl.SettingSelfCheckPeriod, ydbdecl.SettingSessionGracePeriod, ydbdecl.SettingReadConsistencyMode,
+			ydbdecl.SettingAttachConsistencyMode, ydbdecl.SettingRateLimiterCountersMode:
+			settings[field.Key] = value.Text
 		default:
 			return nil, intent, fmt.Errorf("unknown setting %q", field.Key)
 		}
+	}
+	spec, err := ydbdecl.ParseCoordinationNode(settings)
+	if err != nil {
+		return nil, intent, err
+	}
+	// A setting the node was given is never zero or empty: ParseCoordinationNode
+	// refuses both, so a zero value is a setting left out.
+	if spec.SelfCheckPeriodMillis != 0 {
+		intent.SelfCheckPeriodMillis = &spec.SelfCheckPeriodMillis
+	}
+	if spec.SessionGracePeriodMillis != 0 {
+		intent.SessionGracePeriodMillis = &spec.SessionGracePeriodMillis
+	}
+	if spec.ReadConsistencyMode != "" {
+		intent.ReadConsistencyMode = &spec.ReadConsistencyMode
+	}
+	if spec.AttachConsistencyMode != "" {
+		intent.AttachConsistencyMode = &spec.AttachConsistencyMode
+	}
+	if spec.RateLimiterCountersMode != "" {
+		intent.RateLimiterCountersMode = &spec.RateLimiterCountersMode
 	}
 	return owner, intent, nil
 }

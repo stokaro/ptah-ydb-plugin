@@ -144,7 +144,9 @@ func planText(c *qt.C, service string, change *protocol.ComparedChange) string {
 // the host's embedded engine does: a creation writes its items and
 // connection, a change of a paused replication's credential is an ALTER, and
 // a drop takes the replica tables along unless the replication was failed
-// over.
+// over. A replication whose state the read did not establish may still copy,
+// so its drop takes the tables along too. Each change says what it costs in
+// the host's words. Ported from the host's TestReplicationChange_Effect.
 func TestReplicationComparison_HappyPath(t *testing.T) {
 	byPassword := mirror()
 	byPassword.Connection = replication.Connection{ConnectionString: byPassword.Connection.ConnectionString, User: "replicator", PasswordSecretName: "password"}
@@ -154,16 +156,24 @@ func TestReplicationComparison_HappyPath(t *testing.T) {
 		read     *replication.ReplicationSpec
 		state    string
 		impact   protocol.ChangeSemantics_Impact
+		reason   string
 		text     string
 	}{
 		{name: "a creation", declared: new(mirror()), impact: protocol.ChangeSemantics_ADDITIVE,
-			text: "CREATE ASYNC REPLICATION `app/mirror` FOR `src/accounts` AS `replica/accounts` WITH (CONNECTION_STRING = 'grpc://localhost:2136/?database=/local', TOKEN_SECRET_NAME = 'token');"},
+			reason: "CREATE ASYNC REPLICATION adds a replication and its replica tables",
+			text:   "CREATE ASYNC REPLICATION `app/mirror` FOR `src/accounts` AS `replica/accounts` WITH (CONNECTION_STRING = 'grpc://localhost:2136/?database=/local', TOKEN_SECRET_NAME = 'token');"},
 		{name: "a paused replication's credential", declared: &byPassword, read: new(mirror()), state: replication.StatePaused, impact: protocol.ChangeSemantics_BEHAVIORAL,
-			text: "ALTER ASYNC REPLICATION `app/mirror` SET (USER = 'replicator', PASSWORD_SECRET_NAME = 'password');"},
+			reason: "ALTER ASYNC REPLICATION points the replication at another source or credential",
+			text:   "ALTER ASYNC REPLICATION `app/mirror` SET (USER = 'replicator', PASSWORD_SECRET_NAME = 'password');"},
 		{name: "a running replication dropped", read: new(mirror()), state: replication.StateRunning, impact: protocol.ChangeSemantics_DESTRUCTIVE,
-			text: "DROP ASYNC REPLICATION `app/mirror` CASCADE;"},
+			reason: "DROP ASYNC REPLICATION ... CASCADE drops the replica tables with the replication",
+			text:   "DROP ASYNC REPLICATION `app/mirror` CASCADE;"},
+		{name: "a replication of an unread state dropped", read: new(mirror()), impact: protocol.ChangeSemantics_DESTRUCTIVE,
+			reason: "DROP ASYNC REPLICATION ... CASCADE drops the replica tables with the replication",
+			text:   "DROP ASYNC REPLICATION `app/mirror` CASCADE;"},
 		{name: "a failed-over replication dropped", read: new(mirror()), state: replication.StateDone, impact: protocol.ChangeSemantics_BEHAVIORAL,
-			text: "DROP ASYNC REPLICATION `app/mirror`;"},
+			reason: "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first",
+			text:   "DROP ASYNC REPLICATION `app/mirror`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -173,6 +183,7 @@ func TestReplicationComparison_HappyPath(t *testing.T) {
 			c.Assert(result.Undecided, qt.HasLen, 0)
 			c.Assert(result.Changes, qt.HasLen, 1)
 			c.Assert(result.Changes[0].Value.ChangeSemantics.Impact, qt.Equals, test.impact)
+			c.Assert(result.Changes[0].Value.ChangeSemantics.Reason, qt.Equals, test.reason)
 			c.Assert(planText(c, replicationplan.ReplicationServiceID, result.Changes[0]), qt.Equals, test.text)
 		})
 	}
@@ -243,35 +254,57 @@ func TestReplicationComparisonLeavesAnUnkeepableOneUndecided(t *testing.T) {
 }
 
 // TestTransferComparison_HappyPath compares and plans a transfer: a lambda
-// changes in place, with both batch settings, and a drop removes the
-// consumer YDB created.
+// changes in place, with both batch settings, a batch size alone changes the
+// rows the transfer writes as a lambda does, a paused transfer's connection
+// changes in place, and a drop removes the consumer YDB created. Each change
+// says what it costs in the host's words. Ported from the host's
+// TestReplicationChange_Effect.
 func TestTransferComparison_HappyPath(t *testing.T) {
 	held := ingest()
 	held.Consumer = "6f0b8c"
 	relambda := ingest()
 	relambda.Lambda = "($m) -> { return []; }"
 	relambda.FlushInterval = "PT10S"
+	rebatched := ingest()
+	rebatched.BatchSizeBytes = 1024
+	remote := ingest()
+	remote.Connection.ConnectionString, remote.Source = "grpc://standby:2136/?database=/other", "events"
+	remoteHeld := remote
+	remoteHeld.Consumer = "6f0b8c"
+	reconnected := remote
+	reconnected.Connection.ConnectionString = "grpc://primary:2136/?database=/other"
 	for _, test := range []struct {
 		name     string
 		declared *replication.TransferSpec
 		read     *replication.TransferSpec
+		state    string
 		impact   protocol.ChangeSemantics_Impact
+		reason   string
 		text     string
 	}{
-		{name: "a creation", declared: new(ingest()), impact: protocol.ChangeSemantics_ADDITIVE,
+		{name: "a creation", declared: new(ingest()), impact: protocol.ChangeSemantics_ADDITIVE, reason: "CREATE TRANSFER adds a transfer",
 			text: "CREATE TRANSFER `app/ingest` FROM `orders/feed` TO `order_log` USING ($m) -> { return [<| id: $m._offset |>]; };"},
-		{name: "a lambda and a flush interval", declared: &relambda, read: &held, impact: protocol.ChangeSemantics_BEHAVIORAL,
-			text: "ALTER TRANSFER `app/ingest` SET USING ($m) -> { return []; }, SET (BATCH_SIZE_BYTES = 8388608, FLUSH_INTERVAL = Interval('PT10S'));"},
-		{name: "a drop", read: &held, impact: protocol.ChangeSemantics_DESTRUCTIVE, text: "DROP TRANSFER `app/ingest`;"},
+		{name: "a lambda and a flush interval", declared: &relambda, read: &held, state: replication.StateRunning, impact: protocol.ChangeSemantics_BEHAVIORAL,
+			reason: "ALTER TRANSFER changes the rows the transfer writes from each message",
+			text:   "ALTER TRANSFER `app/ingest` SET USING ($m) -> { return []; }, SET (BATCH_SIZE_BYTES = 8388608, FLUSH_INTERVAL = Interval('PT10S'));"},
+		{name: "a batch size", declared: &rebatched, read: &held, state: replication.StateRunning, impact: protocol.ChangeSemantics_BEHAVIORAL,
+			reason: "ALTER TRANSFER changes the rows the transfer writes from each message",
+			text:   "ALTER TRANSFER `app/ingest` SET (BATCH_SIZE_BYTES = 1024, FLUSH_INTERVAL = Interval('PT1M'));"},
+		{name: "a paused transfer's connection", declared: &reconnected, read: &remoteHeld, state: replication.StatePaused, impact: protocol.ChangeSemantics_BEHAVIORAL,
+			reason: "ALTER TRANSFER points the transfer at another source or credential",
+			text:   "ALTER TRANSFER `app/ingest` SET (CONNECTION_STRING = 'grpc://primary:2136/?database=/other');"},
+		{name: "a drop", read: &held, state: replication.StateRunning, impact: protocol.ChangeSemantics_DESTRUCTIVE,
+			reason: "DROP TRANSFER stops the transfer and drops the topic consumer YDB created for it, with its position in the topic", text: "DROP TRANSFER `app/ingest`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := objectRequest(c, schema.TransferProperties, replicationcompare.TransferServiceID, "ingest", declaredTransfer(c, test.declared), readTransfer(c, test.read, replication.StateRunning))
+			request := objectRequest(c, schema.TransferProperties, replicationcompare.TransferServiceID, "ingest", declaredTransfer(c, test.declared), readTransfer(c, test.read, test.state))
 			result, err := backend.New().CompareModels(t.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Undecided, qt.HasLen, 0)
 			c.Assert(result.Changes, qt.HasLen, 1)
 			c.Assert(result.Changes[0].Value.ChangeSemantics.Impact, qt.Equals, test.impact)
+			c.Assert(result.Changes[0].Value.ChangeSemantics.Reason, qt.Equals, test.reason)
 			c.Assert(planText(c, replicationplan.TransferServiceID, result.Changes[0]), qt.Equals, test.text)
 		})
 	}
@@ -476,7 +509,9 @@ func reads(planned *protocol.PlannedFeatures) []string {
 }
 
 // TestTransferPlanningReadsWhatItReads names what a transfer reads beyond its
-// own path: the table it writes, and at its source both a topic and a
+// own path: the secret its connection names by path, by the secret's identity
+// and by its path, so a plan that creates the secret creates it first; the
+// table it writes; and at its source both a topic and a
 // changefeed of a table, since only the plan knows which the path holds. The
 // changefeed is named as the changefeed planner names one, so the host orders
 // a transfer created beside its changefeed after it. A created transfer reads
@@ -484,11 +519,14 @@ func reads(planned *protocol.PlannedFeatures) []string {
 // drop is not ordered after an object the plan creates at the path once the
 // topic is gone. A source of another database is read in none of these ways.
 // Last comes the directory a creation reads above its path, or the one a drop
-// leaves room for at it.
+// leaves room for at it. Ported from the host's
+// TestReplicationPlan_ARemoteTransferReadsNoTopic.
 func TestTransferPlanningReadsWhatItReads(t *testing.T) {
 	remote := ingest()
 	remote.Connection.ConnectionString = "grpc://standby:2136/?database=/other"
 	remote.Source = "events"
+	tokenByPath := remote
+	tokenByPath.Connection.TokenSecretPath = "secrets/token" // #nosec G101 -- a secret's path, not its value
 	topic := ingest()
 	topic.Source = "app/events"
 	for _, test := range []struct {
@@ -504,6 +542,8 @@ func TestTransferPlanningReadsWhatItReads(t *testing.T) {
 			"ydb.scheme-path |||order_log READ", schema.TopicProperties + " |orders||feed READ", schema.TopicProperties + " /local|orders||feed READ", "ydb.changefeed ||orders|feed READ",
 			"ydb.scheme-directory |app||ingest CREATE"}},
 		{name: "a creation from another database", declared: &remote, want: []string{"ydb.scheme-path |||order_log READ", "ydb.scheme-directory |||app READ"}},
+		{name: "a creation from another database with a token secret named by path", declared: &tokenByPath, want: []string{
+			schema.SecretProperties + " |secrets||token READ", "ydb.scheme-path |secrets||token READ", "ydb.scheme-path |||order_log READ", "ydb.scheme-directory |||app READ"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -669,4 +709,144 @@ func TestKeptReplicationAssessment_FailurePath(t *testing.T) {
 			c.Assert(result.Diagnostics[0].Message, qt.Matches, test.wantErr)
 		})
 	}
+}
+
+// A batch that names one replication twice, which no comparison produces, is
+// refused before anything is planned, whether the two changes share a value
+// identity or not. Ported from the host's
+// TestReplicationPlan_RefusesAChangeNamedTwice.
+func TestReplicationPlanningRefusesAChangeNamedTwice_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name, secondID string
+	}{
+		{name: "under one value identity", secondID: "value"},
+		{name: "under two value identities", secondID: "second"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := objectRequest(c, schema.ReplicationProperties, replicationcompare.ReplicationServiceID, "mirror", declaredReplication(c, new(mirror())), nil)
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+			change := &protocol.PlanningChange{Subject: result.Changes[0].Subject, Value: result.Changes[0].Value}
+			second := proto.CloneOf(change)
+			second.Value.Id = test.secondID
+
+			planned, err := backend.New().PlanFeatures(c.Context(), &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature},
+				PlanningId: replicationplan.ReplicationServiceID, DatabasePath: "/local", Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
+				Capabilities: replicationCapabilities(), Changes: []*protocol.PlanningChange{change, second}})
+
+			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+			c.Assert(planned, qt.IsNil)
+		})
+	}
+}
+
+// TestReplicationPlanningRefusesWhatTheTargetLacks_FailurePath refuses,
+// before any step is planned, a replication statement the target cannot take:
+// a drop on a target without async replications, and a creation naming a
+// secret by its path on a target whose replications cannot, as 25.3. Ported
+// from the host's TestReplicationPlan_Refusals.
+func TestReplicationPlanningRefusesWhatTheTargetLacks_FailurePath(t *testing.T) {
+	byPath := mirror()
+	byPath.Connection = replication.Connection{ConnectionString: byPath.Connection.ConnectionString, TokenSecretPath: "secrets/token"} // #nosec G101 -- a secret's path, not its value
+	for _, test := range []struct {
+		name           string
+		declared, read *replication.ReplicationSpec
+		withheld       string
+		wantErr        string
+	}{
+		{name: "a drop without async replications", read: new(mirror()), withheld: replication.CapabilityReplication,
+			wantErr: `Planning a async replication requires the async_replication capability and nontransactional DDL.*`},
+		{name: "a secret path without replication secret paths", declared: &byPath, withheld: replication.CapabilitySecretPaths,
+			wantErr: `async replication app/mirror names a secret by its path requires target capability replication_secret_paths`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := objectRequest(c, schema.ReplicationProperties, replicationcompare.ReplicationServiceID, "mirror", declaredReplication(c, test.declared), readReplication(c, test.read, replication.StateRunning))
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+			capabilities := replicationCapabilities()
+			capabilities[test.withheld] = false
+
+			planned, err := backend.New().PlanFeatures(c.Context(), &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature},
+				PlanningId: replicationplan.ReplicationServiceID, DatabasePath: "/local", Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
+				Capabilities: capabilities, Changes: []*protocol.PlanningChange{{Subject: result.Changes[0].Subject, Value: result.Changes[0].Value}}})
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(planned.Contributions, qt.HasLen, 0)
+			c.Assert(planned.Diagnostics, qt.HasLen, 1)
+			c.Assert(planned.Diagnostics[0].Message, qt.Matches, test.wantErr)
+		})
+	}
+}
+
+// TestReplicationConversion_KeepsEverySetting converts a declaration into the
+// observation a read reports once it is applied, with no state, and an
+// observation back into the declaration that keeps it, without its state:
+// every setting survives both ways. Ported from the host's
+// TestReplicationConversion_KeepsEverySetting and TestConversion_KeepsTheObject.
+func TestReplicationConversion_KeepsEverySetting(t *testing.T) {
+	c := testcheck.New(t)
+	full := mirror()
+	full.ConsistencyLevel, full.CommitInterval = replication.ConsistencyGlobal, "PT5S"
+	held := ingest()
+	held.Consumer, held.BatchSizeBytes, held.FlushInterval = "c", 1024, "PT5S"
+	for _, test := range []struct {
+		name            string
+		value           *protocol.Envelope
+		from, to        protocol.ValueInput_Representation
+		wantReplication replication.ReplicationSpec
+		wantTransfer    replication.TransferSpec
+		kind            string
+	}{
+		{name: "a declared replication", value: declaredReplication(c, &full),
+			from: protocol.ValueInput_DESIRED, to: protocol.ValueInput_OBSERVED, wantReplication: full, kind: schema.ReplicationProperties},
+		{name: "a read replication", value: readReplication(c, &full, replication.StatePaused),
+			from: protocol.ValueInput_OBSERVED, to: protocol.ValueInput_DESIRED, wantReplication: full, kind: schema.ReplicationProperties},
+		{name: "a declared transfer", value: declaredTransfer(c, &held),
+			from: protocol.ValueInput_DESIRED, to: protocol.ValueInput_OBSERVED, wantTransfer: held, kind: schema.TransferProperties},
+		{name: "a read transfer", value: readTransfer(c, &held, replication.StateRunning),
+			from: protocol.ValueInput_OBSERVED, to: protocol.ValueInput_DESIRED, wantTransfer: held, kind: schema.TransferProperties},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			service := backend.New()
+			normalized, err := service.NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "v", Representation: test.from, Value: test.value}}})
+			c.Assert(err, qt.IsNil)
+
+			converted, err := service.ConvertValues(t.Context(), &protocol.ConvertValuesRequest{Engine: "ydb", From: test.from, To: test.to, Values: normalized.Values})
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(converted.Values, qt.HasLen, 1)
+			replicationSpec, transferSpec, state := convertedSpecs(c, test.kind, test.to, converted.Values[0].Value)
+			c.Assert(replicationSpec, qt.DeepEquals, test.wantReplication)
+			c.Assert(transferSpec, qt.DeepEquals, test.wantTransfer)
+			c.Assert(state, qt.Equals, "")
+		})
+	}
+}
+
+// convertedSpecs reads value, of kind in representation, as the replication or
+// the transfer it holds, and the state an observation reports; the spec of the
+// other kind is zero.
+func convertedSpecs(c *qt.C, kind string, representation protocol.ValueInput_Representation, value *protocol.Envelope) (replication.ReplicationSpec, replication.TransferSpec, string) {
+	c.Helper()
+	var replicationSpec replication.ReplicationSpec
+	var transferSpec replication.TransferSpec
+	var state string
+	var err error
+	switch {
+	case kind == schema.ReplicationProperties && representation == protocol.ValueInput_OBSERVED:
+		replicationSpec, state, err = schema.ObservedReplication(value)
+	case kind == schema.ReplicationProperties:
+		replicationSpec, err = schema.DesiredReplication(value)
+	case representation == protocol.ValueInput_OBSERVED:
+		transferSpec, state, err = schema.ObservedTransfer(value)
+	default:
+		transferSpec, err = schema.DesiredTransfer(value)
+	}
+	c.Assert(err, qt.IsNil)
+	return replicationSpec, transferSpec, state
 }

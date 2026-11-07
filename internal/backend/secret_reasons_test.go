@@ -20,6 +20,9 @@ import (
 // what it takes (gap G144). It never quotes the value a declaration wrote or
 // the variable it names, which the host's engine quoted; a name it quotes is
 // the secret's own. A key too long for a reason a host shows is left out.
+// The empty name, the unclean directory and the trailing slash are ported
+// from the host's ydbsecret TestDeclare_FailurePath and
+// TestValidateIdentity_FailurePath.
 func TestSecretSourceRefusalGivesTheReason_FailurePath(t *testing.T) {
 	// #nosec G101 -- the rows are declarations and the reasons a host prints for them, with made-up variable names, not credentials
 	tests := []struct {
@@ -38,6 +41,12 @@ func TestSecretSourceRefusalGivesTheReason_FailurePath(t *testing.T) {
 			reason: `secret "pw": invalid name: "ext/pw" holds a slash; name the directory with schema`},
 		{name: "a name that is not a path segment", secrets: `{"pw":{"name":"..","value_env":"PTAH_SECRET_PW"}}`,
 			reason: `secret "pw": invalid name: ".." is not a path segment`},
+		{name: "an empty name", secrets: `{"pw":{"name":" ","value_env":"PTAH_SECRET_PW"}}`,
+			reason: `secret "pw": invalid name: a secret needs a name`},
+		{name: "an unclean directory", secrets: `{"pw":{"schema":"ext//aws","value_env":"PTAH_SECRET_PW"}}`,
+			reason: `secret "pw": invalid schema: "ext//aws" is not a directory path relative to the database root`},
+		{name: "a directory with a trailing slash", secrets: `{"pw":{"schema":"ext/","value_env":"PTAH_SECRET_PW"}}`,
+			reason: `secret "pw": invalid schema: "ext/" is not a directory path relative to the database root`},
 		{name: "a directory written from the server root", secrets: `{"pw":{"schema":"/local/ext","value_env":"PTAH_SECRET_PW"}}`,
 			reason: `secret "pw": invalid schema: "/local/ext" starts with a slash; name the directory relative to the database root, without the database's own path`},
 		{name: "a directory outside the database", secrets: `{"pw":{"schema":"../ext","value_env":"PTAH_SECRET_PW"}}`,

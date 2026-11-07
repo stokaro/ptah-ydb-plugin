@@ -33,6 +33,9 @@ func TestAlteredTable_FailurePath(t *testing.T) {
 		"PRAGMA TablePathPrefix = \"/x\"; ALTER TABLE t ADD INDEX i GLOBAL ON (v)",
 		"ALTER TABLE a ADD COLUMN v Utf8; ALTER TABLE b ADD COLUMN v Utf8",
 		"ALTER TOPIC t ADD CONSUMER c",
+		// Ported from the host's TestStopTimedOutSchemeQuery_UnknownOutcome:
+		// a BATCH UPDATE starts no index build a timed-out run could cancel.
+		"BATCH UPDATE `t` SET v = 1",
 		"ALTER TABLE",
 		"ALTER TABLE `t ADD COLUMN v Utf8",
 	} {

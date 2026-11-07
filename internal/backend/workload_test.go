@@ -109,6 +109,11 @@ func TestWorkloadComparison_HappyPath(t *testing.T) {
 		{name: "the same classifier", kind: schema.ResourcePoolClassifierProperties, declared: map[string]proto.Message{"etl": routing("batch", 10)}, read: map[string]proto.Message{"etl": routing("batch", 10)}},
 		{name: "a classifier moved", kind: schema.ResourcePoolClassifierProperties, declared: map[string]proto.Message{"etl": routing("batch", 20)}, read: map[string]proto.Message{"etl": routing("batch", 10)},
 			changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
+		// Ported from the host's TestClassifierComparisonCapturesRoutingAndRankOperands:
+		// a pool name is case-sensitive, so routing to Pool rather than pool
+		// is a change.
+		{name: "a pool name differing in case", kind: schema.ResourcePoolClassifierProperties, declared: map[string]proto.Message{"etl": routing("Pool", 10)},
+			read: map[string]proto.Message{"etl": routing("pool", 10)}, changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -466,4 +471,91 @@ func TestWorkloadComparisonIgnoresRelations_HappyPath(t *testing.T) {
 	request.DeclaredRelations = []*protocol.ComparisonIdentity{{Kind: "table", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{},
 		Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part("items")}}
 	c.Assert(compareWorkload(c, request).Changes, qt.HasLen, 1)
+}
+
+// workloadChanges compares each request and returns every change, under an
+// ID of its own, followed by extra, as one planning request holds them.
+func workloadChanges(c *qt.C, extra []*protocol.PlanningChange, requests ...*protocol.CompareModelsRequest) []*protocol.PlanningChange {
+	c.Helper()
+	var changes []*protocol.PlanningChange
+	for _, request := range requests {
+		for _, change := range compareWorkload(c, request).Changes {
+			change.Value.Id = request.ComparisonId + "/" + change.Value.Id
+			changes = append(changes, &protocol.PlanningChange{Subject: change.Subject, Value: change.Value})
+		}
+	}
+	return append(changes, extra...)
+}
+
+// planWorkloadChanges plans changes in one request on a target with resource
+// pools.
+func planWorkloadChanges(c *qt.C, changes []*protocol.PlanningChange) (*protocol.PlanFeaturesRequest, *protocol.PlannedFeatures) {
+	c.Helper()
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: workloadplan.ServiceID,
+		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: workloadCapabilities(), Changes: changes}
+	plan, err := backend.New().PlanFeatures(c.Context(), planning)
+	c.Assert(err, qt.IsNil)
+	return planning, plan
+}
+
+// A classifier may keep routing to a pool the plan drops: YDB takes it and
+// runs the member's queries in the pool default. The drop is planned, before
+// the classifier moves. Ported from the host's
+// TestWorkloadClassifierMayKeepRoutingToARemovedPool.
+func TestWorkloadClassifierMayKeepRoutingToARemovedPool_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	dropped := workloadDrops(c, workloadRequest(c, schema.ResourcePoolProperties, nil, map[string]proto.Message{"pool": pool(workload.PoolSpec{})}))
+	moved := workloadRequest(c, schema.ResourcePoolClassifierProperties, map[string]proto.Message{"classifier": routing("pool", 30)}, map[string]proto.Message{"classifier": routing("pool", 10)})
+
+	planning, plan := planWorkloadChanges(c, workloadChanges(c, dropped, moved))
+
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, workloadCapabilities())
+	rendering.Form = protocol.RenderRequest_TEXT
+	text, err := backend.New().Render(c.Context(), rendering)
+	c.Assert(err, qt.IsNil)
+	var statements []string
+	for _, unit := range text.Units {
+		statements = append(statements, unit.GetSql())
+	}
+	c.Assert(statements, qt.DeepEquals, []string{"DROP RESOURCE POOL `pool`;", "ALTER RESOURCE POOL CLASSIFIER `classifier` SET (RESOURCE_POOL = 'pool', RANK = 30);"})
+	c.Assert(workloadEdges(plan), qt.DeepEquals, []string{"workload/000000 -> workload/000001"})
+}
+
+// A change the workload planner refuses refuses the whole call: the pool
+// creation beside it and every classifier change plan nothing, and the
+// refusal names the refused change's input. Ported from the host's
+// TestWorkloadRefusalsDiscardOtherFamiliesAndKeepInputIndexes. The host
+// planned streaming queries in the same call, which another service plans
+// here, and a change that creates or drops the pool default never reaches
+// planning here: its capture refuses it.
+func TestWorkloadRefusalDiscardsTheCallAndNamesTheInput_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	created := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"pool": pool(workload.PoolSpec{})}, nil)
+	for _, test := range []struct {
+		name    string
+		changes []*protocol.PlanningChange
+		input   uint32
+		message string
+	}{
+		{name: "two classifiers moving to one rank", changes: workloadChanges(c, nil, created, workloadRequest(c, schema.ResourcePoolClassifierProperties,
+			map[string]proto.Message{"a": routing("pool", 30), "b": routing("pool", 30)}, map[string]proto.Message{"a": routing("pool", 10), "b": routing("pool", 20)})),
+			input: 2, message: "rank 30"},
+		{name: "two classifiers read on one rank", changes: workloadChanges(c, nil, created, workloadRequest(c, schema.ResourcePoolClassifierProperties,
+			map[string]proto.Message{"a": routing("pool", 30), "b": routing("pool", 40)}, map[string]proto.Message{"a": routing("pool", 10), "b": routing("pool", 10)})),
+			input: 2, message: "rank 10"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			_, plan := planWorkloadChanges(c, test.changes)
+
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].GetChange(), qt.Equals, test.input)
+			c.Assert(plan.Diagnostics[0].Message, qt.Contains, test.message)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
+			c.Assert(plan.Changes, qt.HasLen, 0)
+		})
+	}
 }

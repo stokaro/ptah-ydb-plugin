@@ -112,3 +112,25 @@ func TestEncodeSource_GoDirectivesOfTheDocument_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+// A Go export writes each setting a node declares, a period in the ISO 8601
+// text its directive reads, a fraction of a second included, and the settings
+// in the order of the directive: the self-check period, the grace period, the
+// read, attach and counters modes. Ported from the host's ydbcoordination
+// TestAttributes_WritesTheSettingsTheSpecSets.
+func TestEncodeSource_GoWritesEveryNodeSettingInOrder_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := encodeRequest(protocol.SourceDocument_GO_ANNOTATIONS, node(c, "node", "app", "queue", schema.CoordinationIntent{
+		SelfCheckPeriodMillis: new(uint32(1500)), SessionGracePeriodMillis: new(uint32(2500)), ReadConsistencyMode: new("strict"),
+		AttachConsistencyMode: new("relaxed"), RateLimiterCountersMode: new("detailed"),
+	}))
+
+	encoded, err := backend.New().EncodeSource(provider.ContextWithHostFeatures(c.Context(), []string{provider.EntryKeysFeature, provider.EncodeGroupsFeature}), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(encoded.Losses, qt.HasLen, 0)
+	c.Assert(goLines(encoded), qt.DeepEquals, []goLine{{Directive: "ptah:schema:coordinationnode", Attributes: []string{
+		"name=queue", "schema=app", "self_check_period=PT1.5S", "session_grace_period=PT2.5S",
+		"read_consistency_mode=strict", "attach_consistency_mode=relaxed", "rate_limiter_counters_mode=detailed",
+	}}})
+}

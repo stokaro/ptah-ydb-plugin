@@ -200,6 +200,10 @@ func commentStatement(comment *protocol.ObjectComment) (ydbcomment.Statement, er
 
 // objectPath is an object's path relative to the database, as a text unit names it
 // so it runs in whatever database the migration is applied to.
+// ViewPath is the scheme path YDB keeps view at, relative to the database:
+// its directory and its name, which may hold directories of its own.
+func ViewPath(view *protocol.SQLView) string { return objectPath(view.GetSchema(), view.GetName()) }
+
 func objectPath(directory, name string) string {
 	if strings.TrimSpace(directory) == "" {
 		return name

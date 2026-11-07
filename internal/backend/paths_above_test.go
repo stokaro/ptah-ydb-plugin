@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
@@ -214,5 +215,49 @@ func TestNodeAboveADroppedNode_FailurePath(t *testing.T) {
 
 	c.Assert(result.Diagnostics, qt.HasLen, 1)
 	c.Assert(result.Diagnostics[0].GetMessage(), qt.Matches, "this plan drops app/occupied/lock and creates an object at app/occupied, which is a directory in the database. .*")
+	c.Assert(result.Contributions, qt.HasLen, 0)
+}
+
+// planStreaming plans the change of the streaming query at directory/copy
+// from before to after beside the host's steps common.
+func planStreaming(c *qt.C, directory string, before, after *streaming.Spec, common []*protocol.CommonPlanningStep) (*protocol.PlanFeaturesRequest, *protocol.PlannedFeatures) {
+	c.Helper()
+	request := streamingPlanRequestAt(c, directory, "copy", before, after, false)
+	request.CommonSteps = common
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	return request, result
+}
+
+// A streaming query created below two paths the plan drops follows both
+// drops, since YDB needs every path above an object to be a directory, as a
+// coordination node does. Ported from the host's
+// TestStandalonePlan_CreationFollowsADropAbove.
+func TestStreamingQueryBelowDroppedPathsFollowsTheDrops_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	common := []*protocol.CommonPlanningStep{commonAt("table", "", "app", protocol.PlanningEffect_DROP), commonAt("table", "app", "ext", protocol.PlanningEffect_DROP)}
+
+	request, result := planStreaming(c, "app/ext", nil, &streaming.Spec{Text: "SELECT 1;"}, common)
+
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
+	created := result.Changes[0].Steps[0].GetName()
+	c.Assert(stepEdges(result), qt.DeepEquals, []string{"drop table /app -> " + created, "drop table app/ext -> " + created})
+}
+
+// A streaming query dropped below two paths the plan creates objects at is
+// refused, as a coordination node's drop is: YDB keeps the directory after
+// its last object goes, so no order lets the creations run. The host's
+// embedded engine ordered the drop first and the creations after it, which
+// YDB then refused. Ported from the host's
+// TestStandalonePlan_DropPrecedesACreationAbove.
+func TestStreamingQueryDroppedBelowCreatedPaths_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	common := []*protocol.CommonPlanningStep{commonAt("table", "", "app", protocol.PlanningEffect_CREATE), commonAt("table", "app", "ext", protocol.PlanningEffect_CREATE)}
+
+	_, result := planStreaming(c, "app/ext", &streaming.Spec{Text: "SELECT 1;"}, nil, common)
+
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].GetMessage(), qt.Matches, "this plan drops app/ext/copy and creates an object at app(/ext)?, which is a directory in the database. .*")
 	c.Assert(result.Contributions, qt.HasLen, 0)
 }

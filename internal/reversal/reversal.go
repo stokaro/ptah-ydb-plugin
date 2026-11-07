@@ -19,9 +19,13 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -32,6 +36,17 @@ const ServiceID = "ydb-objects"
 // ChangeKinds lists the change kinds the service undoes.
 func ChangeKinds() []string {
 	return slices.Sorted(slices.Values(append(schema.ReversibleObjectChanges(), schema.ReversibleTableChanges()...)))
+}
+
+// capabilities names the target capability the reverse of each object change
+// needs, the one its forward change needed: the host's embedded engine
+// refused to reverse a change on a target without it.
+var capabilities = map[string]string{
+	schema.CoordinationChange: "coordination_nodes", schema.SecretChange: secrets.Capability, schema.TopicChange: topics.CapabilityTopics,
+	schema.StreamingQueryChange: streaming.Capability, schema.ExternalSourceChange: externals.CapabilityExternalDataSources,
+	schema.ExternalTableChange: externals.CapabilityExternalDataSources, schema.ResourcePoolChange: workload.CapabilityResourcePools,
+	schema.ResourcePoolClassifierChange: workload.CapabilityResourcePools, schema.ReplicationChange: replication.CapabilityReplication,
+	schema.TransferChange: replication.CapabilityTransfers,
 }
 
 // workloadLimitation is what restoring a resource pool or a classifier
@@ -46,6 +61,13 @@ func Reverse(ctx context.Context, request *protocol.ReverseChangesRequest, obser
 	access := schema.NativeAccess
 	if slices.Contains(request.GetTargetFeatures(), provider.CommonAccessFeature) {
 		access = schema.CommonAccess
+	}
+	for _, change := range request.GetChanges() {
+		if key, needed := capabilities[change.GetValue().GetValue().GetKind()]; needed && !request.GetCapabilities()[key] {
+			owner := change.GetValue().GetValue().GetOwner()
+			return nil, authored.New(fmt.Sprintf("the change of %s cannot be reversed: reversing it requires target capability %s, unavailable on this ydb target",
+				path.Join(owner.GetSchema(), owner.GetName()), key))
+		}
 	}
 	result := &protocol.ReversedChanges{Complete: true}
 	for _, change := range request.GetChanges() {
@@ -146,10 +168,12 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 		result.Strategy, _ = lifecycle(created, dropped, "remove the created resource pool classifier", "recreate the removed resource pool classifier",
 			"restore captured resource pool classifier settings")
 		result.Limitations = []string{workloadLimitation}
-	case schema.ReplicationChange:
-		describeReplication(result, created, dropped, name)
-	case schema.TransferChange:
-		describeTransfer(result, created, dropped, name)
+	case schema.ReplicationChange, schema.TransferChange:
+		describeReplicated := map[string]func(*protocol.ReversedChange, schema.Reversed, string) error{
+			schema.ReplicationChange: describeReplication, schema.TransferChange: describeTransfer}[change.GetKind()]
+		if err := describeReplicated(result, reversed, name); err != nil {
+			return nil, err
+		}
 	case schema.TablePropertiesChange, schema.ColumnStorageChange:
 		if reversed.Kind == schema.IndexSettingsProperties {
 			limitations, err := indexSettingsLimitations(reversed)
@@ -194,31 +218,81 @@ func describeTopic(result *protocol.ReversedChange, change *protocol.Envelope, c
 
 // describeReplication describes the reversal of an async replication change:
 // a created replication is dropped with its replica tables, a dropped one is
-// created again and copies its source from the start.
-func describeReplication(result *protocol.ReversedChange, created, dropped bool, name string) {
+// created again and copies its source from the start, and one failed over
+// before the change dropped it stays dropped, since its tables stayed as
+// ordinary tables. A credential the change added stays.
+func describeReplication(result *protocol.ReversedChange, reversed schema.Reversed, name string) error {
+	created, dropped := reversed.Before == nil, reversed.After == nil
 	result.Strategy, _ = lifecycle(created, dropped, "drop the created replication with its replica tables", "create the dropped replication again with its connection and items",
 		"restore the replication's connection and credential in place")
-	switch {
-	case created:
+	if created {
 		result.Limitations = []string{fmt.Sprintf("dropping async replication %s drops the replica tables it created, with every row it copied", name)}
+		return nil
+	}
+	held, state, err := schema.ObservedReplication(reversed.Before)
+	if err != nil {
+		return err
+	}
+	switch {
+	case dropped && reversed.Value == nil:
+		result.Strategy = "leave the failed-over replication dropped"
+		result.Limitations = []string{fmt.Sprintf("async replication %s was failed over before it was dropped, so it is not created again: "+
+			"it replicated nothing more, and its tables stayed as ordinary tables", name)}
 	case dropped:
 		result.Limitations = []string{fmt.Sprintf("the replica tables async replication %s dropped are created again empty, and the replication copies its source again from the start", name)}
+		if state == replication.StatePaused {
+			result.Limitations = append(result.Limitations, fmt.Sprintf("async replication %s was paused when it was dropped, and runs once it is created again", name))
+		}
+	default:
+		declared, err := schema.DesiredReplication(reversed.After)
+		if err != nil {
+			return err
+		}
+		if replication.RollbackConnection(held.Connection, declared.Connection) != held.Connection {
+			result.Limitations = []string{fmt.Sprintf("the credential the change gave async replication %s stays, since YDB has no statement that takes a credential away", name)}
+		}
 	}
+	return nil
 }
 
 // describeTransfer describes the reversal of a transfer change: the rows a
-// created transfer wrote stay, and a dropped one created again does not resume
-// from its consumer's position.
-func describeTransfer(result *protocol.ReversedChange, created, dropped bool, name string) {
+// transfer wrote stay whatever its reverse does, the consumer YDB created for
+// a created transfer goes with it, and a dropped one created again does not
+// resume from its consumer's position. A credential the change added stays.
+func describeTransfer(result *protocol.ReversedChange, reversed schema.Reversed, name string) error {
+	created, dropped := reversed.Before == nil, reversed.After == nil
 	result.Strategy, _ = lifecycle(created, dropped, "drop the created transfer", "create the dropped transfer again with its lambda and settings",
 		"restore the transfer's lambda, batch settings and connection in place")
+	var held, declared replication.TransferSpec
+	var err error
+	if !created {
+		if held, _, err = schema.ObservedTransfer(reversed.Before); err != nil {
+			return err
+		}
+	}
+	if !dropped {
+		if declared, err = schema.DesiredTransfer(reversed.After); err != nil {
+			return err
+		}
+	}
 	switch {
 	case created:
-		result.Limitations = []string{fmt.Sprintf("the rows transfer %s wrote into its target table stay", name)}
+		result.Limitations = []string{fmt.Sprintf("the rows transfer %s wrote into table %s stay", name, declared.Target)}
+		if declared.Consumer == "" {
+			result.Limitations = append(result.Limitations, fmt.Sprintf("dropping transfer %s drops the consumer YDB created for it, with its position in topic %s", name, declared.Source))
+		}
 	case dropped:
-		result.Limitations = []string{fmt.Sprintf("dropping transfer %s removed the consumer YDB created for it, if it had one, with its position in its source topic; "+
-			"the transfer created again does not resume from it", name)}
+		result.Limitations = []string{fmt.Sprintf("dropping transfer %s removed the consumer YDB created for it, if it had one, with its position in topic %s; "+
+			"the transfer created again does not resume from it", name, held.Source)}
+	default:
+		if replication.CompareTransfer(declared, held).Lambda {
+			result.Limitations = append(result.Limitations, fmt.Sprintf("the rows transfer %s wrote with the changed lambda stay as written", name))
+		}
+		if replication.RollbackConnection(held.Connection, declared.Connection) != held.Connection {
+			result.Limitations = append(result.Limitations, fmt.Sprintf("the credential the change gave transfer %s stays, since YDB has no statement that takes a credential away", name))
+		}
 	}
+	return nil
 }
 
 // describeSecret sets the strategy and the limitations of a secret's reverse

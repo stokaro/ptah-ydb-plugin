@@ -195,6 +195,19 @@ func HasCredentials(connection Connection) bool {
 		connection.User != "" || connection.PasswordSecretName != "" || connection.PasswordSecretPath != ""
 }
 
+// RollbackConnection is the connection a rollback of a change from before to
+// after reaches in place: before, with after's credential where before holds
+// none and after holds one, since YDB has no statement that takes a
+// credential away.
+func RollbackConnection(before, after Connection) Connection {
+	if HasCredentials(before) || !HasCredentials(after) {
+		return before
+	}
+	kept := after
+	kept.ConnectionString = before.ConnectionString
+	return kept
+}
+
 // CanonicalConnectionString writes a connection string as YDB reads it back,
 // or returns it unchanged where it does not parse.
 func CanonicalConnectionString(text string) string {
