@@ -410,16 +410,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, table)
 	keepHeldComments(request, table.GetCurrent())
-	// YDB refuses a new table that stores external blobs (`Setting
-	// store_external_blobs to ENABLED is not allowed`), measured on 25.1.4.7
-	// and 26.2.1.14, so a rebuild cannot keep them.
-	if request.GetStorageSettings().GetStoreExternalBlobs() == Ydb.FeatureFlag_ENABLED {
-		return nil, subject + ": the table stores external blobs, which YDB does not let a new table do " +
-			"(`Setting store_external_blobs to ENABLED is not allowed`), so the new table would drop them; change the table by hand", nil
-	}
-	// A cache mode the old table holds is written into the new table too, so
-	// the target must take one.
-	if reason := creationCacheModeRefusal(subject+" with column family cache mode", request, capabilities); reason != "" {
+	if reason := rebuiltTableRefusal(subject, request, capabilities); reason != "" {
 		return nil, reason, nil
 	}
 	indexSettings, reason, err := rebuiltIndexSettings(owner, request, table, steps, changes)
@@ -920,6 +911,20 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	keepHeldStorage(request, held)
 	families := keepHeldFamilies(request, held)
 	keepHeldPlacements(request, table, families)
+}
+
+// rebuiltTableRefusal is why the new table of a rebuild, request with what
+// the old table holds, cannot be created, or "". YDB refuses a new table that
+// stores external blobs (`Setting store_external_blobs to ENABLED is not
+// allowed`), measured on 25.1.4.7 and 26.2.1.14, so a rebuild cannot keep
+// them; and a cache mode the old table holds is written into the new table
+// too, so the target must take one.
+func rebuiltTableRefusal(subject string, request *Ydb_Table.CreateTableRequest, capabilities map[string]bool) string {
+	if request.GetStorageSettings().GetStoreExternalBlobs() == Ydb.FeatureFlag_ENABLED {
+		return subject + ": the table stores external blobs, which YDB does not let a new table do " +
+			"(`Setting store_external_blobs to ENABLED is not allowed`), so the new table would drop them; change the table by hand"
+	}
+	return creationCacheModeRefusal(subject+" with column family cache mode", request, capabilities)
 }
 
 // keepHeldStorage gives the new table of a rebuild each storage setting the
