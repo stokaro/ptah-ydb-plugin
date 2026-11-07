@@ -4260,7 +4260,9 @@ requested key columns and then of the primary key columns the request leaves
 out, so the order is total, and resumes after the last row of a page through
 its token. YDB orders a null first, and the cursor steps past nulls and equal
 keys. A page holds at most the requested rows and 3 MiB. A missing table is a
-complete page that says so.
+complete page that says so. A Decimal value with more digits than its
+precision, which is how YDB stores infinity and NaN, fails the read rather than
+being returned as digits the column never held.
 
 A seed file runs as the queries YQL reads it into, in one serializable
 transaction with its ledger row, so the file and its row commit together or not

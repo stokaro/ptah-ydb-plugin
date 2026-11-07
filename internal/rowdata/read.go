@@ -190,6 +190,11 @@ func Scanned(ydbType string, value any) (*protocol.DataValue, error) {
 		return Null(), nil
 	}
 	kind := Kind(ydbType)
+	if decimal, ok := value.(scannedDecimal); ok && kind == protocol.DataKind_DATA_KIND_DECIMAL {
+		if err := finiteDecimal(decimal); err != nil {
+			return nil, err
+		}
+	}
 	scanned, ok := scannedNumberOrFlag(kind, value)
 	if !ok {
 		scanned, ok = scannedTextOrTime(ydbType, kind, value)
@@ -198,6 +203,18 @@ func Scanned(ydbType string, value any) (*protocol.DataValue, error) {
 		return scanned, nil
 	}
 	return nil, fmt.Errorf("the driver returned a Go %T for a %s column", value, ydbType)
+}
+
+// finiteDecimal refuses a scanned Decimal whose unscaled value has more digits
+// than its precision. No finite Decimal(p,s) holds one: YDB stores infinity
+// and NaN as such a value (10^35 and beyond), and read as digits it would be
+// a finite number the column never held, as the host's reader refused it.
+func finiteDecimal(decimal scannedDecimal) error {
+	bytes, precision, scale := decimal.Decimal()
+	if digits := new(big.Int).Abs(twosComplement(bytes)).String(); len(digits) > int(precision) {
+		return fmt.Errorf("read a Decimal(%d,%d) value that is not a finite number", precision, scale)
+	}
+	return nil
 }
 
 // scannedNumberOrFlag is the neutral value of a scanned integer, flag, double
