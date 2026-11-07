@@ -1,0 +1,4 @@
+# Draft only: TestHostScopesAClassifierBesideItsHeldPool_HappyPath needs
+# stokaro/ptah#5782, which this branch of the host carries. Remove this file
+# before marking the PR ready.
+fix/4204-g227-scope-requirements
