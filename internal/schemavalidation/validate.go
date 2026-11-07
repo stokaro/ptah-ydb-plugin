@@ -9,7 +9,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"path"
 	"slices"
 	"strings"
 
@@ -222,8 +221,17 @@ func validateObjects(ctx context.Context, request *protocol.ValidateSchemaReques
 			// The refusal names the secret by its path, as the secret's other
 			// refusals do: two directories may hold secrets of one name.
 			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "secrets", "secret %s requires the unavailable target capability secrets%s",
-				path.Join(record.GetSubject().GetSchema().GetSource(), object), featureflags.Clause("secrets"))
+				secretPath(record.GetSubject().GetSchema().GetSource(), object), featureflags.Clause("secrets"))
 		}
 	}
 	return nil
+}
+
+// secretPath writes a secret's directory and name as the one path its
+// statements name.
+func secretPath(directory, name string) string {
+	if directory == "" {
+		return name
+	}
+	return directory + "/" + name
 }
