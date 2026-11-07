@@ -156,13 +156,13 @@ func TestCompileRefusesWhatYDBCannotHold_FailurePath(t *testing.T) {
 		want    string
 	}{
 		{"a type YDB has none of", []*protocol.DeclaredColumn{{Name: "at", Type: "TIME", Nullable: true}},
-			`TIME has no YDB counterpart: YDB has no time-of-day type`},
+			`column "at" of table "app/records": TIME has no YDB counterpart: YDB has no time-of-day type`},
 		{"a collation", []*protocol.DeclaredColumn{{Name: "n", Type: "TEXT", Nullable: true, Collation: "C"}},
 			`YDB table creation does not support ptah.provider.experimental.DeclaredColumn.collation`},
 		{"a NULL default on a NOT NULL column", []*protocol.DeclaredColumn{{Name: "n", Type: "TEXT", DefaultSet: true, DefaultValue: "NULL"}},
 			`the column is NOT NULL and its default is NULL`},
 		{"a half-precision vector", []*protocol.DeclaredColumn{{Name: "emb", Type: "halfvec(3)", Nullable: true}},
-			`halfvec\(3\) has no YDB counterpart: YDB has no half-precision vector; .*`},
+			`column "emb" of table "app/records": halfvec\(3\) has no YDB counterpart: YDB has no half-precision vector; .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

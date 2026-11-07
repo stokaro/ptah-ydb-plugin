@@ -250,11 +250,11 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	// is left out, and the column takes the type that holds the values, as
 	// the host's built-in engine creates it: YDB has no length-limited string,
 	// so Utf8 is the only column a VARCHAR declaration can have.
+	subject := fmt.Sprintf("column %q of table %q", column.Name, table)
 	mapping, err := ydbtype.Map(column.Type, ydbtype.Capabilities(caps))
 	if err != nil {
-		return nil, unsupported("%s", err)
+		return nil, unsupported("%s: %s", subject, err)
 	}
-	subject := fmt.Sprintf("column %q of table %q", column.Name, table)
 	stored, sequence, err := serialColumn(subject, column, mapping, caps)
 	if err != nil {
 		return nil, err

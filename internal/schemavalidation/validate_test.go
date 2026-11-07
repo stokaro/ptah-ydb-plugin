@@ -115,12 +115,12 @@ func TestValidateSchema_Diagnostics(t *testing.T) {
 			protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "hollow", `YDB table creation requires columns`},
 		{"unknown type", func() *protocol.ValidateSchemaRequest {
 			return newRequest(table("", "typed", column("id", "Uint64", true), column("b", "Wibble", false)))
-		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "typed", `Wibble has no YDB counterpart: YDB has no type of that name`},
+		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "typed", `column "b" of table "typed": Wibble has no YDB counterpart: YDB has no type of that name`},
 		// Ported from the host's TestValidateSchema_YDB: a type YDB has no
 		// counterpart for is refused with the reason.
 		{"a time of day", func() *protocol.ValidateSchemaRequest {
 			return newRequest(table("", "timed", column("id", "Uint64", true), column("at", "TIME", false)))
-		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "timed", `TIME has no YDB counterpart: YDB has no time-of-day type`},
+		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "timed", `column "at" of table "timed": TIME has no YDB counterpart: YDB has no time-of-day type`},
 		{"key names no column", func() *protocol.ValidateSchemaRequest {
 			misdirected := keyed("", "misdirected")
 			misdirected.Declaration.PrimaryKey = []string{"nope"}

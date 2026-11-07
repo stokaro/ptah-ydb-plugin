@@ -98,7 +98,7 @@ func TestCompileSerialColumn_FailurePath(t *testing.T) {
 		{name: "an auto-increment column without Serial columns", id: &protocol.DeclaredColumn{Type: "BIGINT", AutoIncrement: true},
 			want: `column "id" of table "app/records" increments itself, which requires target capability serial_columns, unavailable on this ydb target`},
 		{name: "a Serial type without Serial columns", id: &protocol.DeclaredColumn{Type: "BIGSERIAL"},
-			want: `BIGSERIAL requires target capability serial_columns: this target has no Serial column type`},
+			want: `column "id" of table "app/records": BIGSERIAL requires target capability serial_columns: this target has no Serial column type`},
 		{name: "GENERATED ALWAYS", id: &protocol.DeclaredColumn{Type: "BIGINT", IdentityGeneration: "ALWAYS"}, caps: serialCapabilities(),
 			want: `column "id" of table "app/records": GENERATED ALWAYS refuses an explicit value, and a YDB Serial takes one`},
 		{name: "identity options", id: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityOptions: "MINVALUE 5"}, caps: serialCapabilities(),
