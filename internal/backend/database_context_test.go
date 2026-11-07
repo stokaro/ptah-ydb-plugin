@@ -189,3 +189,44 @@ func TestDatabaseContextRefusalSaysWhatTheAddressLacks_FailurePath(t *testing.T)
 		})
 	}
 }
+
+// A dev database spec names the database local-ydb serves, before anything
+// starts, so a comparison of two documents with a Docker dev URL reads their
+// relative paths under /local, as the host's embedded engine read them. Ported
+// from the Docker rows of the host's TestSetDiffRoot_HappyPath,
+// TestSourceRoot_HappyPath and TestYQLPrivilegeDatabaseContext.
+func TestDatabaseContextOfADevDatabaseSpec_HappyPath(t *testing.T) {
+	for _, address := range []string{"docker://ydb", "docker://ydb/26.2.1.14", "docker://ydb/26.2.1.14/local", "docker+ydb://_/ydbplatform/local-ydb:25.1.4.7/local"} {
+		t.Run(address, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().ResolveDatabaseContext(c.Context(), &protocol.DatabaseContextRequest{Engine: "ydb", Address: address})
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.GetDatabase(), qt.Equals, "/local")
+			c.Assert(result.GetSourceDatabase(), qt.Equals, "/local")
+		})
+	}
+}
+
+// A spec that names another database, or a database by a parameter, names
+// none local-ydb serves, and is refused with what it gets wrong. Ported from
+// the host's TestSetDiffRoot_FailurePath and the Docker rows of
+// TestYQLPrivilegeInvalidDatabaseContext.
+func TestDatabaseContextOfADevDatabaseSpec_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		address, reason string
+	}{
+		{address: "docker://ydb?database=/other", reason: `the dev database spec names no YDB database: docker parameter "database" would point the connection away from the container this spec provisions; remove it`},
+		{address: "docker://ydb/26.2.1.14/other", reason: "the dev database spec names no YDB database: the database is not one the ydbplatform/local-ydb image serves: name local"},
+	} {
+		t.Run(test.address, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().ResolveDatabaseContext(c.Context(), &protocol.DatabaseContextRequest{Engine: "ydb", Address: test.address})
+
+			c.Assert(err, qt.ErrorMatches, `rpc error: code = InvalidArgument desc = `+regexp.QuoteMeta(test.reason))
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}

@@ -129,3 +129,23 @@ func TestHostCompatMigrateDiffOnADockerDevDatabase_HappyPath(t *testing.T) {
 func leftContainers(before, after []string) []string {
 	return slices.DeleteFunc(slices.Clone(after), func(container string) bool { return slices.Contains(before, container) })
 }
+
+// A comparison of two files with a Docker dev URL reads both under the
+// database the spec names, /local, before anything starts, and writes the
+// difference, as the host's embedded engine did (measured with ptah-compat at
+// host 74de0b65b). The provider refused the spec as no YDB address. Ported from
+// the Docker rows of the host's TestSetDiffRoot_HappyPath and
+// TestSourceRoot_HappyPath.
+func TestHostCompatDiffsTwoFilesWithADockerDevURL_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	dir := c.TempDir()
+	from := "file://" + compatFile(c, dir, "from.sql", "CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY (id));\n")
+	to := "file://" + compatFile(c, dir, "to.sql", "CREATE TABLE `shop/orders` (id Uint64 NOT NULL, note Utf8, PRIMARY KEY (id));\n")
+
+	for _, devURL := range []string{"docker://ydb", "docker://ydb/" + devImageTag + "/local"} {
+		diffed, notes, exit := runCompat(c, nil, "schema", "diff", "--from", from, "--to", to, "--dev-url", devURL)
+
+		c.Assert(exit, qt.Equals, 0, qt.Commentf("%s: %s\n%s", devURL, diffed, notes))
+		c.Assert(diffed, qt.Contains, "ALTER TABLE `shop/orders` ADD COLUMN `note` Utf8;", qt.Commentf("%s", devURL))
+	}
+}
