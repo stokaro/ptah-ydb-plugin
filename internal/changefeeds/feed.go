@@ -154,6 +154,19 @@ func replication(attributes map[string]string) (bool, error) {
 	return read != nil, err
 }
 
+// ReplicaPath is the absolute path of the replica table an asynchronous
+// replication writes from the changefeed with attributes, or "" for a
+// changefeed no replication controls or whose binding Ptah does not read. A
+// replication lives in the database of its replicas, so the path says which
+// database holds the replication that reads the changefeed's table.
+func ReplicaPath(attributes map[string]string) string {
+	read, err := bindingOf(attributes)
+	if err != nil || read == nil {
+		return ""
+	}
+	return read.Path
+}
+
 // binding is the replication binding a controller writes on a stream: the
 // replica table's absolute path, the target item's number and whether the
 // replica takes an auto-partitioned topic.

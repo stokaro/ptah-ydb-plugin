@@ -14,11 +14,13 @@ import (
 
 // assessReplications gives every replication of the assigned context a
 // receipt, the steps of its change where it has one, and refuses a plan
-// whose tables would reach a table a replication the plan keeps owns: a
-// table created at the path of a live replica, which YDB keeps read-only
-// while the replication runs, and a failed-over replica dropped while the
-// schema keeps the replication that made it. A read leaves a live replica
-// out of the tables, so only this assessment sees such a table.
+// whose tables would reach a table a replication the plan keeps owns or
+// reads: a table created at the path of a live replica, which YDB keeps
+// read-only while the replication runs, a failed-over replica dropped while
+// the schema keeps the replication that made it, and a table the replication
+// reads in this database, which YDB drops and leaves the replication failing.
+// A read leaves a live replica out of the tables, so only this assessment
+// sees such a table.
 func assessReplications(ctx context.Context, request *protocol.PlanFeaturesRequest, result *protocol.PlannedFeatures) (*protocol.PlannedFeatures, error) {
 	for index, subject := range provider.PlanningObjectSubjects(request) {
 		if err := ctx.Err(); err != nil {
@@ -47,7 +49,11 @@ func assessReplications(ctx context.Context, request *protocol.PlanFeaturesReque
 
 // keptReplicaRefusal says why the plan's tables break the replication
 // subject names, as it holds it now, or "". A replication the plan drops is
-// the drop's to refuse.
+// the drop's to refuse, and one that drops the table the replication reads
+// drops the replication first, with CASCADE. A table the replication reads
+// is refused only here: the table planner reads the stream a replication
+// reads the table through, and leaves a replication of this database to this
+// assessment.
 func keptReplicaRefusal(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity) (string, error) {
 	current := record(request.GetCurrentObjects(), subject)
 	if current == nil || dropped(request, subject) {
@@ -62,8 +68,14 @@ func keptReplicaRefusal(request *protocol.PlanFeaturesRequest, subject *protocol
 		name = directory + "/" + name
 	}
 	targets := replication.Targets(spec)
+	sources := localSources(request.GetDatabasePath(), spec)
 	for _, table := range request.GetTables() {
 		tablePath := tablePath(table.Subject)
+		if table.GetAction() == protocol.PlanningTable_DROP && replication.UnderTarget(tablePath, sources) {
+			return fmt.Sprintf("table %s: async replication %s reads it through a changefeed its controller manages, and the "+
+				"schema keeps the replication; YDB drops the table and leaves the replication failing (`Discovery for all "+
+				"topics failed`); drop the replication in the same plan, or keep the table", tablePath, name), nil
+		}
 		if !replication.UnderTarget(tablePath, targets) {
 			continue
 		}
@@ -114,4 +126,15 @@ func sameObject(a, b *protocol.ComparisonIdentity) bool {
 	a, b = proto.CloneOf(a), proto.CloneOf(b)
 	a.Database, b.Database = &protocol.ComparisonPart{}, &protocol.ComparisonPart{}
 	return provider.CompareIdentities(a, b) == 0
+}
+
+// localSources lists the paths below root that spec reads, relative to root:
+// the tables that hold the changefeeds the replication reads. A replication
+// of another database reads none.
+func localSources(root string, spec replication.ReplicationSpec) []string {
+	var sources []string
+	for _, effect := range sourcePaths(root, spec) {
+		sources = append(sources, replication.TablePath(effect.Schema, effect.Name))
+	}
+	return sources
 }

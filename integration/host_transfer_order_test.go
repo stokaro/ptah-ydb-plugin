@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"testing"
@@ -56,6 +57,42 @@ func TestHostCreatesAReplicationAfterItsSourceTable_HappyPath(t *testing.T) {
 	removed, err := hostApplySource(c, directory, "yaml", "tables: {}\nasync_replications: {}\n")
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", removed))
 	c.Assert(operationOrder(removed), qt.DeepEquals, []string{"async-replication-operation " + qualified("mirror"), "table-drop-operation " + qualified("src")}, qt.Commentf("%s", removed))
+	awaitNames(c, opened, path.Join(database, directory), nil)
+}
+
+// The host refuses a schema that drops the table an async replication reads
+// and keeps the replication: YDB would drop the table and leave the
+// replication failing (`Discovery for all topics failed`), measured on
+// 25.1.4.7 and 26.2.1.14, and the host's embedded engine refused it. Nothing
+// runs, and a later schema that drops both drops the replication first.
+func TestHostRefusesToDropATableAKeptReplicationReads_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	absolute := func(name string) string { return path.Join(database, directory, name) }
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		for _, statement := range []string{"DROP ASYNC REPLICATION `" + absolute("mirror") + "` CASCADE", "DROP TABLE `" + absolute("rep") + "`", "DROP TABLE `" + absolute("src") + "`"} {
+			_ = execFixtureSchema(cleanup, opened.DB, statement)
+		}
+	})
+	source := "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n"
+	kept := "async_replications:\n  mirror:\n    schema: " + directory + "\n    connection_string: " + strconv.Quote(selfConnection(c, opened)) +
+		"\n    items:\n      - source: " + absolute("src") + "\n        target: " + path.Join(directory, "rep") + "\n"
+	created, err := hostApplySource(c, directory, "yaml", source+kept)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
+	awaitNames(c, opened, path.Join(database, directory), []string{"mirror", "rep", "src"})
+
+	refused, err := hostApplySource(c, directory, "yaml", "tables: {}\n"+kept)
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", refused))
+	c.Assert(refused, qt.Matches, `(?s).*table `+regexp.QuoteMeta(path.Join(directory, "src"))+`: async replication `+regexp.QuoteMeta(path.Join(directory, "mirror"))+
+		` reads it through a changefeed its controller manages, and the schema keeps the replication; YDB drops the table and leaves `+
+		"the replication failing \\(`Discovery for all topics failed`\\); drop the replication in the same plan, or keep the table.*")
+	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"mirror", "rep", "src"})
+	removed, err := hostApplySource(c, directory, "yaml", "tables: {}\nasync_replications: {}\n")
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", removed))
+	c.Assert(operationOrder(removed), qt.DeepEquals, []string{"async-replication-operation " + directory + ".mirror", "table-drop-operation " + directory + ".src"}, qt.Commentf("%s", removed))
 	awaitNames(c, opened, path.Join(database, directory), nil)
 }
 

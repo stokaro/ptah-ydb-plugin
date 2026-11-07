@@ -711,6 +711,63 @@ func TestKeptReplicationAssessment_FailurePath(t *testing.T) {
 	}
 }
 
+// droppedSource is the drop of src/accounts, the table mirror reads in the
+// session's database, as an outlining host sends it.
+func droppedSource() *protocol.PlanningTable {
+	subject := replicaTable()
+	subject.Schema = testcomparison.Part("src")
+	return &protocol.PlanningTable{Subject: subject, Action: protocol.PlanningTable_DROP, Current: &protocol.ObservedTable{Schema: "src", Name: "accounts"}}
+}
+
+// A plan that drops a table a replication it keeps reads in the session's
+// database is refused, in any state of the replication: YDB drops the table
+// and leaves a running replication failing, measured on 25.1.4.7 and
+// 26.2.1.14. The host's embedded engine refused it.
+func TestKeptReplicationAssessmentRefusesADroppedSource_FailurePath(t *testing.T) {
+	for _, state := range []string{replication.StateRunning, replication.StatePaused, replication.StateDone} {
+		t.Run(state, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, state, "", droppedSource()))
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Objects, qt.HasLen, 0)
+			c.Assert(result.Diagnostics, qt.HasLen, 1)
+			c.Assert(result.Diagnostics[0].Message, qt.Equals, "table src/accounts: async replication app/mirror reads it through a changefeed its "+
+				"controller manages, and the schema keeps the replication; YDB drops the table and leaves the replication failing "+
+				"(`Discovery for all topics failed`); drop the replication in the same plan, or keep the table")
+		})
+	}
+}
+
+// A table no replication of the database reads is no replication's business:
+// a replication of another database reads none here, and a table elsewhere is
+// not its source.
+func TestKeptReplicationAssessmentLeavesADroppedTable_HappyPath(t *testing.T) {
+	elsewhere := droppedSource()
+	elsewhere.Subject.Schema = testcomparison.Part("other")
+	for _, test := range []struct {
+		name     string
+		table    *protocol.PlanningTable
+		database string
+	}{
+		{name: "a table no replication reads", table: elsewhere, database: "/local"},
+		{name: "a replication of another database", table: droppedSource(), database: "/remote"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := keptReplicationRequest(c, replication.StateRunning, "", test.table)
+			request.DatabasePath = test.database
+
+			result, err := backend.New().PlanFeatures(t.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, 0)
+			c.Assert(result.Objects, qt.HasLen, 1)
+		})
+	}
+}
+
 // A batch that names one replication twice, which no comparison produces, is
 // refused before anything is planned, whether the two changes share a value
 // identity or not. Ported from the host's

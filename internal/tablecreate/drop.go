@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -53,6 +55,52 @@ func buildDropModel() *protocol.ValueModel {
 	sum := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: DropOperationKind, Representation: protocol.ValueInput_OPERATION, SchemaVersion: 1, Encoding: "json",
 		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: DropOperationKind + "/json-v1"}
+}
+
+// replicationRefusal is why table cannot be dropped, or "": it holds a
+// changefeed an asynchronous replication of another database controls, which
+// the replication reads the table through. YDB drops such a table and leaves
+// the replication failing (`Discovery for all topics failed`), measured on
+// 25.1.4.7 and 26.2.1.14, and no plan of this database drops that
+// replication, so the removal waits until it goes, as the host's embedded
+// engine refused it. A replication lives in its replicas' database, and the
+// stream names the replica it writes. A replica in this database belongs to a
+// replication the planner of replications reads on both sides, and it refuses
+// the drop where the plan keeps the replication; a plan that drops both drops
+// the replication first, with CASCADE, which releases the stream. A changefeed
+// the read cannot represent goes with the table.
+func replicationRefusal(request *protocol.PlanFeaturesRequest, owner *protocol.Reference, table *protocol.PlanningTable) (string, error) {
+	for _, record := range table.GetCurrent().GetFeatures().GetFacets().GetRecords() {
+		if record.GetKind() != schema.ChangefeedProperties || record.GetValue() == nil || !forThisEngine(record.GetTargets()) {
+			continue
+		}
+		observed, err := normalizedFacet(record, protocol.ValueInput_OBSERVED)
+		if err != nil {
+			return "", err
+		}
+		_, held, err := changefeedSets(nil, observed)
+		if err != nil {
+			return "", err
+		}
+		for _, stream := range held.GetChangefeeds() {
+			replica := changefeeds.ReplicaPath(stream.GetDescription().GetAttributes())
+			if replica == "" || inDatabase(replica, request.GetDatabasePath()) {
+				continue
+			}
+			return fmt.Sprintf("table %q: changefeed %q is a replication-managed stream that depends on this table; "+
+				"its replication's controller must release it before the table is dropped, and the replication, "+
+				"which writes %s, lives in another database; drop it there first, or keep the table",
+				tableLabel(owner), stream.GetDescription().GetName(), replica), nil
+		}
+	}
+	return "", nil
+}
+
+// inDatabase reports whether the absolute path lies below the database at
+// root. A root the request does not name holds nothing.
+func inDatabase(absolute, root string) bool {
+	root = strings.TrimRight(root, "/")
+	return root != "" && strings.HasPrefix(absolute, root+"/")
 }
 
 // columnTable reports whether the read of table describes a column table,
