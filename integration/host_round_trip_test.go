@@ -203,14 +203,14 @@ func inspectedColumns(c *qt.C, directory string) map[string]string {
 	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 	c.Assert(err, qt.IsNil)
 	read := make(map[string]string)
-	for _, table := range snapshot.GetTables() {
-		for _, column := range table.GetColumns() {
+	for _, described := range snapshot.GetTables() {
+		for _, column := range described.GetColumns() {
 			observed := column.GetObserved()
 			text := observed.GetDataType()
 			for _, expression := range slices.DeleteFunc([]*string{observed.DefaultExpression}, func(value *string) bool { return value == nil }) {
 				text += " DEFAULT " + *expression
 			}
-			read[table.GetIdentity().GetName()+"."+column.GetName()] = text
+			read[described.GetIdentity().GetName()+"."+column.GetName()] = text
 		}
 	}
 	return read

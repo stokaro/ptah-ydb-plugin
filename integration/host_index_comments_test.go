@@ -155,7 +155,7 @@ func TestHostCommentChangesPassTheLeftCommentRule_HappyPath(t *testing.T) {
 		c.Helper()
 		statements, err := hostCommand(c, "schema", "diff", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", filepath.Join(sources, name+".sql"), "--schemas", directory)
 		c.Assert(err, qt.IsNil, qt.Commentf("schema diff %s:\n%s", name, statements))
-		c.Assert(os.WriteFile(filepath.Join(migrations, version+"_"+name+".up.sql"), []byte(statements), 0o600), qt.IsNil)
+		c.Assert(os.WriteFile(filepath.Join(migrations, version+"_"+name+".up.sql"), []byte(statements), 0o600), qt.IsNil) // #nosec G703 -- a fixed file name under the test's c.TempDir()
 		return statements
 	}
 
