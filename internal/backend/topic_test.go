@@ -297,3 +297,150 @@ func TestTopicChangeKeepsATransfersConsumer_HappyPath(t *testing.T) {
 	c.Assert(desired.Consumers, qt.DeepEquals, []ydbdecl.Consumer{{Name: "worker"}})
 	c.Assert(desired.RetentionPeriod, qt.Equals, "P2D")
 }
+
+// A consumer whose change YDB makes only by dropping it and adding it again,
+// a declaration that takes any codec where the read consumer lists some,
+// loses its position in the topic, so the change is destructive. Ported from
+// the host's TestTopicChange_Effect and TestClassify_Topic.
+func TestTopicComparisonReAddedConsumerIsDestructive_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	read := readTopic()
+	read.Consumers[0].SupportedCodecs = &Ydb_Topic.SupportedCodecs{Codecs: []int32{int32(Ydb_Topic.Codec_CODEC_RAW)}}
+	request := topicRequest(c, &ydbdecl.Topic{RetentionPeriod: "PT24H", Consumers: []ydbdecl.Consumer{{Name: "worker"}}}, read)
+
+	result, err := backend.New().CompareModels(t.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Changes, qt.HasLen, 1)
+	semantics := result.Changes[0].Value.ChangeSemantics
+	c.Assert(semantics.Impact, qt.Equals, protocol.ChangeSemantics_DESTRUCTIVE)
+	c.Assert(semantics.GetRemovesState(), qt.IsTrue)
+	c.Assert(semantics.Reason, qt.Equals, "DROP CONSUMER removes a topic consumer and its position in the topic")
+}
+
+// plannedTopic is the captured change of the topic at directory/name of the
+// fixture database: action "create" declares it with no setting, "drop"
+// reads it as YDB 26.2.1.14 reports a new one, and "alter" reads it and
+// declares a longer retention.
+func plannedTopic(c *qt.C, directory, name, action string) *protocol.PlanningChange {
+	c.Helper()
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Database: "/local", Schema: directory, Name: name}
+	var before, after *protocol.Envelope
+	var err error
+	if action != "create" {
+		before, err = schema.CaptureObject(owner, readTopic())
+		c.Assert(err, qt.IsNil)
+	}
+	if action != "drop" {
+		declared := ydbdecl.Topic{Consumers: []ydbdecl.Consumer{{Name: "worker"}}}
+		if action == "alter" {
+			declared.RetentionPeriod = "P2D"
+		}
+		intent, err := topics.Intent(declared)
+		c.Assert(err, qt.IsNil)
+		after, err = schema.CaptureTopicIntent(owner, intent)
+		c.Assert(err, qt.IsNil)
+	}
+	change, err := schema.CaptureTopicChange(directory+"/"+name, owner, before, after)
+	c.Assert(err, qt.IsNil)
+	return &protocol.PlanningChange{Subject: testplanning.Subject(owner), Value: change}
+}
+
+// topicPlanRequest is the topic service's request for changes beside the
+// host's steps common, on a target holding capabilities.
+func topicPlanRequest(capabilities map[string]bool, common []*protocol.CommonPlanningStep, changes ...*protocol.PlanningChange) *protocol.PlanFeaturesRequest {
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: topicplan.ServiceID, DatabasePath: "/local",
+		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: capabilities,
+		Changes: changes, CommonSteps: common}
+}
+
+// A topic planned beside the host's steps at its path or a path above it
+// takes the path once it is free: a creation follows the drop of the object
+// at its path or at the directory above it, and a drop precedes the creation
+// of an object at its path. A creation and a change act on the topic itself,
+// which is what orders a streaming query or a transfer that reads it after
+// them. Ported from the host's TestTopicPlan_PlacesEachStatement.
+func TestTopicOrdersAgainstCommonStepsAtItsPath_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, action string
+		common       []*protocol.CommonPlanningStep
+		edges        []string
+		effect       protocol.PlanningEffect_Action
+	}{
+		{name: "a creation follows the drop that frees its path", action: "create",
+			common: []*protocol.CommonPlanningStep{commonAt("table", "app", "events", protocol.PlanningEffect_DROP)},
+			edges:  []string{"drop table app/events -> topic/000000"}, effect: protocol.PlanningEffect_CREATE},
+		{name: "a creation follows the drop of its directory", action: "create",
+			common: []*protocol.CommonPlanningStep{commonAt("table", "", "app", protocol.PlanningEffect_DROP)},
+			edges:  []string{"drop table /app -> topic/000000"}, effect: protocol.PlanningEffect_CREATE},
+		{name: "a drop runs before a creation at its path", action: "drop",
+			common: []*protocol.CommonPlanningStep{commonAt("table", "app", "events", protocol.PlanningEffect_CREATE)},
+			edges:  []string{"topic/000000 -> create table app/events"}, effect: protocol.PlanningEffect_DROP},
+		{name: "a creation with nothing at its path", action: "create", effect: protocol.PlanningEffect_CREATE},
+		{name: "a change", action: "alter", effect: protocol.PlanningEffect_ALTER},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := topicPlanRequest(map[string]bool{"topics": true, "transactional_ddl": false}, test.common, plannedTopic(c, "app", "events", test.action))
+
+			result, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
+			c.Assert(stepEdges(result), qt.DeepEquals, test.edges)
+			effects := result.Contributions[0].Steps[0].Metadata.Effects
+			c.Assert(effects[0].Subject.Kind, qt.Equals, schema.TopicProperties)
+			c.Assert(effects[0].Action, qt.Equals, test.effect)
+		})
+	}
+}
+
+// One refused topic change refuses the batch: a target without topics, a
+// change YDB makes in no line, and a creation at a path a host step creates a
+// table at. The diagnostic names the refused change, and no other change of
+// the batch is planned. Ported from the host's TestTopicPlan_RefusesTheWholeBatch.
+func TestTopicPlanRefusesTheWholeBatch_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	fewer := plannedTopic(c, "app", "events", "alter")
+	wide := readTopic()
+	wide.PartitioningSettings.MinActivePartitions = 2
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Database: "/local", Schema: "app", Name: "events"}
+	before, err := schema.CaptureObject(owner, wide)
+	c.Assert(err, qt.IsNil)
+	_, after, err := schema.TopicOperands(fewer.Value.Value)
+	c.Assert(err, qt.IsNil)
+	change, err := schema.CaptureTopicChange("app/events", owner, before, after)
+	c.Assert(err, qt.IsNil)
+	fewer.Value = change
+	for _, test := range []struct {
+		name   string
+		topics bool
+		second *protocol.PlanningChange
+		common []*protocol.CommonPlanningStep
+		change uint32
+		want   string
+	}{
+		{name: "a target without topics", second: plannedTopic(c, "app", "events", "create"), change: 0,
+			want: "Planning a topic requires the topics capability and nontransactional DDL"},
+		{name: "fewer partitions", topics: true, second: fewer, change: 1, want: "topic app/events: it has 2 partitions and is declared with 1, .*"},
+		{name: "a path a table takes", topics: true, second: plannedTopic(c, "app", "events", "create"), change: 1,
+			common: []*protocol.CommonPlanningStep{commonAt("table", "app", "events", protocol.PlanningEffect_CREATE)},
+			want:   "topic operation conflicts with a common occupant at its path"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := topicPlanRequest(map[string]bool{"topics": test.topics, "transactional_ddl": false}, test.common, plannedTopic(c, "", "first", "create"), test.second)
+
+			result, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, 1)
+			c.Assert(result.Diagnostics[0].GetChange(), qt.Equals, test.change)
+			c.Assert(result.Diagnostics[0].GetMessage(), qt.Matches, test.want)
+			c.Assert(result.Contributions, qt.HasLen, 0)
+			c.Assert(result.Changes, qt.HasLen, 0)
+		})
+	}
+}
