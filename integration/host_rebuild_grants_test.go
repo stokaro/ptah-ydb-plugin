@@ -3,12 +3,15 @@
 package integration_test
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -58,6 +61,45 @@ func TestHostRebuildGivesBackTheTablesGrants_HappyPath(t *testing.T) {
 
 	applyUntilSynced(c, directory, "yaml", grantedItems(directory, "Int64", names, "SELECT ROW"), "--allow-table-rebuild")
 
+	c.Assert(heldColumnTypes(c, opened, absolute)["n"], qt.Equals, "Optional<Int64>")
+	c.Assert(rowCount(c, opened, absolute, "n = 7l"), qt.Equals, int64(1))
+	c.Assert(principalEntries(c, opened, absolute, names), qt.DeepEquals, []string{names.blocked + " ydb.generic.list", names.group + " ydb.granular.select_row"})
+}
+
+// A rebuild written into a migration file gives the new table back every
+// permission entry the old table held, except the one the plan revokes, as a
+// rebuild the provider runs itself does: the host sends the grants the read
+// found on the table under planning.table-grants, and the file grants them on
+// the table after the old one is dropped, where the host's embedded engine
+// wrote them. Measured with built-in 74de0b65b on 25.1.4.7 and 26.2.1.14:
+// the same GRANT after the DROP TABLE, and the table keeps SELECT ROW alone
+// (G222, TEXT form). The grants follow the drop, so the host's lint still
+// reads the rebuild as one and `migrations up` runs it.
+func TestHostRebuildMigrationGivesBackTheTablesGrants_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.TableGrantsFeature)
+	opened, directory, database := lockFixture(c)
+	names := newAccessNames()
+	removeAccess(c, opened, database, names)
+	absolute := path.Join(database, directory, "items")
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	applyRuns(c, directory, "yaml", grantedItems(directory, "Int32", names, "SELECT ROW", "ERASE ROW"))
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (id, n) VALUES (1ul, 7)"), qt.IsNil)
+	source := filepath.Join(c.TempDir(), "schema.yaml")
+	c.Assert(os.WriteFile(source, []byte(grantedItems(directory, "Int64", names, "SELECT ROW")), 0o600), qt.IsNil)
+	migrations := c.TempDir()
+	address := os.Getenv("PTAH_YDB_TEST_URL")
+
+	generated, generateErr := hostCommand(c, "migrations", "generate", "--db-url", address, "--schema-file", source, "--schemas", directory,
+		"--migrations-dir", migrations, "--name", "rebuild", "--allow-table-rebuild")
+	up, _ := generatedPair(c, migrations)
+	applied, upErr := hostCommand(c, "migrations", "up", "--db-url", address, "--migrations-dir", migrations, "--migrations-schema", path.Join(directory, "m"))
+
+	c.Assert(generateErr, qt.IsNil, qt.Commentf("migrations generate:\n%s", generated))
+	c.Assert(up, qt.Contains, "DROP TABLE `"+directory+"/__ptah_replaced_items`;\n"+
+		"GRANT 'ydb.generic.list' ON `"+directory+"/items` TO `"+names.blocked+"`;\n"+
+		"GRANT 'ydb.granular.select_row' ON `"+directory+"/items` TO `"+names.group+"`;\n")
+	c.Assert(upErr, qt.IsNil, qt.Commentf("migrations up:\n%s", applied))
 	c.Assert(heldColumnTypes(c, opened, absolute)["n"], qt.Equals, "Optional<Int64>")
 	c.Assert(rowCount(c, opened, absolute, "n = 7l"), qt.Equals, int64(1))
 	c.Assert(principalEntries(c, opened, absolute, names), qt.DeepEquals, []string{names.blocked + " ydb.generic.list", names.group + " ydb.granular.select_row"})

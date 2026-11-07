@@ -44,7 +44,10 @@ func keptTTLTable(c *qt.C) *protocol.PlanningTable {
 		Current: &protocol.ObservedTable{Name: "records", Schema: "app", Columns: []*protocol.ObservedColumn{{Name: "ts"}, {Name: "id"}}, Features: &protocol.CapturedFeatures{
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{},
-				Records: []*protocol.ComparisonRecord{{Kind: schema.ColumnStorageProperties, Subject: subject, Value: values.Values[0]}}}}}}
+				Records: []*protocol.ComparisonRecord{{Kind: schema.ColumnStorageProperties, Subject: subject, Value: values.Values[0]}}}}},
+		// The host sends a held table's grants under planning.table-grants,
+		// which the target features list.
+		CurrentGrants: &protocol.PlanningTableGrants{}}
 }
 
 // A data source moved while a column table the plan keeps moves rows to it

@@ -273,6 +273,9 @@ func providerFeatures() []string {
 		// start and increment an offline creation cannot set; see
 		// renderOmissions.
 		provider.RenderOmissionsFeature,
+		// A rebuild written into a migration file gives the new table the
+		// grants the read found on the old one; see tablecreate.regrants.
+		provider.TableGrantsFeature,
 		// A view query is compared in the form YDB stores it, keeping case,
 		// in place of the host's reading, which folds it; see
 		// CompareViewQueries.

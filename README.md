@@ -3454,9 +3454,17 @@ A native execution gives the new table the access control entries the old
 table holds before it copies the rows, as the host's embedded engine gave a
 rebuilt table back its grants: the new table is created with its directory's
 permissions alone, and the old one is dropped with its own. A grant or revoke
-the plan makes on the table runs after the rebuild, on the new table. The TEXT
-form has no statement for those entries, so a rebuild a migration file holds
-leaves the new table with its directory's permissions.
+the plan makes on the table runs after the rebuild, on the new table. A
+migration file runs later and reads no server, so under `planning.table-grants`
+(contract 25.33, ADR 0111 in Ptah), where the host sends the grants the read
+found on each held table, the TEXT form grants them on the new table after the
+old one is dropped, where the host's embedded engine wrote them, one `GRANT` to
+a line: every grant except a privilege the table holds by default and one the
+plan revokes. They follow the drop so the rebuild's statements stay the
+consecutive steps the migration lint reads as one rebuild. A read that did not
+describe the table's grants leaves the file without them, and a note above the
+rebuild says so; a host that does not send the grants leaves the new table
+with its directory's permissions.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
 
