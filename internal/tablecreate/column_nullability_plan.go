@@ -44,7 +44,10 @@ func planNullability(owner *protocol.Reference, table *protocol.PlanningTable, c
 		if !nullable || held.IsNullable != "NO" || heldType(held) != typ {
 			continue
 		}
-		captured := observed.columns[column.Name]
+		captured, err := heldColumnFacet(owner, table, observed, held, caps)
+		if err != nil {
+			return nil, "", err
+		}
 		if captured == nil {
 			return nil, "A column nullability change requires the complete native column observation", nil
 		}

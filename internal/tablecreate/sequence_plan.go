@@ -76,7 +76,11 @@ func planSequences(owner *protocol.Reference, table *protocol.PlanningTable, cap
 		if reason := ydbsequence.RangeRefusal(SerialTypeOf(column), settings, caps); reason != "" {
 			return nil, keyRefusal(ydbsequence.KeepsRange, "giving "+subject+" a start or an increment ("+reason+")"), nil
 		}
-		captured, err := capturedColumn(current, observed.columns[column.GetName()])
+		value, err := heldColumnFacet(owner, table, observed, current, caps)
+		if err != nil {
+			return nil, "", err
+		}
+		captured, err := capturedColumn(current, value)
 		if err != nil {
 			return nil, err.Error(), nil
 		}

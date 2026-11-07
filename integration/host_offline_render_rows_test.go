@@ -63,13 +63,16 @@ func itemsTable(more string) string {
 
 // A diff of two files plans each change of an existing table as its own
 // statement, as the host's embedded engine wrote it: an index added to the
-// table, columns added and dropped beside an index dropped and one added, and
-// a NOT NULL column added with a default on a line that fills the rows the
-// table holds. Each statement is the built-in's at host 74de0b65b on the same
-// files and line. Ported from the host's TestRender_Changes_HappyPath, but
-// for a column made nullable and a default changed in place, which a diff of
-// two files refuses through this provider (gap G226), and a table renamed,
-// which a diff plans as a drop and a creation on both engines.
+// table, columns added and dropped beside an index dropped and one added, a
+// NOT NULL column added with a default on a line that fills the rows the
+// table holds, a column made nullable, and a default set and one dropped in
+// place. Each statement is the built-in's at host 74de0b65b on the same files
+// and line. The --from file carries no native facet for a column whose
+// declaration states no native setting; without reading that known absence
+// as such a column, the last two were refused (`requires the complete native
+// column observation`, gap G226). Ported from the host's
+// TestRender_Changes_HappyPath, but for a table renamed, which a diff plans
+// as a drop and a creation on both engines.
 func TestHostSchemaDiffPlansEachChangeOfATable_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, from, to, version string
@@ -87,6 +90,17 @@ func TestHostSchemaDiffPlansEachChangeOfATable_HappyPath(t *testing.T) {
 		{name: "a NOT NULL column added with a default", version: "26.1.1.6",
 			from: itemsTable(""), to: itemsTable("      qty: {type: Int64, not_null: true, default: '7'}\n"),
 			want: []string{"ALTER TABLE `items` ADD COLUMN `qty` Int64 NOT NULL DEFAULT 7l;"}},
+		{name: "a column made nullable", version: "25.1.4.7",
+			from: itemsTable("      label: {type: Utf8, not_null: true}\n"), to: itemsTable("      label: {type: Utf8}\n"),
+			want: []string{"ALTER TABLE `items` ALTER COLUMN `label` DROP NOT NULL;"}},
+		{name: "a default set and one dropped in place", version: "26.2.1.14",
+			from: itemsTable("      qty: {type: Int32}\n      label: {type: Utf8, default: \"'x'\"}\n"),
+			to:   itemsTable("      qty: {type: Int32, default: '2'}\n      label: {type: Utf8}\n"),
+			want: []string{"ALTER TABLE `items` ALTER COLUMN `label` DROP DEFAULT;", "ALTER TABLE `items` ALTER COLUMN `qty` SET DEFAULT 2;"}},
+		{name: "a default changed beside a column made nullable", version: "26.2.1.14",
+			from: itemsTable("      label: {type: Utf8, default: \"'x'\"}\n      n: {type: Int64, not_null: true, default: '5'}\n"),
+			to:   itemsTable("      label: {type: Utf8, default: \"'it''s'\"}\n      n: {type: Int64, default: '5'}\n"),
+			want: []string{"ALTER TABLE `items` ALTER COLUMN `label` SET DEFAULT 'it\\'s'u;", "ALTER TABLE `items` ALTER COLUMN `n` DROP NOT NULL;"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -99,4 +113,20 @@ func TestHostSchemaDiffPlansEachChangeOfATable_HappyPath(t *testing.T) {
 			c.Assert(previewStatements(out), qt.ContentEquals, test.want)
 		})
 	}
+}
+
+// A file compared with itself plans nothing, the defaults of its columns
+// included: each side reads a default as the same native literal. The host's
+// embedded engine planned an ALTER COLUMN ... SET DEFAULT for each column with
+// a default (measured with schema diff on 26.2.1.14), which is not copied.
+func TestHostSchemaDiffOfAFileWithItselfPlansNothing_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	text := itemsTable("      qty: {type: Int32, default: '2'}\n      label: {type: Utf8, default: \"'x'\"}\n" +
+		"      at: {type: Timestamp, default: '2024-01-02T03:04:05Z'}\n")
+	from, to := compatFile(c, c.TempDir(), "from.yaml", text), compatFile(c, c.TempDir(), "to.yaml", text)
+
+	out, err := hostCommand(c, "schema", "diff", "--from", from, "--to", to, "--dev-url", devOnlyURL, "--server-version", "26.2.1.14")
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+	c.Assert(previewStatements(out), qt.HasLen, 0, qt.Commentf("%s", out))
 }
