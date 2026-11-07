@@ -96,6 +96,36 @@ func TestDropPlan_FailurePath(t *testing.T) {
 	c.Assert(plan.Diagnostics[0].Message, qt.Equals, "YDB table removal requires established nontransactional DDL")
 }
 
+// A table that holds a changefeed an asynchronous replication controls is not
+// dropped: the replication reads the table through the stream, and its
+// controller has to release it first, as the host's embedded engine refused
+// it. A changefeed the declaration manages goes with the table. Ported from
+// the host's TestParentOperationsRefuseReplicationBindingsWithoutChildChanges.
+func TestDropPlanRefusesATableAReplicationReads(t *testing.T) {
+	c := testcheck.New(t)
+	request := dropRequest(c)
+	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records, observedFacet(c, schema.ChangefeedProperties, "",
+		`{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",`+
+			`"attributes":{"__async_replication":"{\"path\":\"/local/r\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`))
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `table "app/records": changefeed "updates" is a replication-managed stream that depends on this table; `+
+		`its replication's controller must release it before the table is dropped`)
+}
+
+// The control: a table whose changefeeds Ptah manages is dropped with them.
+func TestDropPlanDropsATableWithItsChangefeeds(t *testing.T) {
+	c := testcheck.New(t)
+	request := dropRequest(c)
+	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records, observedFacet(c, schema.ChangefeedProperties, "", heldFeed))
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(plannedSteps(plan), qt.DeepEquals, []string{"table-drop/000000 table-drop-operation"})
+}
+
 func TestDecodeDrop_FailurePath(t *testing.T) {
 	for _, tc := range []struct {
 		name, payload, want string
