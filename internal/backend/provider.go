@@ -276,6 +276,9 @@ func providerFeatures() []string {
 		// A rebuild written into a migration file gives the new table the
 		// grants the read found on the old one; see tablecreate.regrants.
 		provider.TableGrantsFeature,
+		// A YQL reading returns the password a document gives a user; see
+		// yqlschema.Reply.
+		provider.SQLRolePasswordsFeature,
 		// A view query is compared in the form YDB stores it, keeping case,
 		// in place of the host's reading, which folds it; see
 		// CompareViewQueries.

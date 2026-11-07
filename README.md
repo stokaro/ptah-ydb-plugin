@@ -800,9 +800,11 @@ and the host's note gives the reason the host's embedded engine gave: `because
 the cluster made them or they own the database, or the read was of a dev realm,
 which shares its database's users and groups`.
 
-A user's password is set when the user is created, from a YAML or Go
+A user's password is set when the user is created, from a YAML, Go or YQL
 declaration, and is never read back: a declaration that names another password
-plans nothing, as the host's embedded engine plans it.
+plans nothing, as the host's embedded engine plans it. A YQL document's
+password reaches the host under `source.sql-role-passwords` (see [SQL schema
+reading](#sql-schema-reading)).
 
 The password never enters a plan. Under `schema.password-inputs` (contract
 25.22, ADR 0071) the host sends a declared password, or a password hash, as an
@@ -4154,12 +4156,23 @@ carry is refused by name, with no partial reading:
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;
-- a user's password: the reply's role carries none, so the host would create
-  the user without it; a YAML or Go declaration carries the password, which
-  the host sets when it creates the user;
+- a user's password, for a host that does not list
+  `source.sql-role-passwords`: the reply's role carries none, so the host would
+  create the user without it;
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
   would come back on a renamed pool.
+
+Under `source.sql-role-passwords` (contract 25.33, ADR 0112 in Ptah) the reply
+carries the password a document gives a user as the document writes it: a
+literal after `PASSWORD`, a YDB password hash after `HASH`, or the
+`$PTAH_SECRET_...` reference a migration file Ptah generated names it by. The
+host binds it as it binds a password a YAML or Go source declares, so the plan
+names the user's execution input and no value (see [Common
+objects](#common-objects)), and execution writes `HASH` for a hash, as the
+host's embedded engine did. Measured on 25.1.4.7 and 26.2.1.14: a user
+created from `PASSWORD 'x'` logs in with `x`, one created from `HASH` logs in
+with the password the hash stands for, and the next run plans nothing.
 
 Some of what a reading carries is not planned yet. Table creation refuses
 column defaults, and table comments on a host that does not list

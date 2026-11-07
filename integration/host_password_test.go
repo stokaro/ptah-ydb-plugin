@@ -131,3 +131,49 @@ func TestHostKeepsAUsersPasswordOutOfEveryOutput_HappyPath(t *testing.T) {
 	c.Assert(written, qt.HasLen, 10+len(files))
 	c.Assert(len(files) >= 2, qt.IsTrue, qt.Commentf("migrations generate wrote %d files", len(files)))
 }
+
+// A YQL document that creates a user with a password, or with a password hash,
+// applies through the provider: under source.sql-role-passwords the reading
+// returns the password as the document writes it, the host binds it as it
+// binds one a YAML document declares, and the plan names the user's execution
+// input where the password stands, with no value. The user logs in with the
+// password, and the one the hash stands for, and not with another; the next
+// run plans nothing. Measured with built-in 74de0b65b on 25.1.4.7 and
+// 26.2.1.14 on the same document: both users log in, and the next run plans
+// nothing (G64). The built-in wrote the password into the plan; the provider
+// names the input instead (ADR 0071).
+func TestHostAppliesAYQLUsersPassword_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.SQLRolePasswordsFeature)
+	opened, directory, _ := lockFixture(c)
+	suffix := strings.ToLower(rand.Text())[:8]
+	literal, hashed := "ptahyqlp"+suffix, "ptahyqlh"+suffix
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		for _, user := range []string{literal, hashed} {
+			c.Check(execFixtureSchema(ctx, opened.DB, "DROP USER IF EXISTS `"+user+"`"), qt.IsNil)
+		}
+	})
+	// The 25.1 form of the hash of Hash1pw, which 25.1.4.7 and 26.2.1.14 take.
+	const hash = `{"hash":"k4QNdPpXaK21FWRuUiGqx7SwpJlfmQpHWIKvL1Hw0vs=","salt":"trbpRea8YJJT6AzQzgY6Hg==","type":"argon2id"}`
+	document := "CREATE USER " + literal + " PASSWORD 'Literal1SENTINEL';\nCREATE USER " + hashed + " HASH '" + hash + "';\n"
+
+	planned, planErr := hostApplySelected(c, directory, "sql", document, "--dry-run")
+	applied, applyErr := hostApplySource(c, directory, "sql", document)
+	again, againErr := hostApplySource(c, directory, "sql", document)
+
+	c.Assert(planErr, qt.IsNil, qt.Commentf("%s", planned))
+	c.Assert(planned, qt.Contains, "CREATE USER `"+literal+"` PASSWORD $"+passwordVariable(literal)+";")
+	c.Assert(planned, qt.Contains, "CREATE USER `"+hashed+"` PASSWORD $"+passwordVariable(hashed)+";")
+	c.Assert(planned, qt.Not(qt.Contains), "SENTINEL")
+	c.Assert(planned, qt.Not(qt.Contains), "argon2id")
+	c.Assert(applyErr, qt.IsNil, qt.Commentf("%s", applied))
+	c.Assert(applied, qt.Not(qt.Contains), "SENTINEL")
+	c.Assert(loginError(c, literal, "Literal1SENTINEL"), qt.IsNil)
+	c.Assert(loginError(c, literal, "Other1password"), qt.IsNotNil)
+	c.Assert(loginError(c, hashed, "Hash1pw"), qt.IsNil)
+	c.Assert(loginError(c, hashed, "Other1password"), qt.IsNotNil)
+	c.Assert(againErr, qt.IsNil, qt.Commentf("%s", again))
+	c.Assert(again, qt.Contains, "Schema is synced, no changes to be made")
+}

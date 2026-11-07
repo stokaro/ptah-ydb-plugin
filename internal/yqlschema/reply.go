@@ -196,7 +196,13 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 // wire writes a reading as the reply's schema, and returns the refusals of
 // everything in it a SQL schema reading has no home for: a table's settings
 // and changefeeds among them where the host does not take the facets of a
-// reading (see [takesFacets]).
+// reading (see [takesFacets]), and a user's password where the host does not
+// take the password a document gives a role (source.sql-role-passwords,
+// contract 25.33). A host that takes it gets the password as the document
+// writes it: a literal, a YDB password hash after HASH, or the reference a
+// migration file Ptah generated names it by. The host binds it at execution
+// as it binds a password a YAML or HCL source declares, and the provider's
+// execution writes HASH for a hash, as the host's embedded engine wrote it.
 func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.SQLSchema, []*Refusal) {
 	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request), indexFacets: takesIndexFacets(request)}
 	w.tables(reading)
@@ -204,13 +210,18 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.S
 		w.trace(protocol.SQLObjectTrace_VIEWS, len(w.reply.Views), view.document, view.span)
 		w.reply.Views = append(w.reply.Views, &protocol.SQLView{Schema: view.schema, Name: view.leaf, Body: view.Body, Comment: view.Comment})
 	}
+	passwords := slices.Contains(request.GetTargetFeatures(), provider.SQLRolePasswordsFeature)
 	for _, role := range reading.Roles {
-		if role.passwordAt != nil {
+		if role.passwordAt != nil && !passwords {
 			w.gaps = append(w.gaps, gap(role.passwordDocument, *role.passwordAt, fmt.Sprintf("user %s declares a password, which a SQL schema reading has no home for: "+
 				"the host compares no secret a schema file holds", quoteName(role.Name))))
 		}
 		w.trace(protocol.SQLObjectTrace_ROLES, len(w.reply.Roles), role.document, role.span)
-		w.reply.Roles = append(w.reply.Roles, &protocol.SQLRole{Name: role.Name, Login: role.Login, Inherit: role.Inherit, Group: role.Group, MemberOf: slices.Clone(role.MemberOf)})
+		declared := &protocol.SQLRole{Name: role.Name, Login: role.Login, Inherit: role.Inherit, Group: role.Group, MemberOf: slices.Clone(role.MemberOf)}
+		if role.passwordAt != nil && passwords {
+			declared.PasswordDeclared, declared.Password = true, role.Password
+		}
+		w.reply.Roles = append(w.reply.Roles, declared)
 	}
 	w.grants(reading)
 	var feeds []Object
