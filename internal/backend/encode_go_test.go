@@ -11,12 +11,42 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
+
+// Ported from the host's TestRender_StreamingQuery_RoundTrip: an exported Go
+// annotation keeps a query's text, pool, run setting, and permission to reset
+// state through the same EncodeSource and DecodeSource calls the host makes.
+func TestEncodeSource_GoStreamingQueryRoundTrip_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: "jobs", Name: "copy"}
+	text := "$tag = \"it's a stream\";\nINSERT INTO output SELECT * FROM input;"
+	query, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: text, Run: new(false), ResourcePool: "batch"}, true)
+	c.Assert(err, qt.IsNil)
+	request := encodeRequest(protocol.SourceDocument_GO_ANNOTATIONS, &protocol.EncodeSourceValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
+		Value: &protocol.NormalizedValue{Id: "query", Value: query, NormalizedOwner: proto.CloneOf(owner),
+			CanonicalFormat: schema.NativeDesiredModel(schema.StreamingQueryProperties).CanonicalFormat, CanonicalProjection: bytes.Clone(query.Payload)}})
+	request.TargetFeatures = []string{provider.PlanningObjectContextFeature}
+	ctx := provider.ContextWithHostFeatures(c.Context(), []string{provider.EntryKeysFeature, provider.HCLSourceFeature,
+		provider.EncodeGroupsFeature, provider.PlanningObjectContextFeature})
+
+	encoded, err := backend.New().EncodeSource(ctx, request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(encoded.Losses, qt.HasLen, 0)
+	c.Assert(goLines(encoded), qt.DeepEquals, []goLine{{Directive: "ptah:schema:streamingquery", Attributes: []string{
+		"name=copy", "schema=jobs", "text=" + text, "run=false", "resource_pool=batch", "allow_state_reset=true",
+	}}})
+	readBack := sourceDocument(protocol.SourceDocument_GO_ANNOTATIONS, request, encoded)
+	readBack.TargetFeatures = request.TargetFeatures
+	c.Assert(decodedProjections(c, ctx, readBack), qt.DeepEquals,
+		map[string]string{schema.StreamingQueryProperties + " jobs/copy": string(query.Payload)})
+}
 
 // workloadValue is the desired value of a resource pool or a classifier
 // with settings.
