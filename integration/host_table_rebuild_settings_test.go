@@ -3,12 +3,17 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+	"github.com/ydb-platform/ydb-go-sdk/v3/types"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -83,6 +88,57 @@ func TestHostRebuildKeepsTheTableSettingsADeclarationLeavesOut_HappyPath(t *test
 	rebuildRuns(c, directory, "go", replaceDirectory(rebuiltItems("", "Int64", ""), directory))
 
 	c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, want)
+	c.Assert(rowCount(c, opened, absolute, "n = 7"), qt.Equals, int64(1))
+}
+
+// heldStoragePools reads the storage settings of the table at absolute back
+// from the server, without the provider: the pool of each commit log and the
+// external pool, and whether it stores external blobs.
+func heldStoragePools(c *qt.C, opened *connection.Connection, absolute string) string {
+	c.Helper()
+	var held string
+	err := opened.Driver.Table().Do(c.Context(), func(ctx context.Context, session table.Session) error {
+		described, err := session.DescribeTable(ctx, absolute)
+		if err != nil {
+			return err
+		}
+		storage := described.StorageSettings
+		held = fmt.Sprintf("log0=%s log1=%s external=%s blobs=%s", storage.TableCommitLog0.Media, storage.TableCommitLog1.Media, storage.External.Media,
+			flagText(storage.StoreExternalBlobs))
+		return nil
+	}, table.WithIdempotent())
+	c.Assert(err, qt.IsNil)
+	return held
+}
+
+// A table whose commit logs and external pool name a storage pool, which no
+// declaration states, is rebuilt for a column type change, and the new table
+// takes the pools the old one holds, as CreateTable keeps them, so nothing is
+// left to plan. The host's embedded engine refused the rebuild; YQL has no
+// setting for a row table's storage, so a migration file refuses it (see
+// TestRebuildPlanKeepsTheHeldStorage_FailurePath).
+func TestHostRebuildKeepsTheStorageSettings_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "items")
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	pool := options.StoragePool{Media: storagePool}
+	// YDB sets storage settings only through CreateTable: an ALTER of them
+	// is refused (`Incompatible alter of storage config in default column
+	// family denied`), measured on 26.2.1.14.
+	c.Assert(opened.Driver.Table().Do(c.Context(), func(ctx context.Context, session table.Session) error {
+		return session.CreateTable(ctx, absolute, options.WithColumn("id", types.TypeUint64), options.WithColumn("code", types.TypeUTF8),
+			options.WithColumn("n", types.Optional(types.TypeInt32)), options.WithColumn("label", types.Optional(types.TypeUTF8)),
+			options.WithPrimaryKeyColumn("id", "code"), options.WithStorageSettings(options.StorageSettings{TableCommitLog0: pool, TableCommitLog1: pool, External: pool}))
+	}), qt.IsNil)
+	want := "log0=hdd log1=hdd external=hdd blobs=DISABLED"
+	c.Assert(heldStoragePools(c, opened, absolute), qt.Equals, want)
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (id, code, n) VALUES (1ul, 'a'u, 7)"), qt.IsNil)
+	c.Assert(hostPlanned(c, directory, "go", replaceDirectory(rebuiltItems("", "Int32", ""), directory)), qt.HasLen, 0)
+
+	rebuildRuns(c, directory, "go", replaceDirectory(rebuiltItems("", "Int64", ""), directory))
+
+	c.Assert(heldStoragePools(c, opened, absolute), qt.Equals, want)
 	c.Assert(rowCount(c, opened, absolute, "n = 7"), qt.Equals, int64(1))
 }
 
