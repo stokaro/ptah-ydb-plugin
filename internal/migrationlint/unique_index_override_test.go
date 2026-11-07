@@ -19,7 +19,7 @@ func TestUniqueIndexOnAnExistingTableFollowsTheCapability(t *testing.T) {
 		held bool
 		want []string
 	}{
-		{name: "a cluster that allows it", held: true, want: []string{}},
+		{name: "a cluster that allows it", held: true, want: make([]string, 0)},
 		{name: "a cluster that does not", want: []string{"1:1 CAP001 unique_index_on_existing_table"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

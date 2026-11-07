@@ -1,6 +1,7 @@
 package tablesource_test
 
 import (
+	"maps"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -15,9 +16,7 @@ import (
 func vectorIndex(changes map[string]string) map[string]string {
 	attributes := map[string]string{"name": "v", "fields": "emb", "type": "vector_kmeans_tree", "distance": "cosine", "vector_type": "float",
 		"vector_dimension": "3", "levels": "2", "clusters": "8"}
-	for name, value := range changes {
-		attributes[name] = value
-	}
+	maps.Copy(attributes, changes)
 	return attributes
 }
 

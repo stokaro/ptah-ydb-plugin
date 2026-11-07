@@ -13,6 +13,7 @@ import (
 // and is no JSON, are sent as a PASSWORD, never as a HASH. Ported from the
 // host's TestPasswordClause.
 func TestExpandPasswordThatIsNoHash(t *testing.T) {
+	// #nosec G101 -- the passwords are fixtures of the clause a password is written in
 	for _, test := range []struct {
 		name, password, want string
 	}{
