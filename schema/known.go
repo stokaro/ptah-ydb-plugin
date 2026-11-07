@@ -6,6 +6,8 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // Known refuses unknown fields and enum values recursively. Protobuf's normal
@@ -80,4 +82,22 @@ func requestFamilyCacheMode(value protoreflect.Message, unknown []byte) bool {
 	}
 	_, read := requestCacheMode(unknown)
 	return read
+}
+
+// ReadableFamilies is description as a read can capture it, with the reason
+// its column families cannot be read, or description itself and "". Column
+// families that hold what this provider's model does not know, a field or an
+// enum value a newer server writes, are left out of the description, and the
+// read records the table's properties as unrepresentable for the reason
+// rather than fail, as the host's embedded engine left the families
+// undecided. description is not changed.
+func ReadableFamilies(description *native.DescribeTableResult) (*native.DescribeTableResult, string) {
+	for _, family := range description.GetColumnFamilies() {
+		if err := Known(family); err != nil {
+			readable := proto.CloneOf(description)
+			readable.ColumnFamilies = nil
+			return readable, fmt.Sprintf("column family %q holds what this provider does not read (%v)", family.GetName(), err)
+		}
+	}
+	return description, ""
 }

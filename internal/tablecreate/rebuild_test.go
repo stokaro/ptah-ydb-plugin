@@ -469,6 +469,32 @@ func TestRebuildPlanKeepsTheHeldStorage_FailurePath(t *testing.T) {
 		"(`Setting store_external_blobs to ENABLED is not allowed`), so the new table would drop them; change the table by hand")
 }
 
+// A rebuild of a table whose read could not describe its TTL, families or
+// partitioning, such as a family field a newer server writes, is refused:
+// the new table would drop what nobody read. The host's embedded engine
+// refused it, for families the read did not describe.
+func TestRebuildPlanRefusesATableWhosePropertiesTheReadCouldNotDescribe(t *testing.T) {
+	check := testcheck.New(t)
+	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	table := request.Tables[0]
+	table.Current.Features.Facets.Records = slices.DeleteFunc(table.Current.Features.Facets.Records, func(record *protocol.ComparisonRecord) bool {
+		return record.GetKind() == schema.TableProperties
+	})
+	table.Current.Features.Facets.Coverage.Kinds = append(table.Current.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: observedTableModel(),
+		Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "fixture"}}}})
+	table.Current.Features.Facets.Coverage.Subjects = append(table.Current.Features.Facets.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{
+		Kind: schema.TableProperties, Subject: proto.CloneOf(table.Subject),
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: "column family \"cold\" holds what this provider does not read"}})
+
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Contributions, qt.HasLen, 0)
+	check.Assert(plan.Diagnostics, qt.HasLen, 1)
+	check.Assert(plan.Diagnostics[0].Message, qt.Equals, `rebuilding table "app/records": the read could not describe the table's TTL, column families or partitioning `+
+		`(column family "cold" holds what this provider does not read), so the new table would drop them; change the table by hand`)
+}
+
 // A rebuild creates the new table with what the declaration states, so a
 // declared TTL over a column YDB reads no TTL from refuses the rebuild before
 // any statement, as the host's embedded engine refused it. Ported from the
@@ -979,4 +1005,14 @@ func TestRebuildPlanKeepsTheHeldTTLRunInterval_FailurePath(t *testing.T) {
 	check.Assert(rendered.GetRefusal().GetChangeId(), qt.Equals, plan.Contributions[0].Steps[0].Operation.Value.Id)
 	check.Assert(rendered.GetRefusal().GetReason(), qt.Equals, protocol.RenderRefusal_NO_TEXT_FORM)
 	check.Assert(rendered.GetRefusal().GetMessage(), qt.Equals, "no YQL text form: the TTL runs on an interval of its own, and YQL's TTL setting has none")
+}
+
+// observedTableModel is the observed model of table properties.
+func observedTableModel() *protocol.ValueModel {
+	for _, model := range schema.ObservedModels() {
+		if model.GetKind() == schema.TableProperties {
+			return model
+		}
+	}
+	return nil
 }

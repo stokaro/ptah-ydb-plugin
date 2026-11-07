@@ -486,9 +486,22 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 		t.replicas = append(t.replicas, &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name})
 		return nil
 	}
-	table, err := readTable(t.database, selected, name, description.table)
+	// A family that holds what the model does not know, from a newer
+	// server, leaves the table's properties unrepresentable rather than the
+	// read failed: the table is read without them, and a plan that would
+	// change or rebuild them stops (see tablecompare.Compare and
+	// tablecreate's rebuild).
+	described, unknown := schema.ReadableFamilies(description.table)
+	table, err := readTable(t.database, selected, name, described)
 	if err != nil {
 		return err
+	}
+	if unknown != "" {
+		table.Facets = slices.DeleteFunc(table.Facets, func(facet *protocol.Envelope) bool { return facet.GetKind() == schema.TableProperties })
+		t.result.Coverage.Subjects = append(t.result.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+			Kind: schema.TableProperties, Subject: proto.CloneOf(table.Identity), NormalizedSubject: proto.CloneOf(table.Identity),
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: "table " + path.Join(selected, name) + ": " + unknown},
+		})
 	}
 	t.common.primaryKey(table, description.table.GetPrimaryKey())
 	t.common.tableComments(t.result.CommonObjects, table.Identity, description)

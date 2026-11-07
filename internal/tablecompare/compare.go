@@ -5,6 +5,7 @@
 package tablecompare
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -66,6 +67,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 	if err := compareUnstatedTables(ctx, request, result, held); err != nil {
 		return nil, err
 	}
+	undescribedProperties(request, result)
 	if err := compareUnstatedParts(ctx, request, result, held); err != nil {
 		return nil, err
 	}
@@ -183,6 +185,49 @@ func compareUnstatedTables(ctx context.Context, request *protocol.CompareModelsR
 		}
 	}
 	return nil
+}
+
+// undescribedProperties reports undecided the table properties of a table
+// a side claims unrepresentable. A source that met a TTL, a column family or
+// a partitioning setting it could not describe would have the table keep
+// what it holds, or be created without them, and drop what the author wrote
+// without a word; a read that found one it could not describe, such as a
+// family field a newer server writes, would have the declaration change what
+// nobody read. So the plan stops there, as the host's embedded engine stopped
+// it: for the declaration of any table the plan keeps or creates, and for the
+// read of a table both sides hold whose properties the declaration states.
+func undescribedProperties(request *protocol.CompareModelsRequest, result *protocol.ComparedModels) {
+	for _, parent := range request.GetParents() {
+		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() {
+			continue
+		}
+		reason, found := unrepresentableClaim(request.GetDesired(), parent.GetSubject())
+		if found {
+			result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: schema.TableProperties, Subject: proto.CloneOf(parent.GetSubject()),
+				Reason: "The desired source could not describe the table's TTL, column families or partitioning: " + reason})
+			continue
+		}
+		stated := tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.TableProperties, parent.GetSubject(), tablecreate.DesiredSide) ||
+			slices.ContainsFunc(request.GetDesired().GetRecords(), func(record *protocol.ComparisonRecord) bool {
+				return record.GetKind() == schema.TableProperties && provider.CompareIdentities(record.GetSubject(), parent.GetSubject()) == 0
+			})
+		if reason, found = unrepresentableClaim(request.GetCurrent(), parent.GetSubject()); found && parent.GetCurrent() && stated {
+			result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: schema.TableProperties, Subject: proto.CloneOf(parent.GetSubject()),
+				Reason: "The read found a TTL, a column family or a partitioning setting of the table it could not describe: " + reason})
+		}
+	}
+}
+
+// unrepresentableClaim is the reason side gives for claiming the table
+// properties of subject unrepresentable, and whether it claims so.
+func unrepresentableClaim(side *protocol.ComparisonState, subject *protocol.ComparisonIdentity) (string, bool) {
+	for _, claim := range side.GetCoverage().GetSubjects() {
+		if claim.GetKind() == schema.TableProperties && claim.GetKnowledge().GetState() == protocol.ModelKnowledge_UNREPRESENTABLE &&
+			provider.CompareIdentities(claim.GetSubject(), subject) == 0 && forYDB(claim.GetTargets()) {
+			return cmp.Or(claim.GetKnowledge().GetReason(), "it gives no reason"), true
+		}
+	}
+	return "", false
 }
 
 // compareUnstatedParts compares the changefeeds of every table both sides
@@ -522,11 +567,16 @@ func compareChangefeeds(result *protocol.ComparedModels, kind string, subject *p
 // compared reports whether this comparison reads a record: it owns the model,
 // the record states a value, and the value is not bound to other targets.
 func compared(request *protocol.CompareModelsRequest, record *protocol.ComparisonRecord) bool {
-	return slices.Contains(request.GetKinds(), record.GetKind()) && record.GetValue() != nil &&
-		(len(record.GetTargets()) == 0 || slices.ContainsFunc(record.GetTargets(), func(target string) bool {
-			target = strings.ToLower(strings.TrimSpace(target))
-			return target == "ydb" || target == "ydbs"
-		}))
+	return slices.Contains(request.GetKinds(), record.GetKind()) && record.GetValue() != nil && forYDB(record.GetTargets())
+}
+
+// forYDB reports whether a record or a claim scoped to targets applies to
+// YDB. One with no targets applies to every engine.
+func forYDB(targets []string) bool {
+	return len(targets) == 0 || slices.ContainsFunc(targets, func(target string) bool {
+		target = strings.ToLower(strings.TrimSpace(target))
+		return target == "ydb" || target == "ydbs"
+	})
 }
 
 func compareRecord(result *protocol.ComparedModels, want, observed *protocol.ComparisonRecord) error {
