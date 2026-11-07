@@ -270,18 +270,28 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 			decided = append(decided, *pair)
 		}
 	}
-	for _, family := range families {
-		if err := refuseDottedLimits(bound, family, objects, decided); err != nil {
-			return nil, nil, err
-		}
-		if err := refuseUndeclaredRequired(bound, family, objects); err != nil {
-			return nil, nil, err
-		}
+	if err := refuseFamilies(bound, families, objects, decided); err != nil {
+		return nil, nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	return result, decided, nil
+}
+
+// refuseFamilies applies the refusals that read the whole comparison of
+// each family: a dotted limit that would drop an object, and an object a
+// declaration requires without declaring it.
+func refuseFamilies(request *protocol.CompareModelsRequest, families []Family, objects []object, decided []Decided) error {
+	for _, family := range families {
+		if err := refuseDottedLimits(request, family, objects, decided); err != nil {
+			return err
+		}
+		if err := refuseUndeclaredRequired(request, family, objects); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // refuseUndeclaredRequired refuses a comparison where a declared object
