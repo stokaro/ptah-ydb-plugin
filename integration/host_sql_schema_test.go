@@ -119,16 +119,18 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 
 // The host refuses a YQL schema this provider refuses, with the provider's
 // words and the position in the document, and changes nothing: a syntax
-// error the host's own reader reports the same way, and an index setting a SQL
-// schema reading has no home for.
+// error the host's own reader reports the same way, and a vector index's
+// settings, which a SQL schema reading has no home for. A global index's
+// partitioning reaches the host as a facet (see
+// TestHostAppliesAYQLTableWithSettings_HappyPath).
 func TestHostRefusesASQLSchema_FailurePath(t *testing.T) {
 	syntax := `YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL \(got ";"\)`
-	settings := "index `by_body` of table `[^`]+/items` declares partitioning settings, which a SQL schema reading has no home for: " +
-		"an index states no settings of its own in the row-table model[^\n]*"
+	settings := "index `by_vector` of table `[^`]+/items` declares vector settings, which a SQL schema reading has no home for: [^\n]*"
 	for _, test := range []struct{ name, text, want string }{
 		{name: "syntax", text: "CREATE TABLE `{dir}/items` (id Uint64, PRIMARY KEY (id));",
 			want: positioned(syntax)},
-		{name: "index settings", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL SYNC ON (body) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
+		{name: "vector index settings", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, a String, PRIMARY KEY (id), INDEX by_vector GLOBAL USING vector_kmeans_tree ON (a) " +
+			"WITH (distance = cosine, vector_type = 'float', vector_dimension = 3, clusters = 2, levels = 1));",
 			want: positioned(settings)},
 	} {
 		t.Run(test.name, func(t *testing.T) {

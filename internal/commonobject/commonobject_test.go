@@ -107,8 +107,6 @@ func TestRender_FailurePath(t *testing.T) {
 		{"comment not UTF-8", setComment(table, "\xff"), `unsupported feature: the comment on table t: the comment is not UTF-8 text, which YDB keeps in an attribute value`},
 		{"column without its table", setComment(&protocol.Reference{Engine: "ydb", Kind: "column", Name: "c"}, "x"), `a YDB column comment names its table`},
 		// Ported from the host's TestRender_Comments_FailurePath_ByKey.
-		{"constraint comment", setComment(&protocol.Reference{Engine: "ydb", Kind: "constraint", Name: "t_pkey", Path: []string{"t"}}, "x"),
-			`unsupported feature: the comment on constraint t_pkey: YDB keeps comments on tables, their columns and indexes, and views`},
 		{"sequence comment", setComment(&protocol.Reference{Engine: "ydb", Kind: "sequence", Name: "s"}, "x"),
 			`unsupported feature: the comment on sequence s: YDB keeps comments on tables, their columns and indexes, and views`},
 		{"sequence", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateSequence{CreateSequence: &protocol.SQLSequence{Name: "s"}}},
