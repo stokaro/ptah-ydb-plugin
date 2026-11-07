@@ -10,6 +10,7 @@ import (
 	"time"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
@@ -17,10 +18,39 @@ import (
 )
 
 // HeldWorkload is the resource pools and the classifiers a database holds,
-// by name.
+// by name, with the pools its scheme lists.
 type HeldWorkload struct {
 	Pools       map[string]workload.PoolSpec
 	Classifiers map[string]workload.ClassifierSpec
+	// Listed names the resource pools the database's scheme lists under
+	// .metadata/workload_manager/pools, in the listing's order. A pool
+	// listed there and missing from Pools is one whose settings the system
+	// view did not report.
+	Listed []string
+}
+
+// PoolDirectory is where a database's scheme lists its resource pools,
+// relative to the database root.
+const PoolDirectory = ".metadata/workload_manager/pools"
+
+// ListedPools names the resource pools the scheme of database lists under
+// [PoolDirectory], through list. A database that keeps no pools has no such
+// directory, which lists none.
+func ListedPools(ctx context.Context, list DirectoryLister, database string) ([]string, error) {
+	listing, err := list(ctx, path.Join(database, PoolDirectory))
+	if errors.Is(err, ErrDirectoryNotVisible) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range listing.GetChildren() {
+		if entry.GetType() == Ydb_Scheme.Entry_RESOURCE_POOL {
+			names = append(names, entry.GetName())
+		}
+	}
+	return names, nil
 }
 
 // ReadWorkload reads the resource pools and the classifiers of database from

@@ -215,3 +215,30 @@ func incompleteSubjects(read *protocol.Schema) []string {
 	}
 	return described
 }
+
+// A pool the scheme lists and the system view does not describe is recorded
+// as unrepresentable: listing it cannot establish its settings, and read as
+// absent a plan would create it again. A described pool is the control, and
+// the namespace stays complete. Ported from the host's
+// TestReadSchemaRetainsPoolsMissingFromSystemViews.
+func TestWorkload_RecordsAListedPoolTheSystemViewMisses(t *testing.T) {
+	c := testcheck.New(t)
+	read := snapshot()
+
+	err := inspect.Workload(c.Context(), read, "/local", nil, false, func(context.Context) (nativeapi.HeldWorkload, error) {
+		return nativeapi.HeldWorkload{Pools: map[string]workload.PoolSpec{"default": {}}, Listed: []string{"default", "batch"}}, nil
+	}, "")
+
+	c.Assert(err, qt.IsNil)
+	var names []string
+	for _, value := range read.NativeObjects {
+		names = append(names, value.Kind+" "+value.Owner.Name)
+	}
+	c.Assert(names, qt.DeepEquals, []string{schema.ResourcePoolProperties + " default"})
+	c.Assert(incompleteSubjects(read), qt.DeepEquals, []string{schema.ResourcePoolProperties + ` batch UNREPRESENTABLE: resource pool "batch": ` +
+		`the database lists it under .metadata/workload_manager/pools, and its system view reports no settings for it`})
+	c.Assert(workloadKnowledge(read)[schema.ResourcePoolProperties].State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED)
+	for _, record := range workloadRecords(read) {
+		c.Assert(record.Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
+	}
+}
