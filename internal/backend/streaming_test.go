@@ -19,7 +19,14 @@ import (
 
 func streamingPlanRequest(c *qt.C, before, after *streaming.Spec, allow bool) *protocol.PlanFeaturesRequest {
 	c.Helper()
-	owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: "app", Name: "copy"}
+	return streamingPlanRequestAt(c, "app", "copy", before, after, allow)
+}
+
+// streamingPlanRequestAt is streamingPlanRequest for the query at
+// directory/name.
+func streamingPlanRequestAt(c *qt.C, directory, name string, before, after *streaming.Spec, allow bool) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: directory, Name: name}
 	var observed, desired *protocol.Envelope
 	var err error
 	if before != nil {
@@ -95,4 +102,66 @@ func TestStreamingPlanningRequiresCapability(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Contributions, qt.HasLen, 0)
 	c.Assert(result.Diagnostics, qt.HasLen, 1)
+}
+
+// One refused change refuses the whole batch: a creation at a path where a
+// common step creates a table, beside a valid creation, plans nothing, and the
+// refusal names the refused change's input. Ported from the host's
+// TestStreamingInvalidChangeDiscardsTheWholeBatch. The host's invalid change,
+// a running query's body changed without allow_state_reset, never reaches
+// planning here: the change's capture refuses it.
+func TestStreamingInvalidChangeDiscardsTheWholeBatch_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := streamingPlanRequestAt(c, "app", "added", nil, &streaming.Spec{Text: "SELECT 1;"}, false)
+	clash := streamingPlanRequestAt(c, "app", "clash", nil, &streaming.Spec{Text: "SELECT 2;"}, false)
+	clash.Changes[0].Value.Id = "clash"
+	request.Changes = append(request.Changes, clash.Changes...)
+	request.DesiredObjects.Records = append(request.DesiredObjects.Records, clash.DesiredObjects.Records...)
+	request.CommonSteps = []*protocol.CommonPlanningStep{commonAt("table", "app", "clash", protocol.PlanningEffect_CREATE)}
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Complete, qt.IsTrue)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].GetChange(), qt.Equals, uint32(1))
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(result.Changes, qt.HasLen, 0)
+}
+
+// A running query whose body changes is stopped early, before a user the plan
+// creates and one it drops, and started again after both, as the YDB engine
+// built into the host at 74de0b65b ran it: the stop is placed early rather
+// than fenced against the principal changes, and the restart follows the last
+// common step. Ported from the host's
+// TestWorkloadStreamingStopsAroundPoolAndPrincipalChanges.
+func TestStreamingStopsAroundPrincipalChanges_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := streamingPlanRequest(c, &streaming.Spec{Text: "SELECT 1;"}, &streaming.Spec{Text: "SELECT 2;"}, true)
+	request.TargetFeatures = backend.Description().Engines[0].Features
+	role := func(name string) *protocol.ComparisonIdentity {
+		return &protocol.ComparisonIdentity{Kind: "role", Name: &protocol.ComparisonPart{Source: name, Normalized: name}}
+	}
+	request.CommonSteps = []*protocol.CommonPlanningStep{
+		{Id: &protocol.StepIdentity{Owner: "host", Name: "create-user"}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN,
+			Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Create a user", Effects: []*protocol.PlanningEffect{{Subject: role("new.user"), Action: protocol.PlanningEffect_CREATE}}},
+			CommonObject: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "new.user", Login: true}}}}},
+		{Id: &protocol.StepIdentity{Owner: "host", Name: "drop-user"}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN,
+			Impact: protocol.ChangeSemantics_DESTRUCTIVE, Reason: "Drop a user", Effects: []*protocol.PlanningEffect{{Subject: role("old.user"), Action: protocol.PlanningEffect_DROP}}},
+			CommonObject: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_DropRole{DropRole: &protocol.Reference{Engine: "ydb", Kind: "role", Name: "old.user"}}}},
+	}
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	steps := result.Contributions[0].Steps
+	c.Assert(steps, qt.HasLen, 2)
+	stopped, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(steps[0].Operation.Value.Value))
+	c.Assert(err, qt.IsNil)
+	c.Assert(streaming.Running(*stopped.After), qt.IsFalse)
+	c.Assert(steps[0].Metadata.Placement, qt.Equals, protocol.PlanningMetadata_EARLY)
+	c.Assert(steps[1].Metadata.Placement, qt.Equals, protocol.PlanningMetadata_DEFAULT)
+	c.Assert(stepEdges(result), qt.DeepEquals, []string{steps[0].Id.Name + " -> " + steps[1].Id.Name, "drop-user -> " + steps[1].Id.Name})
+	c.Assert(result.Changes[0].Steps, qt.HasLen, 2)
 }

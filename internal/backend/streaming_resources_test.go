@@ -208,3 +208,33 @@ func TestStreamingResourcesResolveNamedAndExternalInputs(t *testing.T) {
 	}
 	c.Assert(paths, qt.DeepEquals, []string{"app/input", "app/sink", "app/external"})
 }
+
+// A dropped query runs early and reads each path its dropped body names, once
+// however the body spells it, so the drop runs before one of those topics
+// changes or goes. Ported from the host's
+// TestStreamingDropReadsTheTopicsOfTheDroppedBody.
+func TestStreamingDropReadsEachPathOfTheDroppedBodyOnce_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := streamingPlanRequest(c, &streaming.Spec{Text: "INSERT INTO `app/out` SELECT * FROM `app/in` JOIN `/local/app/in` USING (k);"}, nil, false)
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	steps := result.Contributions[0].Steps
+	c.Assert(steps, qt.HasLen, 1)
+	c.Assert(steps[0].Metadata.Placement, qt.Equals, protocol.PlanningMetadata_EARLY)
+	c.Assert(schemePathReads(steps[0]), qt.DeepEquals, []string{"app/out", "app/in"})
+}
+
+// schemePathReads names each scheme path step reads, as its directory and
+// name.
+func schemePathReads(step *protocol.PlanningStep) []string {
+	var paths []string
+	for _, effect := range step.GetMetadata().GetEffects() {
+		if effect.GetAction() == protocol.PlanningEffect_READ && effect.GetSubject().GetKind() == "ydb.scheme-path" {
+			paths = append(paths, effect.GetSubject().GetSchema().GetNormalized()+"/"+effect.GetSubject().GetName().GetNormalized())
+		}
+	}
+	return paths
+}

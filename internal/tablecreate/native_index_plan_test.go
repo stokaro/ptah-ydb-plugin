@@ -383,3 +383,19 @@ func TestNativeIndexComparison(t *testing.T) {
 		})
 	}
 }
+
+// A change of a vector index's settings needs the index the table holds, so
+// an altered table read without its index set, as a rollback that could not
+// capture the table sends it, plans no step blind: the change is refused.
+// Ported from the host's TestVectorIndexService_RefusesAChangeWithoutACapture.
+func TestNativeIndexPlan_RefusesAChangeWithoutACapture(t *testing.T) {
+	c := testcheck.New(t)
+	request := alterRequest(c, documents(indexSet(nativeDeclared(vectorJSON("docs_emb", []string{"gen", "emb"}, []string{"body"}, cosine3(4), ""), prefixedTables)), ""))
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, "The table's current indexes were not captured")
+}
