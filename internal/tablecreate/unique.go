@@ -62,7 +62,9 @@ func effectiveUniqueKey(table *protocol.DeclaredTable, declared, native []string
 }
 
 func uniqueConstraintIndex(table *protocol.DeclaredTable, key []string, constraint *protocol.DeclaredConstraint) (*protocol.DeclaredIndex, error) {
-	if err := only(constraint, "name", "type", "table", "columns", "include_columns", "nulls_distinct", "deferrable", "not_enforced", "requires"); err != nil {
+	// The host renders a constraint comment as a separate COMMENT ON INDEX
+	// step after the table exists. It is not part of the native CREATE request.
+	if err := only(constraint, "name", "type", "table", "columns", "include_columns", "nulls_distinct", "deferrable", "not_enforced", "requires", "comment"); err != nil {
 		return nil, err
 	}
 	name := uniqueIndexName(table.GetName(), constraint.GetName(), constraint.GetColumns())
