@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -559,7 +560,7 @@ func nativeIndexOptions(spec *native.IndexIntent) []string {
 		options["tokenizer"] = strings.ToLower(analyzers.GetTokenizer().String())
 	}
 	if analyzers.Language != nil {
-		options["language"] = "'" + strings.ReplaceAll(analyzers.GetLanguage(), "'", "\\'") + "'"
+		options["language"] = ydbtype.StringLiteral(analyzers.GetLanguage())
 	}
 	for name, value := range map[string]*bool{"use_filter_lowercase": analyzers.UseFilterLowercase, "use_filter_stopwords": analyzers.UseFilterStopwords,
 		"use_filter_ngram": analyzers.UseFilterNgram, "use_filter_edge_ngram": analyzers.UseFilterEdgeNgram, "use_filter_length": analyzers.UseFilterLength,
