@@ -64,3 +64,61 @@ func TestValidateSchema_Views(t *testing.T) {
 	c.Assert(found[1].Object+": "+found[1].Message, qt.Equals, "empty: unsupported feature: view empty: a YDB view needs a query")
 	c.Assert(found[0].Kind+found[1].Kind, qt.Equals, "viewview")
 }
+
+// viewBesideTable declares the table app.object and view beside it.
+func viewBesideTable(view *protocol.SQLView) *protocol.ValidateSchemaRequest {
+	request := newRequest(keyed("app", "object"))
+	request.TargetFeatures = []string{provider.CommonObjectsFeature}
+	view.Body = "SELECT 1 AS a"
+	request.CommonObjects = &protocol.DeclaredCommonObjects{Views: []*protocol.SQLView{view}}
+	return request
+}
+
+// A view declared at the path of a declared table is refused before anything
+// is rendered or planned, however its directory and name spell the path: YDB
+// keeps one object at a path, and CREATE VIEW there fails (`unexpected path
+// type`). Ported from the host's TestYDBSharedPaths_RefusesAViewAtATablesPath.
+func TestValidateSchema_ViewAtATablesPath_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		view *protocol.SQLView
+	}{
+		{name: "the table's directory and name", view: &protocol.SQLView{Schema: "app", Name: "object"}},
+		{name: "a directory with a trailing slash", view: &protocol.SQLView{Schema: "app/", Name: "object"}},
+		{name: "the path as the name", view: &protocol.SQLView{Name: "app/object"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			found := diagnostics(c, viewBesideTable(test.view))
+
+			c.Assert(found, qt.HasLen, 1)
+			c.Assert(found[0].Code, qt.Equals, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE)
+			c.Assert(found[0].Kind, qt.Equals, "view")
+			c.Assert(found[0].Object, qt.Equals, "app/object")
+			c.Assert(found[0].Message, qt.Equals, "view app/object has the path of a declared table, and YDB keeps one object at a path (`unexpected path type`)")
+		})
+	}
+}
+
+// A view whose dotted name is one path segment at the root, one whose name
+// differs from the table's only in case, and one in another directory are at
+// paths of their own. Ported from the host's TestYDBSharedPaths_KeepDistinctPaths.
+func TestValidateSchema_ViewBesideATableAtAnotherPath_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		view *protocol.SQLView
+	}{
+		{name: "a dotted name at the root", view: &protocol.SQLView{Name: "app.object"}},
+		{name: "a name in another case", view: &protocol.SQLView{Schema: "app", Name: "Object"}},
+		{name: "another directory", view: &protocol.SQLView{Schema: "other", Name: "object"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			found := diagnostics(c, viewBesideTable(test.view))
+
+			c.Assert(found, qt.HasLen, 0)
+		})
+	}
+}
