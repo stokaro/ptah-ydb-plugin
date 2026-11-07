@@ -10,9 +10,15 @@ package replicationcompare
 
 import (
 	"context"
+	"fmt"
+	"path"
+	"slices"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -36,7 +42,49 @@ func CompareReplications(ctx context.Context, request *protocol.CompareModelsReq
 // CompareTransfers evaluates complete transfer operands and coverage, as
 // [CompareReplications] does for replications.
 func CompareTransfers(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
+	if err := undeclaredTargets(request); err != nil {
+		return nil, err
+	}
 	return objectcompare.Compare(ctx, request, TransferFamily())
+}
+
+// undeclaredTargets refuses a declared transfer whose table the schema does
+// not declare, where the host lists every declared table among the declared
+// relations (models.declared-relations). YDB creates no transfer into a table
+// that is not there (`Path does not exist`, measured on 26.2.1.14), and a
+// plan that leaves the table out drops it or leaves it absent, so the
+// transfer would fail at apply or after it; the host's embedded engine
+// refused it in the same words. A host that lists only views leaves the
+// question open, and the transfer is compared as before.
+func undeclaredTargets(request *protocol.CompareModelsRequest) error {
+	if !slices.Contains(request.GetTargetFeatures(), provider.DeclaredRelationsFeature) {
+		return nil
+	}
+	for _, record := range request.GetDesired().GetRecords() {
+		if record.GetKind() != schema.TransferProperties || record.GetValue() == nil {
+			continue
+		}
+		spec, err := schema.DesiredTransfer(record.GetValue().GetValue())
+		if err != nil {
+			return err
+		}
+		target := strings.Trim(spec.Target, "/")
+		directory, name := path.Split(target)
+		directory = strings.TrimSuffix(directory, "/")
+		if slices.ContainsFunc(request.GetDeclaredRelations(), func(relation *protocol.ComparisonIdentity) bool {
+			return relation.GetKind() == "table" && relation.GetSchema().GetNormalized() == directory && relation.GetName().GetNormalized() == name
+		}) {
+			continue
+		}
+		owner := record.GetValue().GetValue().GetOwner()
+		subject := owner.GetName()
+		if owner.GetSchema() != "" {
+			subject = owner.GetSchema() + "/" + subject
+		}
+		return authored.New(fmt.Sprintf("transfer %s: it writes table %s, which the schema does not declare, and YDB creates no transfer into "+
+			"a table that is not there (`Path does not exist`); declare the table", subject, target))
+	}
+	return nil
 }
 
 // ReplicationFamily is the async replication's part of a comparison.

@@ -907,3 +907,65 @@ func convertedSpecs(c *qt.C, kind string, representation protocol.ValueInput_Rep
 	c.Assert(err, qt.IsNil)
 	return replicationSpec, transferSpec, state
 }
+
+// tableRelation is a declared table of the schema, as a host that lists
+// models.declared-relations names it among the declared relations.
+func tableRelation(directory, name string) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{Kind: "table", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: testcomparison.Part(directory),
+		Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part(name)}
+}
+
+// transferRelationsRequest compares the declared transfer app/ingest, which
+// writes table order_log, beside relations, from a host that lists every
+// declared table among them.
+func transferRelationsRequest(c *qt.C, relations ...*protocol.ComparisonIdentity) *protocol.CompareModelsRequest {
+	c.Helper()
+	request := objectRequest(c, schema.TransferProperties, replicationcompare.TransferServiceID, "ingest", declaredTransfer(c, new(ingest())), nil)
+	request.TargetFeatures = append(request.TargetFeatures, provider.DeclaredRelationsFeature)
+	request.DeclaredRelations = relations
+	return request
+}
+
+// A declared transfer into a table the schema does not declare is refused
+// before anything is planned: YDB creates no transfer into a table that is
+// not there (`Path does not exist`), and the host's embedded engine refused
+// it in these words. Ported from the host's
+// TestGenerateMigrationAST_Replications_TransferReadsADeclaredTopic and
+// TestGenerateMigrationAST_Replications_FailurePath (the undeclared table).
+func TestTransferComparisonRefusesAnUndeclaredTable_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		relations []*protocol.ComparisonIdentity
+	}{
+		{name: "no table declared"},
+		{name: "a table elsewhere", relations: []*protocol.ComparisonIdentity{tableRelation("app", "order_log")}},
+		{name: "a view of the name", relations: []*protocol.ComparisonIdentity{{Kind: "view", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{},
+			Schema: &protocol.ComparisonPart{}, Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part("order_log")}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().CompareModels(c.Context(), transferRelationsRequest(c, test.relations...))
+
+			c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it writes table order_log, which the schema does not declare, "+
+				"and YDB creates no transfer into a table that is not there \\(`Path does not exist`\\); declare the table")
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// A transfer into a declared table is compared, and so is any transfer from
+// a host that names only views among the declared relations, which cannot
+// say a table is undeclared.
+func TestTransferComparisonRefusesAnUndeclaredTable_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	declared := transferRelationsRequest(c, tableRelation("", "order_log"))
+	viewsOnly := objectRequest(c, schema.TransferProperties, replicationcompare.TransferServiceID, "ingest", declaredTransfer(c, new(ingest())), nil)
+
+	for _, request := range []*protocol.CompareModelsRequest{declared, viewsOnly} {
+		result, err := backend.New().CompareModels(c.Context(), request)
+
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.Changes, qt.HasLen, 1)
+	}
+}

@@ -257,6 +257,13 @@ func providerFeatures() []string {
 		// the host reads it as the same claim once modelPredecessors names
 		// that identity; see TestModelIdentitiesAreDescribedOrDeclaredPredecessors.
 		provider.OwnPredecessorsFeature,
+		// A comparison reads every table the desired schema declares among
+		// its declared relations, so a transfer into a table the schema does
+		// not declare is refused; see replicationcompare.CompareTransfers.
+		provider.DeclaredRelationsFeature,
+		// YDB has no enum type, and an enum column is refused before any
+		// call, as the host's embedded engine refused it (EnumColumns).
+		provider.EnumColumnsFeature,
 	}
 }
 
@@ -696,6 +703,7 @@ func buildDescription() *protocol.Description {
 				GoHeaderKinds: yqlschema.HeaderKinds(),
 				Reports:       schema.Reports(),
 				IndexKinds:    tablesource.IndexKinds(),
+				EnumColumns:   &protocol.EnumColumns{Form: protocol.EnumColumns_REFUSED},
 			},
 		},
 	}

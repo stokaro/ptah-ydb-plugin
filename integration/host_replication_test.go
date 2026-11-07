@@ -458,6 +458,28 @@ func TestHostRefusesToDropATopicATransferReads_FailurePath(t *testing.T) {
 	c.Assert(operations(removed), qt.DeepEquals, []string{"transfer-operation " + h.directory + ".ingest", "topic-operation " + h.directory + ".events"}, qt.Commentf("%s", removed))
 }
 
+// A schema that declares a transfer into a table it does not declare is
+// refused before anything runs, in the words of the host's embedded engine:
+// YDB creates no transfer into a table that is not there (`Path does not
+// exist`), measured on 26.2.1.14. The host lists every declared table among
+// a comparison's declared relations under models.declared-relations; a host
+// that predates it cannot say a table is undeclared. Nothing is created.
+// Ported from the undeclared-table half of the host's
+// TestGenerateMigrationAST_Replications_FailurePath.
+func TestHostRefusesATransferIntoAnUndeclaredTable_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.DeclaredRelationsFeature)
+	h := newHostTransfer(c)
+	topic := "topics:\n  events:\n    schema: " + h.directory + "\n    consumers:\n      ingest: {}\n"
+
+	refused, err := h.apply(topic + h.transfer(lambdaWriting("a:"), "    consumer: ingest\n"))
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", refused))
+	c.Assert(refused, qt.Contains, "transfer "+h.directory+"/ingest: it writes table "+h.directory+"/order_log, which the schema does not declare, "+
+		"and YDB creates no transfer into a table that is not there (`Path does not exist`); declare the table")
+	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.HasLen, 0)
+}
+
 // Ported from the host's TestYDBTransfer_RefusedOn251: a transfer is refused
 // on a line without transfers, such as 25.1 with its default flags (`Topic
 // transfer creation is disabled`), before any statement runs. The host
