@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.24.0, which speaks provider contract 25.27.
+The module pins `provider-sdk` v0.26.0, which speaks provider contract 25.28.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -154,6 +154,21 @@ full-text tests that need one skip there; the 25.1 run checks the refusal
 instead. One full-text test turns `enable_fulltext_index` off for the whole
 26.2 cluster through its dynamic configuration and drops the configuration
 when it ends.
+
+Ptah's provider conformance suite, from the SDK's package `conformance`, runs
+in `integration/conformance_e2e_test.go`. Its offline part runs in the unit job
+and needs no database: the handshake, the description and its negotiation
+under every host profile, every RPC, offline calls, and the model identities
+of the last release in `integration/testdata`. Its live part runs with the
+other live tests: sessions, reads, locks across two processes, transactions, a
+table created and dropped, a refused statement, and a login whose password is
+the suite's canary. A release records its model identities there with the
+suite's command:
+
+```sh
+GOWORK=off go run github.com/stokaro/ptah/provider-sdk/cmd/ptah-provider-conformance \
+  models -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
+```
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions,
