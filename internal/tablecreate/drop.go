@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -56,33 +55,15 @@ func buildDropModel() *protocol.ValueModel {
 		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: DropOperationKind + "/json-v1"}
 }
 
-// replicationRefusal is why the table cannot be dropped, or "": it holds a
-// changefeed an asynchronous replication controls, which the replication
-// reads the table through. Dropping the table would take the stream from
-// under the replication, so the removal waits until the replication's
-// controller releases it, as the host's embedded engine refused it. A
-// changefeed the read cannot represent goes with the table.
-func replicationRefusal(owner *protocol.Reference, table *protocol.PlanningTable) (string, error) {
+// columnTable reports whether the read of table describes a column table,
+// which holds a column storage facet.
+func columnTable(table *protocol.PlanningTable) bool {
 	for _, record := range table.GetCurrent().GetFeatures().GetFacets().GetRecords() {
-		if record.GetKind() != schema.ChangefeedProperties || record.GetValue() == nil || !forThisEngine(record.GetTargets()) {
-			continue
-		}
-		observed, err := normalizedFacet(record, protocol.ValueInput_OBSERVED)
-		if err != nil {
-			return "", err
-		}
-		_, held, err := changefeedSets(nil, observed)
-		if err != nil {
-			return "", err
-		}
-		for _, stream := range held.GetChangefeeds() {
-			if feed, err := changefeeds.FromObserved(stream); err == nil && feed.Replicated {
-				return fmt.Sprintf("table %q: changefeed %q is a replication-managed stream that depends on this table; "+
-					"its replication's controller must release it before the table is dropped", tableLabel(owner), feed.Name), nil
-			}
+		if record.GetKind() == schema.ColumnStorageProperties && forThisEngine(record.GetTargets()) {
+			return true
 		}
 	}
-	return "", nil
+	return false
 }
 
 // Drop is a decoded removal: what the table holds when it is planned, which

@@ -243,18 +243,13 @@ func (p *planner) planTableDrop(i int, table *protocol.PlanningTable) (*protocol
 	if table.Current == nil || len(table.Current.GetColumns()) == 0 {
 		return refused(i, fmt.Sprintf("table %q: a removal checks the table it drops against the read of it, and the table was not read", tableLabel(owner))), nil
 	}
-	reason, err := replicationRefusal(owner, table)
-	if err != nil {
-		return nil, err
-	}
-	if reason != "" {
-		return refused(i, reason), nil
-	}
 	operation, err := CaptureDrop("pending", owner, table.Current)
 	if err != nil {
 		return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 	}
-	if reason := undescribedChangefeeds(table); reason != "" {
+	// A column table holds no changefeeds, so its read records none and
+	// claims no knowledge of them.
+	if reason := undescribedChangefeeds(table); reason != "" && !columnTable(table) {
 		return refused(i, fmt.Sprintf("dropping table %q: %s", tableLabel(owner), reason)), nil
 	}
 	p.drops = append(p.drops, removal{index: i, table: table, operation: operation})
