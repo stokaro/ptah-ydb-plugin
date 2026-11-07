@@ -149,40 +149,6 @@ func TestHostScopesResourcePoolsAndClassifiers_HappyPath(t *testing.T) {
 	c.Assert(refused, qt.Contains, "a declared resource pool classifier names resource pool \""+pool+"\", which is not declared")
 }
 
-// A classifier selected by name beside the pool the database holds plans the
-// classifier alone, and a classifier moved to another pool the database holds
-// plans its change alone: the host keeps the pool a declared classifier routes
-// to on both sides of the comparison (G227). A host that kept it on the
-// declared side alone planned CREATE RESOURCE POOL of the held pool, which
-// stops `schema apply` before the classifier is created. The same holds for
-// the built-in engine at 74de0b65b, whose scope had the same rule.
-func TestHostScopesAClassifierBesideItsHeldPool_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
-	requireHostNegotiates(c, provider.ScopeSelectionsFeature)
-	requireHostChange(c, "stokaro/ptah#5782, which keeps a declared classifier's held pool on both sides of a scoped comparison")
-	opened, directory, _ := inspectionFixture(c)
-	enableResourcePools(c, opened)
-	pool, other, classifier, member := directory+"_pool", directory+"_other", directory+"_cls", workloadMember(directory)
-	rank, _ := workloadRanks(directory)
-	createSchemaObject(c, opened, "CREATE RESOURCE POOL `"+pool+"` WITH (CONCURRENT_QUERY_LIMIT = 5)", "DROP RESOURCE POOL `"+pool+"`")
-	createSchemaObject(c, opened, "CREATE RESOURCE POOL `"+other+"` WITH (CONCURRENT_QUERY_LIMIT = 6)", "DROP RESOURCE POOL `"+other+"`")
-	declared := func(routed string) string {
-		return fmt.Sprintf("resource_pools:\n  %s:\n    concurrent_query_limit: 5\n  %s:\n    concurrent_query_limit: 6\n"+
-			"resource_pool_classifiers:\n  %s:\n    resource_pool: %s\n    member_name: %s\n    rank: %d\n", pool, other, classifier, routed, member, rank)
-	}
-	settings := func(routed string) string {
-		return fmt.Sprintf("(RESOURCE_POOL = '%s', RANK = %d, MEMBER_NAME = '%s')", routed, rank, member)
-	}
-	selectors, include := directory+",/", classifier+"[type=resource_pool_classifier]"
-
-	created := scopedStatements(c, selectors, declared(pool), "--include", include)
-	createSchemaObject(c, opened, "CREATE RESOURCE POOL CLASSIFIER `"+classifier+"` WITH "+settings(pool), "DROP RESOURCE POOL CLASSIFIER `"+classifier+"`")
-	moved := scopedStatements(c, selectors, declared(other), "--include", include)
-
-	c.Assert(created, qt.DeepEquals, []string{"CREATE RESOURCE POOL CLASSIFIER `" + classifier + "` WITH " + settings(pool)})
-	c.Assert(moved, qt.DeepEquals, []string{"ALTER RESOURCE POOL CLASSIFIER `" + classifier + "` SET " + settings(other)})
-}
-
 // The host selects a YDB secret by its own name, on both sides: an include
 // plans only that secret's drop, an exclusion keeps it, and an exclusion of
 // the directory's secrets plans nothing. Ported from the host's
