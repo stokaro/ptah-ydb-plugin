@@ -122,12 +122,14 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 // error the host's own reader reports the same way, and an index setting a SQL
 // schema reading has no home for.
 func TestHostRefusesASQLSchema_FailurePath(t *testing.T) {
+	syntax := `YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL \(got ";"\)`
+	settings := "index `by_body` of table `[^`]+/items` declares partitioning settings, which a SQL schema reading has no home for: " +
+		"an index states no settings of its own in the row-table model[^\n]*"
 	for _, test := range []struct{ name, text, want string }{
 		{name: "syntax", text: "CREATE TABLE `{dir}/items` (id Uint64, PRIMARY KEY (id));",
-			want: `(?s).*read SQL schema file .*schema\.sql: YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL \(got ";"\) at position \d+ \(line 1, column \d+\).*`},
+			want: positioned(syntax)},
 		{name: "index settings", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL SYNC ON (body) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
-			want: "(?s).*index `by_body` of table `[^`]+/items` declares partitioning settings, which a SQL schema reading has no home for: " +
-				"an index states no settings of its own in the row-table model.* at position \\d+ \\(line 1, column \\d+\\).*"},
+			want: positioned(settings)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -141,6 +143,14 @@ func TestHostRefusesASQLSchema_FailurePath(t *testing.T) {
 			c.Assert(listing.Children, qt.HasLen, 0)
 		})
 	}
+}
+
+// positioned matches the refusal message as the host reports it with its
+// position in schema.sql: Ptah v0.22.1 appends "at position N (line L, column
+// C)", and later hosts lead with "schema.sql:L:C:". Either way the position is
+// required.
+func positioned(message string) string {
+	return `(?s).*read SQL schema file .*schema\.sql(:1:\d+: ` + message + `|: ` + message + ` at position \d+ \(line 1, column \d+\)).*`
 }
 
 func replaceDirectory(text, directory string) string {
