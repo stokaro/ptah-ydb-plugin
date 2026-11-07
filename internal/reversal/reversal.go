@@ -12,6 +12,7 @@ import (
 	"path"
 	"reflect"
 	"slices"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -175,23 +176,83 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			return nil, err
 		}
 	case schema.TablePropertiesChange, schema.ColumnStorageChange:
-		if reversed.Kind == schema.IndexSettingsProperties {
-			limitations, err := indexSettingsLimitations(reversed)
-			if err != nil {
-				return nil, err
-			}
-			result.Strategy, result.Limitations = "restore every setting the index held in place", limitations
-			break
-		}
-		ttl, err := ttlTransition(reversed)
-		if err != nil {
+		if err := describeTableSettings(result, reversed, name); err != nil {
 			return nil, err
 		}
-		result.Strategy, result.Limitations = tableSettings(reversed.Kind, name, ttl)
 	default:
 		return nil, authored.New("YDB change " + change.GetKind() + " has no reversal")
 	}
 	return result, nil
+}
+
+func describeTableSettings(result *protocol.ReversedChange, reversed schema.Reversed, name string) error {
+	if reversed.Kind == schema.IndexSettingsProperties {
+		limitations, err := indexSettingsLimitations(reversed)
+		if err != nil {
+			return err
+		}
+		result.Strategy, result.Limitations = "restore every setting the index held in place", limitations
+		return nil
+	}
+	ttl, err := ttlTransition(reversed)
+	if err != nil {
+		return err
+	}
+	result.Strategy, result.Limitations = tableSettings(reversed.Kind, name, ttl)
+	if reversed.Kind == schema.TableProperties {
+		familiesChanged, retained, err := familySettingsLimitations(reversed)
+		if err != nil {
+			return err
+		}
+		if familiesChanged && ttl == ttlKept {
+			result.Strategy = "move each column back to its family and restore each family setting in place"
+		}
+		result.Limitations = append(result.Limitations, retained...)
+	}
+	return nil
+}
+
+// familySettingsLimitations reports family settings the reverse cannot undo.
+// YQL can change compression and column placement, but it cannot drop a family
+// or remove a storage pool assigned to one. A newly added family keeps its
+// settings, so it needs only one limitation entry.
+func familySettingsLimitations(reversed schema.Reversed) (bool, []string, error) {
+	before, left := &native.DescribeTableResult{}, &native.DescribeTableResult{}
+	if err := protojson.Unmarshal(reversed.Before.GetPayload(), before); err != nil {
+		return false, nil, err
+	}
+	if err := protojson.Unmarshal(reversed.Left.GetPayload(), left); err != nil {
+		return false, nil, err
+	}
+	held := make(map[string]*native.ColumnFamily, len(before.GetColumnFamilies()))
+	for _, family := range before.GetColumnFamilies() {
+		held[family.GetName()] = family
+	}
+	changed := len(before.GetColumnFamilies()) != len(left.GetColumnFamilies())
+	var addedFamilies, addedData []string
+	for _, family := range left.GetColumnFamilies() {
+		previous, found := held[family.GetName()]
+		if !found {
+			changed = true
+			addedFamilies = append(addedFamilies, "family "+family.GetName())
+			continue
+		}
+		changed = changed || !proto.Equal(previous, family)
+		if previous.GetData().GetMedia() == "" && family.GetData().GetMedia() != "" {
+			addedData = append(addedData, "the DATA of family "+family.GetName())
+		}
+	}
+	slices.Sort(addedFamilies)
+	slices.Sort(addedData)
+	retained := slices.Concat(addedFamilies, addedData)
+	if len(retained) == 0 {
+		return changed, nil, nil
+	}
+	kept := retained[0]
+	if len(retained) > 1 {
+		kept = strings.Join(retained[:len(retained)-1], ", ") + " and " + retained[len(retained)-1]
+	}
+	return changed, []string{"YQL cannot drop a column family or unset its DATA pool, so the rollback keeps " + kept + ", which the forward change added."}, nil
 }
 
 // describeTopic describes the reversal of a topic change: a created topic is

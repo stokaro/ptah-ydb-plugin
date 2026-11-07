@@ -17,6 +17,9 @@ import (
 func valueOf(c *qt.C, kind string, representation protocol.ValueInput_Representation, owner *protocol.Reference, payload string) *protocol.Envelope {
 	c.Helper()
 	definition, normalize := schema.NativeDesiredModel(kind), schema.NormalizeDesired
+	if kind == schema.TableProperties {
+		definition = schema.TableDesiredModel()
+	}
 	for _, observed := range schema.ObservedModels() {
 		if representation == protocol.ValueInput_OBSERVED && observed.Kind == kind {
 			definition, normalize = observed, schema.Normalize
@@ -82,4 +85,26 @@ func TestReverse_DroppedChangefeedReportsTheLostStream(t *testing.T) {
 	c.Assert(reverse.Limitations, qt.DeepEquals, []string{
 		"a changefeed of table app/records the rollback adds again starts a new stream; the messages and the consumers' positions of the dropped one are lost"})
 	c.Assert(string(reverse.Value.Value.Payload), qt.Contains, `"after":{"changefeeds":[{"format":"FORMAT_JSON","mode":"MODE_UPDATES","name":"f","topic":{"consumers":[{"name":"audit"}]`)
+}
+
+// A reverse of column family changes reports settings YQL cannot unset.
+// The new family remains after its columns move back, and the default family
+// retains the storage pool the forward change assigned. This ports the
+// recovery limit of TestPlanBidirectionalSchemaDiff_ColumnFamiliesRollBack.
+func TestReverse_ColumnFamiliesReportRetainedSettings(t *testing.T) {
+	c := testcheck.New(t)
+	owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "app", Kind: "table", Name: "items"}
+	held := valueOf(c, schema.TableProperties, protocol.ValueInput_OBSERVED, owner,
+		`{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_NONE"},{"name":"warm","compression":"COMPRESSION_NONE"}]}`)
+	declared := valueOf(c, schema.TableProperties, protocol.ValueInput_DESIRED, owner,
+		`{"primaryKey":["id"],"columnFamilies":[{"name":"default","data":{"media":"hdd"},"compression":"COMPRESSION_LZ4"},`+
+			`{"name":"warm"},{"name":"cold","data":{"media":"hdd"},"compression":"COMPRESSION_LZ4"}]}`)
+	change, err := schema.CaptureTablePropertiesChange("change", owner, held, declared)
+	c.Assert(err, qt.IsNil)
+
+	reverse := reversed(c, change)
+
+	c.Assert(reverse.Strategy, qt.Equals, "move each column back to its family and restore each family setting in place")
+	c.Assert(reverse.Limitations, qt.DeepEquals, []string{
+		"YQL cannot drop a column family or unset its DATA pool, so the rollback keeps family cold and the DATA of family default, which the forward change added."})
 }

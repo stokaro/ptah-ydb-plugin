@@ -55,3 +55,41 @@ func TestHostRollsBackAColumnFamilyMove_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+// A down migration restores a column's old family and the default family's
+// compression. YDB cannot drop the new cold family or remove a storage pool
+// assigned to the default family, so the migration reports both retained
+// settings. This ports TestPlanBidirectionalSchemaDiff_ColumnFamiliesRollBack
+// through the host binary and a live table.
+func TestHostRollsBackColumnFamilySettings_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	absolute := path.Join(database, directory, "docs")
+	before := replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"default\" compression=\"off\"\n"+
+		"//ptah:schema:columnfamily name=\"warm\" fields=\"body\"\n", ""), directory)
+	after := replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"default\" data=\""+storagePool+"\" compression=\"lz4\"\n"+
+		"//ptah:schema:columnfamily name=\"warm\"\n"+
+		"//ptah:schema:columnfamily name=\"cold\" data=\""+storagePool+"\" compression=\"lz4\" fields=\"body\"\n", ""), directory)
+	created, createErr := hostApplySource(c, directory, "go", before)
+	c.Assert(createErr, qt.IsNil, qt.Commentf("%s", created))
+	c.Assert(heldStorage(c, opened, absolute).Families, qt.DeepEquals, []string{
+		"default compression=off", "warm compression=off columns=body"})
+
+	migrations, up, down := hostGenerate(c, directory, "go", after)
+	applied, upErr := hostMigrate(c, directory, migrations, "migrations", "up")
+	c.Assert(upErr, qt.IsNil, qt.Commentf("%s\n%s", applied, up))
+	c.Assert(heldStorage(c, opened, absolute).Families, qt.DeepEquals, []string{
+		"cold data=hdd compression=lz4 columns=body", "default data=hdd compression=lz4", "warm compression=off"})
+	c.Assert(hostPlanned(c, directory, "go", after), qt.HasLen, 0)
+
+	rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
+	c.Assert(downErr, qt.IsNil, qt.Commentf("%s\n%s", rolledBack, down))
+	c.Assert(down, qt.Contains, "Recovery limit:")
+	c.Assert(down, qt.Contains, "family cold")
+	c.Assert(down, qt.Contains, "DATA of family default")
+	c.Assert(down, qt.Contains, "ALTER TABLE `"+directory+"/docs` ALTER FAMILY `default` SET COMPRESSION 'off', ALTER COLUMN `body` SET FAMILY `warm`;")
+	c.Assert(heldStorage(c, opened, absolute).Families, qt.DeepEquals, []string{
+		"cold data=hdd compression=lz4", "default data=hdd compression=off", "warm compression=off columns=body"})
+	c.Assert(hostPlanned(c, directory, "go", before), qt.HasLen, 0)
+}

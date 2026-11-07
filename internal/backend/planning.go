@@ -37,6 +37,7 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
+	request = rebindRenamedIndexChanges(request)
 	// Optional common kinds belong to the negotiated request profile. A host
 	// without independent access observations cannot supply their coverage.
 	description := provider.NegotiatedDescription(described(), request.GetTargetFeatures())
