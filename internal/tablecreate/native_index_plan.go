@@ -161,16 +161,20 @@ func keptColumns(spec *native.IndexIntent, columns nativeIndexColumns) string {
 }
 
 // declaredKeyTypes returns the YDB type of every column a declaration states,
-// and its key in order, for the rules a vector or full-text index follows.
-func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableIntent) nativeIndexColumns {
-	result := nativeIndexColumns{types: declaredTypes(table.GetColumns()), dimensions: make(map[string]uint64)}
+// the dimension each VECTOR(n) column names, and its key in order, for the
+// rules a vector or full-text index follows. A column reads as the type the
+// session's creation of it writes, as the host's embedded engine read it:
+// VECTOR(n) as the String column YDB keeps a vector in.
+func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableIntent, caps map[string]bool) nativeIndexColumns {
+	created := make([]*protocol.DeclaredColumn, 0, len(table.GetColumns()))
 	for _, column := range table.GetColumns() {
-		// A declared VECTOR(n) is bytes in a String column, as the creation
-		// maps it, and the vector index keeps the dimension it names.
-		if mapping, err := ydbtype.Map(column.GetType(), nil); err == nil && mapping.Dimension != 0 {
-			result.types[column.GetName()], result.dimensions[column.GetName()] = mapping.Type, mapping.Dimension
+		spelling := column.GetType()
+		if mapping, err := ydbtype.Map(spelling, ydbtype.Capabilities(caps)); err == nil {
+			spelling = mapping.Type
 		}
+		created = append(created, &protocol.DeclaredColumn{Name: column.GetName(), Type: spelling})
 	}
+	result := nativeIndexColumns{types: declaredTypes(created), dimensions: vectorDimensions(table.GetColumns(), caps)}
 	for _, column := range table.GetColumns() {
 		if column.GetPrimary() && !slices.Contains(result.key, column.GetName()) {
 			result.key = append(result.key, column.GetName())
@@ -179,6 +183,19 @@ func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableInte
 	for _, name := range slices.Concat(table.GetPrimaryKey(), intent.GetPrimaryKey()) {
 		if !slices.Contains(result.key, name) {
 			result.key = append(result.key, name)
+		}
+	}
+	return result
+}
+
+// vectorDimensions returns the dimension each column declared VECTOR(n)
+// names. The column keeps none (see ydbtype.Map), and a vector index over it
+// is held to it.
+func vectorDimensions(columns []*protocol.DeclaredColumn, caps map[string]bool) map[string]uint64 {
+	result := make(map[string]uint64)
+	for _, column := range columns {
+		if mapping, err := ydbtype.Map(column.GetType(), ydbtype.Capabilities(caps)); err == nil && mapping.Dimension != 0 {
+			result[column.GetName()] = mapping.Dimension
 		}
 	}
 	return result
@@ -240,7 +257,8 @@ func withCreationIndexes(owner *protocol.Reference, table *protocol.DeclaredTabl
 	if err != nil {
 		return nil, "", err
 	}
-	creation := &nativeCreation{columns: nativeIndexColumns{types: make(map[string]string), key: slices.Clone(created.GetPrimaryKey())}}
+	creation := &nativeCreation{columns: nativeIndexColumns{types: make(map[string]string), dimensions: vectorDimensions(table.GetColumns(), capabilities),
+		key: slices.Clone(created.GetPrimaryKey())}}
 	for _, index := range created.GetIndexes() {
 		creation.names = append(creation.names, index.GetName())
 	}
