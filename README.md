@@ -3403,6 +3403,13 @@ filled: a read that captured none while the declaration states some, a read
 whose coverage records them as uninspected or unrepresentable and carries none,
 as the host records them for two HCL documents (`the changefeed namespace is
 not fully described: ...`), and a changefeed the read cannot represent.
+A native execution gives the new table the access control entries the old
+table holds before it copies the rows, as the host's embedded engine gave a
+rebuilt table back its grants: the new table is created with its directory's
+permissions alone, and the old one is dropped with its own. A grant or revoke
+the plan makes on the table runs after the rebuild, on the new table. The TEXT
+form has no statement for those entries, so a rebuild a migration file holds
+leaves the new table with its directory's permissions.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
 

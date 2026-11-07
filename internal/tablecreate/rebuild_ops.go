@@ -146,7 +146,8 @@ func NormalizeCopy(input *protocol.ValueInput) (*protocol.NormalizedValue, error
 		return nil, err
 	}
 	return normalizedStatement(input, CopyModel(), decoded, &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE,
-		Reason: "Copies the rows of a table into a new one", Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Rows are written into a table the plan created"})
+		Reason: "Copies the rows of a table into a new one", Access: protocol.ChangeSemantics_UNCHANGED,
+		AccessReason: "The table the plan created takes the rows and the access control entries of the table it replaces"})
 }
 
 // NormalizeRename reconstructs a rename's safety facts from its payload.

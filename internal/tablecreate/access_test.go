@@ -30,9 +30,10 @@ func TestCreatedTableLeavesAccessUnchanged(t *testing.T) {
 }
 
 // A rebuild's scratch table is the one creation whose access stays unknown:
-// it receives the rows of a table whose own permissions it does not take. The
-// copy, the renames and the drop keep their own assessments, and the
-// alteration of a table that exists leaves access unchanged.
+// it is created with its directory's permissions and takes those of the table
+// whose rows it receives only with the copy. The copy, the renames and the
+// drop keep their own assessments, and the alteration of a table that exists
+// leaves access unchanged.
 func TestRebuildScratchTableAccessIsUnknown(t *testing.T) {
 	c := testcheck.New(t)
 	request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
@@ -47,7 +48,7 @@ func TestRebuildScratchTableAccessIsUnknown(t *testing.T) {
 	c.Assert(access, qt.DeepEquals, []protocol.ChangeSemantics_Access{protocol.ChangeSemantics_ACCESS_UNKNOWN, protocol.ChangeSemantics_UNCHANGED,
 		protocol.ChangeSemantics_UNCHANGED, protocol.ChangeSemantics_UNCHANGED, protocol.ChangeSemantics_NARROWS})
 	c.Assert(plan.Contributions[0].Steps[0].Operation.Value.OperationSemantics.AccessReason, qt.Equals,
-		"A rebuild's new table takes its directory's permissions, not those of the table whose rows it receives")
+		"A rebuild's new table is created with its directory's permissions; the copy gives it those of the table whose rows it receives")
 }
 
 // Changing an existing table's column families is an alteration: YDB keeps
