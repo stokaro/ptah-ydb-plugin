@@ -202,3 +202,80 @@ func TestReadReplicationRequiresTheSecretItsAbsolutePathNames_HappyPath(t *testi
 		})
 	}
 }
+
+// transferOf is ingest reading source through connection, the zero
+// connection for a topic of its own database.
+func transferOf(source string, connection replication.Connection) *replication.TransferSpec {
+	transfer := ingest()
+	transfer.Source, transfer.Connection = source, connection
+	return &transfer
+}
+
+// A declared transfer of a topic of its own database requires the topic, so a
+// source that keeps the transfer and leaves the topic out asks for a drop the
+// topic comparison refuses by name: YDB drops the topic and keeps the
+// transfer, which then fails (`Discovery for all topics failed`), measured on
+// 26.2.1.14. The host's embedded engine refused the plan. Ported from the
+// host's TestGenerateMigrationAST_Replications_TransferReadsADeclaredTopic.
+func TestTopicComparisonRefusesDroppingATopicATransferReads_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := topicRequest(c, nil, readTopic())
+	request.Required = requiredByDeclaration(c, declaredTransfer(c, transferOf("app/events", replication.Connection{})))
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = topic app/events is dropped while a declared transfer reads it, "+
+		"and YDB keeps the transfer, which then stops \\(`Discovery for all topics failed`\\); declare the topic, or remove the transfer")
+	c.Assert(result, qt.IsNil)
+}
+
+// YDB reports the topic a transfer of its own database reads by its absolute
+// path, and a read transfer requires the topic that path names in its
+// database. A path outside the database names no topic this database
+// holds and requires none.
+func TestReadTransferRequiresTheTopicItsAbsolutePathNames_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, source string
+		want         []string
+	}{
+		{name: "a path under the database", source: "/local/app/events", want: []string{schema.TopicProperties + " /local|app|events"}},
+		{name: "a path outside the database", source: "/other/app/events"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := readTransfer(c, transferOf(test.source, replication.Connection{}), replication.StateRunning)
+
+			normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "v", Representation: protocol.ValueInput_OBSERVED, Value: read}}})
+
+			c.Assert(err, qt.IsNil)
+			var required []string
+			for _, identity := range normalized.Values[0].RequiredObjects {
+				required = append(required, identity.GetKind()+" "+identity.GetDatabase().GetNormalized()+"|"+identity.GetSchema().GetNormalized()+"|"+identity.GetName().GetNormalized())
+			}
+			c.Assert(required, qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// A transfer of another topic, or of another database's topic, requires none
+// of this database's topics, and the topic's drop is planned.
+func TestTopicComparisonDropsATopicNoTransferReads_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		transfer *replication.TransferSpec
+	}{
+		{name: "another topic", transfer: transferOf("app/other", replication.Connection{})},
+		{name: "another database's topic", transfer: transferOf("app/events", replication.Connection{ConnectionString: "grpc://primary:2136/?database=/prod"})},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := topicRequest(c, nil, readTopic())
+			request.Required = requiredByDeclaration(c, declaredTransfer(c, test.transfer))
+
+			result, err := backend.New().CompareModels(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+		})
+	}
+}

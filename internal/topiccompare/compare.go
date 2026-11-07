@@ -28,6 +28,11 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 func Family() objectcompare.Family {
 	return objectcompare.Family{
 		ServiceID: ServiceID, Kind: schema.TopicProperties, ChangeKind: schema.TopicChange, Capability: topics.CapabilityTopics, Noun: "topic", DottedLimits: true,
+		// YDB drops a topic a transfer reads and keeps the transfer, which
+		// then fails (`Discovery for all topics failed`), measured on
+		// 26.2.1.14. The host's embedded engine refused such a plan.
+		RequiredRemoval: "is dropped while a declared transfer reads it, and YDB keeps the transfer, which then stops " +
+			"(`Discovery for all topics failed`); declare the topic, or remove the transfer",
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.TopicProperties) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(schema.TopicProperties, subject)
