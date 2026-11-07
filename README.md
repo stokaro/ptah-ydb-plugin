@@ -2577,8 +2577,10 @@ topic or the changefeed of a table. It names the changefeed as the changefeed
 planner does, so the host creates it after a changefeed the plan adds; a
 dropped transfer names the topic by the topic's identity rather than its path,
 so the drop comes before the topic's even where the plan creates another object
-at that path. A drop of a failed-over replication runs without `CASCADE` and
-keeps its tables. The provider never pauses, resumes or fails over an object.
+at that path. A creation or a change of either object reads the secret its
+connection names by path, so the plan creates the secret first,
+and a source that drops the secret while it declares the object is refused. A
+drop of a failed-over replication runs without `CASCADE` and keeps its tables. The provider never pauses, resumes or fails over an object.
 
 A grant names a replication or a transfer by its directory and name
 (`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
@@ -3409,8 +3411,8 @@ of an absent declared secret creates it. A rotation request must name a
 secret retained by the selected desired schema. An omitted secret is removed
 only when desired and current coverage establish that removal. A declaration
 that omits a secret a declared object still reads by its path is refused: YDB
-drops a secret an external data source names and keeps the source, which then
-names a secret that is gone.
+drops a secret an external data source, an async replication or a transfer
+names and keeps the object, which then names a secret that is gone.
 
 The `units.sensitive-inputs` service reports input names before approval.
 Previews and saved operations contain references only. Immediately before
@@ -3433,7 +3435,11 @@ remain unknown observations; they cannot become planned removals.
 External data source planning records its old and new secret-path
 dependencies. Creation follows its secret's creation, and a reference is
 removed before its old secret is dropped. Absolute references must resolve
-inside the selected database or dev realm.
+inside the selected database or dev realm. The creation or change of an async
+replication or a transfer reads the secret its connection names by path,
+since YDB looks the secret up when it creates the object or changes its
+connection, so it follows the secret's creation; a path outside the database
+is refused.
 
 ## Native table alteration
 

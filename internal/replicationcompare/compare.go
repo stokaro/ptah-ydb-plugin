@@ -99,7 +99,7 @@ func (f specFamily[S]) family() objectcompare.Family {
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(f.kind, subject)
 		},
-		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize,
+		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize, RequiredObjects: schema.RequiredObjects,
 		Reserved:  func(*protocol.ComparisonIdentity) string { return "" },
 		Unsettled: func(*protocol.Envelope, *protocol.Envelope) error { return nil },
 		Equal: func(current, desired *protocol.Envelope) (bool, error) {

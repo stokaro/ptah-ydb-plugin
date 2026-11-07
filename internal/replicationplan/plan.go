@@ -11,7 +11,8 @@
 // creates one and dropped before one that drops it. A transfer reads its
 // table and a topic or a changefeed of this database, so its step is ordered
 // after a step that creates or changes either, and its drop before one that
-// drops either.
+// drops either. A creation or a change of either kind reads the secret its
+// connection names by path, so it follows the secret's creation.
 package replicationplan
 
 import (
@@ -82,14 +83,16 @@ func replicationFamily() objectplan.Family {
 			}
 			root := request.GetDatabasePath()
 			switch {
-			case step.Before == nil:
-				return append(targetPaths(step.After.Items, protocol.PlanningEffect_CREATE), sourcePaths(root, *step.After)...), nil
 			case step.After == nil && step.Cascade():
 				return append(targetPaths(step.Before.Items, protocol.PlanningEffect_DROP), sourcePaths(root, *step.Before)...), nil
 			case step.After == nil:
 				return sourcePaths(root, *step.Before), nil
 			}
-			return nil, nil
+			secrets, err := secretReads(root, step.After.Connection)
+			if err != nil || step.Before != nil {
+				return secrets, err
+			}
+			return append(append(secrets, targetPaths(step.After.Items, protocol.PlanningEffect_CREATE)...), sourcePaths(root, *step.After)...), nil
 		},
 	}
 }
@@ -127,7 +130,11 @@ func PlanTransfers(ctx context.Context, request *protocol.PlanFeaturesRequest) (
 			if step.After == nil {
 				return transferPaths(request.GetDatabasePath(), *step.Before, topicByIdentity), nil
 			}
-			return transferPaths(request.GetDatabasePath(), *step.After, topicByPath), nil
+			secrets, err := secretReads(request.GetDatabasePath(), step.After.Connection)
+			if err != nil {
+				return nil, err
+			}
+			return append(secrets, transferPaths(request.GetDatabasePath(), *step.After, topicByPath)...), nil
 		},
 	})
 }
@@ -173,6 +180,34 @@ func refuseReplicaTables(request *protocol.PlanFeaturesRequest, change *protocol
 		}
 	}
 	return nil
+}
+
+// secretReads is a read of each scheme secret connection names by path, as a
+// statement that creates or changes a replication or a transfer reads it: YDB
+// looks the secret up when it creates the object or changes its connection
+// (`secret ... not found`), so whatever creates the secret runs first. Each secret is read by
+// the identity the secret planner names it by, and by its scheme path. root
+// is the database the object runs in; a path outside it is refused, in the
+// words of the host's embedded engine.
+func secretReads(root string, connection replication.Connection) ([]objectplan.PathEffect, error) {
+	paths, err := replication.SecretPaths(root, connection)
+	if err != nil {
+		return nil, err
+	}
+	var effects []objectplan.PathEffect
+	for _, secret := range paths {
+		effects = append(effects, objectplan.PathEffect{Subject: secretSubject(secret.Schema, secret.Name), Action: protocol.PlanningEffect_READ},
+			objectplan.PathEffect{Schema: secret.Schema, Name: secret.Name, Action: protocol.PlanningEffect_READ})
+	}
+	return effects, nil
+}
+
+// secretSubject is the secret at directory and name as the secret planner
+// names one it creates: in no database, as the host names a secret it
+// compares.
+func secretSubject(directory, name string) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{Kind: schema.SecretProperties, Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: part(directory),
+		Parent: &protocol.ComparisonPart{}, Name: part(name)}
 }
 
 // targetPaths is action on the scheme path of each item's target.
