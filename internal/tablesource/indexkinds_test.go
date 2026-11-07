@@ -6,6 +6,8 @@ import (
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -154,6 +156,35 @@ func TestIndexKindDirectives_FailurePath(t *testing.T) {
 			decoded, err := backend.New().DecodeSource(provider.ContextWithHostFeatures(c.Context(), []string{provider.IndexKindsFeature}), request)
 			c.Assert(err, qt.ErrorMatches, `rpc error: code = InvalidArgument desc = `+test.want)
 			c.Assert(decoded, qt.IsNil)
+		})
+	}
+}
+
+// A setting value an index cannot take reaches the host as a reason it
+// prints, naming the table, the index and what the setting takes, without the
+// value the declaration wrote: the host printed only `provider decode source
+// failed (InvalidArgument)`, where its embedded engine named the index and
+// the setting. Ported from the host's TestParse_YDBVectorIndex_FailurePath
+// (internal/atlashcl and internal/ydbsource), for the words the host prints.
+func TestIndexKindsGiveTheReasonOfASettingValue(t *testing.T) {
+	for _, test := range []struct {
+		name, setting, value, want string
+	}{
+		{name: "a distance", setting: "distance", value: "inner_product",
+			want: `table "items": index "v": invalid distance: write one of cosine, euclidean, manhattan`},
+		{name: "a similarity", setting: "similarity", value: "euclidean",
+			want: `table "items": index "v": invalid similarity: write one of inner_product, cosine`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := goRequest(c, indexDirective(2, map[string]string{"name": "v", "fields": "emb", "type": "vector_kmeans_tree", test.setting: test.value}))
+
+			decoded, err := backend.New().DecodeSource(provider.ContextWithHostFeatures(c.Context(), []string{provider.IndexKindsFeature}), request)
+
+			c.Assert(decoded, qt.IsNil)
+			details := status.Convert(err).Details()
+			c.Assert(details, qt.HasLen, 1)
+			c.Assert(details[0], qt.CmpEquals(protocmp.Transform()), &protocol.ProviderDiagnostic{Reason: test.want})
 		})
 	}
 }

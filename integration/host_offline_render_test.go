@@ -125,6 +125,40 @@ func TestHostRendersAGrantTheLineCannotWrite_FailurePath(t *testing.T) {
 		"which begins with the database's own path; plan it against the database, which names it by that path")
 }
 
+// A vector index setting value YDB does not take fails the offline render of
+// an HCL or a YAML document, and the host prints the provider's reason, which
+// names the table, the index and what the setting takes, as the host's
+// embedded engine named them; the value the document wrote stays out of it.
+// Without the reason the host printed `provider decode source failed
+// (InvalidArgument)`. Ported from the host's TestParse_YDBVectorIndex_FailurePath
+// of internal/atlashcl and internal/ydbsource.
+func TestHostRendersAnInvalidVectorSetting_FailurePath(t *testing.T) {
+	const want = `table "docs": index "docs_emb": invalid distance: write one of cosine, euclidean, manhattan`
+	for _, test := range []struct {
+		file, text string
+	}{
+		{file: "schema.hcl", text: "table \"docs\" {\n  column \"id\" {\n    null = false\n    type = Uint64\n  }\n  column \"emb\" {\n    null = true\n    type = String\n  }\n" +
+			"  primary_key {\n    columns = [column.id]\n  }\n  index \"docs_emb\" {\n    type = \"GLOBAL USING vector_kmeans_tree\"\n    columns = [column.emb]\n" +
+			"    distance = \"inner_product\"\n    vector_type = \"float\"\n    vector_dimension = 3\n    levels = 2\n    clusters = 4\n  }\n}\n"},
+		{file: "schema.yaml", text: "tables:\n  docs:\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      emb: {type: String}\n    indexes:\n" +
+			"      docs_emb:\n        type: GLOBAL USING vector_kmeans_tree\n        fields: [emb]\n        distance: inner_product\n        vector_type: float\n" +
+			"        vector_dimension: 3\n        levels: 2\n        clusters: 4\n"},
+	} {
+		t.Run(test.file, func(t *testing.T) {
+			c := testcheck.New(t)
+			file := filepath.Join(c.TempDir(), test.file)
+			c.Assert(os.WriteFile(file, []byte(test.text), 0o600), qt.IsNil)
+
+			out, err := hostCommand(c, "schema", "render", "--schema-file", file, "--dialect", "ydb", "--server-version", "26.2.1.14")
+
+			var exited *exec.ExitError
+			c.Assert(err, qt.ErrorAs, &exited, qt.Commentf("%s", out))
+			c.Assert(out, qt.Contains, want)
+			c.Assert(out, qt.Not(qt.Contains), "inner_product")
+		})
+	}
+}
+
 // A YDB URL that names no database is refused before anything is read, in the
 // provider's words for the outcome the built-in engine had. Ported from the
 // host's TestReadDBCommand_FailurePath_YDBURLNamesNoDatabase.
