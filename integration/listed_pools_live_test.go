@@ -50,8 +50,8 @@ func TestInspectionReadsTheListedPools(t *testing.T) {
 	read, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{"/"}})
 	c.Assert(err, qt.IsNil)
 
-	c.Assert(slices.Contains(listed, "default"), qt.IsTrue, qt.Commentf("%v", listed))
-	c.Assert(slices.Contains(listed, pool), qt.IsTrue, qt.Commentf("%v", listed))
+	c.Assert(listed, qt.Contains, "default")
+	c.Assert(listed, qt.Contains, pool)
 	c.Assert(slices.ContainsFunc(read.GetNativeObjects(), func(value *protocol.Envelope) bool {
 		return value.GetKind() == schema.ResourcePoolProperties && value.GetOwner().GetName() == pool
 	}), qt.IsTrue)
