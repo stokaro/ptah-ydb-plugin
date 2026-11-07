@@ -2792,8 +2792,12 @@ drops the consumers it added in the order it added them. A changefeed
 the read cannot represent (an AWS region, attributes, a fraction of a second,
 an auto-partitioning strategy no changefeed declares, a consumer attribute
 other than YDB's own) leaves the table's changefeeds undecided, and so does a
-change to a stream an asynchronous replication controller owns; such a stream
-the declaration leaves out is kept.
+change to a stream an asynchronous replication controller owns, or a
+declaration of such a stream that does not retain the controller's binding, as
+a desired side converted from a read retains it; such a stream the declaration
+leaves out is kept. A binding is read only with every field, an absolute
+replica path, a canonical positive item number and no other key; any other is
+an attribute the read cannot represent.
 
 The table lifecycle service plans every changefeed change of a table as one
 step, outside a transaction: the host runs a step that drops an object after

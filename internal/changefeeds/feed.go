@@ -25,8 +25,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -148,22 +150,67 @@ func FromObserved(observed *native.ObservedChangefeed) (Feed, error) {
 // replication reads a changefeed's attributes: none, or the replication
 // binding alone, which marks a stream a replication controller owns.
 func replication(attributes map[string]string) (bool, error) {
+	read, err := bindingOf(attributes)
+	return read != nil, err
+}
+
+// binding is the replication binding a controller writes on a stream: the
+// replica table's absolute path, the target item's number and whether the
+// replica takes an auto-partitioned topic.
+type binding struct {
+	Path             string `json:"path"`
+	ID               string `json:"id"`
+	Autopartitioning *bool  `json:"supports_topic_autopartitioning"`
+}
+
+// bindingOf reads the replication binding of a changefeed's attributes, nil
+// for a changefeed that has none. As the host's reader, it reads a binding
+// only with every field, an absolute replica path and a canonical positive
+// item number, and with no key it does not know: a binding it cannot vouch
+// for is not read as a stream a controller owns.
+func bindingOf(attributes map[string]string) (*binding, error) {
 	if len(attributes) == 0 {
-		return false, nil
+		return nil, nil
 	}
 	raw, found := attributes[replicationAttribute]
 	if !found || len(attributes) != 1 {
-		return false, errors.New("it holds attributes, which Ptah does not model")
+		return nil, errors.New("it holds attributes, which Ptah does not model")
 	}
-	var binding struct {
-		Path             string `json:"path"`
-		ID               string `json:"id"`
-		Autopartitioning *bool  `json:"supports_topic_autopartitioning"`
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var read binding
+	if err := decoder.Decode(&read); err != nil || !read.valid() {
+		return nil, errors.New("its replication binding is not one Ptah reads")
 	}
-	if err := json.Unmarshal([]byte(raw), &binding); err != nil || binding.Autopartitioning == nil || binding.Path == "" || binding.ID == "" {
-		return false, errors.New("its replication binding is not one Ptah reads")
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("its replication binding is not one Ptah reads")
 	}
-	return true, nil
+	return &read, nil
+}
+
+// valid reports a binding with every field, a replica path that is absolute
+// and names a path below the root, and an item number written as YDB writes
+// a positive one.
+func (b binding) valid() bool {
+	if b.Autopartitioning == nil || !strings.HasPrefix(b.Path, "/") || b.Path == "/" || strings.ContainsRune(b.Path, 0) {
+		return false
+	}
+	id, err := strconv.ParseUint(b.ID, 10, 64)
+	return err == nil && id != 0 && strconv.FormatUint(id, 10) == b.ID
+}
+
+// sameBinding reports two attribute sets that hold the same replication
+// binding, or none.
+func sameBinding(a, b map[string]string) bool {
+	first, firstErr := bindingOf(a)
+	second, secondErr := bindingOf(b)
+	switch {
+	case firstErr != nil || secondErr != nil:
+		return false
+	case first == nil || second == nil:
+		return first == second
+	}
+	return first.Path == second.Path && first.ID == second.ID && *first.Autopartitioning == *second.Autopartitioning
 }
 
 // readTopic reads the retention, the partitions and the consumers of a
