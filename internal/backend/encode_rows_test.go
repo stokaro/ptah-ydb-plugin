@@ -2,7 +2,6 @@ package backend_test
 
 import (
 	"bytes"
-	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -140,8 +139,8 @@ func TestEncodeSource_CarriesAnObjectAReadLeftUnread(t *testing.T) {
 
 			c.Assert(err, qt.IsNil)
 			knowledge := decodedKnowledge(decoded.GetDocuments()[0].GetCoverage(), test.kind)
-			c.Assert(slices.Contains(knowledge, test.kind+" COMPLETE"), qt.IsTrue, qt.Commentf("%v", knowledge))
-			c.Assert(slices.Contains(knowledge, test.kind+" "+test.directory+"/"+test.leaf+" UNINSPECTED"), qt.IsTrue, qt.Commentf("%v", knowledge))
+			c.Assert(knowledge, qt.Contains, test.kind+" COMPLETE")
+			c.Assert(knowledge, qt.Contains, test.kind+" "+test.directory+"/"+test.leaf+" UNINSPECTED")
 		})
 	}
 }
