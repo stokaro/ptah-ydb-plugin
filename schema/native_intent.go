@@ -158,9 +158,12 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
 	case IndexSettingsProperties:
 		// The index directive of a Go source, the index entry of a YAML
-		// source and the index block of an HCL document write the settings as
-		// the host's embedded engine reads them.
-		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_HCL}
+		// source, the index block of an HCL document and the WITH clause of
+		// an index in a YQL CREATE TABLE write the settings as the host's
+		// embedded engine reads them. A YQL reading carries them as a facet
+		// of the index only for a host that takes one (yqlschema.Reply).
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_HCL,
+			protocol.SourceDocument_SQL}
 	}
 	return result
 }

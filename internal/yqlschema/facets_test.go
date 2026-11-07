@@ -227,8 +227,8 @@ func TestReply_TableFacets_HappyPath(t *testing.T) {
 
 // What a table's settings cannot carry is refused by name, with no schema: a
 // host that does not take the facets of a reading has no home for any of
-// them, a column table holds no family, and an index states no settings in
-// the row-table model.
+// them, and a column table holds no family. An index's settings are
+// TestReply_IndexSettingsFacet_FailurePath's.
 func TestReply_TableFacets_FailurePath(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -247,10 +247,6 @@ func TestReply_TableFacets_FailurePath(t *testing.T) {
 			text: "CREATE TABLE `app/events` (id Int64 NOT NULL, PRIMARY KEY (id)) WITH (UNIFORM_PARTITIONS = 4, PARTITION_AT_KEYS = (10, 20));",
 			want: "table `app/events`: uniform_partitions and partition_at_keys are both declared, which YDB refuses " +
 				"(`Uniform partitions and partitions at keys settings are mutually exclusive`)"},
-		{name: "an index's partitioning", features: backend.Description().GetEngines()[0].GetFeatures(),
-			text: "CREATE TABLE `app/items` (id Int64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL SYNC ON (body) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
-			want: "index `by_body` of table `app/items` declares partitioning settings, which a SQL schema reading has no home for: " +
-				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

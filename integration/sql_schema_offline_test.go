@@ -72,9 +72,10 @@ func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
 	}{
 		{name: "syntax", text: "CREATE TABLE t (id Uint64, PRIMARY KEY (id));", code: protocol.SQLDiagnostic_SYNTAX, offset: 44,
 			message: `YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL (got ";")`},
-		{name: "index settings", text: "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id), INDEX i GLOBAL SYNC ON (a) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
+		{name: "vector index settings", text: "CREATE TABLE t (id Uint64 NOT NULL, a String, PRIMARY KEY (id), INDEX i GLOBAL USING vector_kmeans_tree ON (a) " +
+			"WITH (distance = cosine, vector_type = 'float', vector_dimension = 3, clusters = 2, levels = 1));",
 			code: protocol.SQLDiagnostic_UNSUPPORTED, offset: 0,
-			message: "index `i` of table `t` declares partitioning settings, which a SQL schema reading has no home for: " +
+			message: "index `i` of table `t` declares vector settings, which a SQL schema reading has no home for: " +
 				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

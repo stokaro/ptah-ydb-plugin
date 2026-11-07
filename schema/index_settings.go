@@ -46,6 +46,14 @@ func CaptureIndexSettings(owner *protocol.Reference, settings *native.GlobalInde
 	return capture(IndexSettingsProperties, owner, observed)
 }
 
+// CaptureIndexSettingsIntent records the settings a declaration states for
+// an index as its desired facet. owner is the index: kind "index", its table
+// as the only path component and its name.
+func CaptureIndexSettingsIntent(owner *protocol.Reference, intent *native.IndexSettingsIntent) (*protocol.Envelope, error) {
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: IndexSettingsProperties, Owner: proto.CloneOf(owner)},
+		NativeDesiredModel(IndexSettingsProperties), intent, NormalizeDesired)
+}
+
 func replicaCount(replicas *Ydb_Table.ReadReplicasSettings) uint64 {
 	return replicas.GetPerAzReadReplicasCount() + replicas.GetAnyAzReadReplicasCount()
 }

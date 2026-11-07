@@ -67,8 +67,11 @@ func gaps(reading *yqlschema.Reading) []string {
 			found = append(found, "table "+table.Qualified())
 		}
 	}
+	// A global sync, async or unique index's partitioning and read replicas
+	// are a facet of the index; a vector index's settings have no home.
 	for _, index := range reading.Indexes {
-		if len(yqlschema.IndexFacetPayloads(index)) != 0 {
+		kind, _ := ydbdecl.IndexKindOf(index.Type)
+		if len(yqlschema.IndexFacetPayloads(index)) != 0 && (index.Vector != nil || kind == ydbdecl.IndexVector) {
 			found = append(found, "index "+index.Name)
 		}
 	}
@@ -260,12 +263,12 @@ func wireOrder(m meaning) meaning {
 // hostMapping is the meaning of the model the host maps a complete reply to,
 // as internal/providerhost maps a SQL schema reading: each table at its
 // qualified name with its columns, its indexes and the settings its facets
-// hold, each view at its qualified name, each grant at the field of the host's
+// and its indexes' facets hold, each view at its qualified name, each grant at the field of the host's
 // model its target's kind names, and each coordination node with the settings
 // its envelope holds.
 func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 	c.Helper()
-	result := meaning{TableFacets: hostTableFacets(c, reply), IndexFacets: make(map[string]map[string]any)}
+	result := meaning{TableFacets: hostTableFacets(c, reply), IndexFacets: hostIndexFacets(c, reply)}
 	for _, table := range reply.GetTables() {
 		qualified := canonical(table.GetSchema(), table.GetName())
 		object := map[string]any{"Name": table.GetName(), "Schema": table.GetSchema(), "Comment": table.GetComment(), "PrimaryKey": table.GetPrimaryKey()}

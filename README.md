@@ -4020,17 +4020,23 @@ means the same in all three formats:
 - a column table's hash key (`PARTITION BY HASH`), shard count
   (`AUTO_PARTITIONING_MIN_PARTITIONS_COUNT`) and TTL, as one column-storage
   facet. A TTL that only deletes is the storage's one deleting tier, as the
-  `row_deletion_*` properties beside a YAML or Go column table are.
+  `row_deletion_*` properties beside a YAML or Go column table are;
+- for a host that also lists `schema.observed-index-facets`, the partitioning
+  (`AUTO_PARTITIONING_*`) and read replicas a global sync, async or unique
+  index declares in its `WITH` clause, as one facet of the index, the value a
+  Go index directive or a YAML index entry declares.
 
-A setting the statement leaves out keeps what the table holds, and a row table
-declared without a TTL has its TTL removed, as for a YAML or Go source.
+A setting the statement leaves out keeps what the table or the index holds,
+and a row table declared without a TTL has its TTL removed, as for a YAML or Go
+source.
 
 The reply says what each document declares, traces every object to its
 statement, and claims complete coverage of the
 row-table, column, column-storage, coordination, topic, external data source,
 external table, streaming query, secret, async replication and transfer models,
-and of the changefeed model under that feature, so a table a load declares
-without a changefeed is one with none. A
+of the changefeed model under that feature, so a table a load declares
+without a changefeed is one with none, and of the index settings model where
+the host also lists `schema.observed-index-facets`. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -4063,9 +4069,12 @@ carry is refused by name, with no partial reading:
 - a column family on a column table, and a row table that declares both
   `UNIFORM_PARTITIONS` and `PARTITION_AT_KEYS`, with the words a YAML or Go
   source of the same table is refused with;
-- the partitioning and vector settings of an index: an index states no settings
-  of its own in the row-table model, and the provider adds only plain global
-  indexes, as for a YAML or Go source;
+- the partitioning and read replicas of an index, for a host that does not list
+  both `schema.sql-facets` and `schema.observed-index-facets`: without the
+  second the comparison could not see what an index holds, as for a YAML or Go
+  source;
+- the settings of a vector index, its partitioning among them: its index set
+  is no model a SQL schema reading carries;
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;
