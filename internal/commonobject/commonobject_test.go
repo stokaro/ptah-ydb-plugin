@@ -98,6 +98,10 @@ func TestRender_FailurePath(t *testing.T) {
 			DropView: &protocol.Reference{Engine: "ydb", Kind: "materialized_view", Name: "m"}}}, `unsupported feature: DROP of materialized_view m: YDB has no materialized view`},
 		{"directory comment", setComment(&protocol.Reference{Engine: "ydb", Kind: "schema", Name: "app"}, "x"),
 			`unsupported feature: the comment on schema app: YDB keeps comments on tables, their columns and indexes, and views`},
+		// Ported from the host's TestGenerateMigrationAST_Comments_FailurePath:
+		// YDB keeps no comment on a constraint.
+		{"constraint comment", setComment(&protocol.Reference{Engine: "ydb", Kind: "constraint", Name: "items_pkey", Path: []string{"items"}}, "x"),
+			`unsupported feature: the comment on constraint items_pkey: YDB keeps comments on tables, their columns and indexes, and views`},
 		{"column name too long", setComment(&protocol.Reference{Engine: "ydb", Kind: "column", Name: strings.Repeat("c", 81), Path: []string{"t"}}, "x"),
 			`unsupported feature: the comment on column ` + strings.Repeat("c", 81) + `: YDB keeps the comment as the table attribute .*, 101 bytes long, and an attribute key takes at most 100 bytes; a column name takes at most 80`},
 		{"comment not UTF-8", setComment(table, "\xff"), `unsupported feature: the comment on table t: the comment is not UTF-8 text, which YDB keeps in an attribute value`},
