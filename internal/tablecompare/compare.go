@@ -92,7 +92,31 @@ func validateRequest(request *protocol.CompareModelsRequest) error {
 	if request.GetIdentifiers().GetDefaultSchema() != "" || request.GetIdentifiers().GetCatalogCollation() != "" {
 		return fmt.Errorf("YDB comparison has unsupported identifier defaults")
 	}
+	for _, side := range []*protocol.ComparisonState{request.GetDesired(), request.GetCurrent()} {
+		if kind := presentButAbsent(side); kind != "" {
+			return fmt.Errorf("a present %s facet has absent coverage", kind)
+		}
+	}
 	return nil
+}
+
+// presentButAbsent is the kind of a facet side carries a value for while its
+// coverage claims the facet absent for the same subject, or "": the side
+// contradicts itself, and the comparison answers it with no partial result,
+// as the host's embedded engine refused it.
+func presentButAbsent(side *protocol.ComparisonState) string {
+	for _, record := range side.GetRecords() {
+		if record.GetValue() == nil {
+			continue
+		}
+		for _, claim := range side.GetCoverage().GetSubjects() {
+			if claim.GetKind() == record.GetKind() && claim.GetKnowledge().GetState() == protocol.ModelKnowledge_ABSENT &&
+				provider.CompareIdentities(claim.GetSubject(), record.GetSubject()) == 0 {
+				return record.GetKind()
+			}
+		}
+	}
+	return ""
 }
 
 // compareDeclared compares each desired record, in kind and subject order,

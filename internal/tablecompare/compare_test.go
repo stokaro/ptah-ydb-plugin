@@ -611,6 +611,20 @@ func TestCompare_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorMatches, `(?s).*unknown enum.*`)
 		c.Assert(values, qt.IsNil)
 	})
+	// A side that carries a changefeed set while its coverage claims the
+	// set absent contradicts itself. Ported from the host's
+	// TestComparison_RefusesInvalidInputsWithoutPartialResults.
+	t.Run("a present changefeed set with absent coverage", func(t *testing.T) {
+		c := testcheck.New(t)
+		req := request(c, side{changefeeds: declaredFeed}, side{changefeeds: heldFeed})
+		req.Desired.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.ChangefeedProperties, Subject: subject("table", ""),
+			Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_ABSENT)}}
+
+		result, err := backend.New().CompareModels(c.Context(), req)
+
+		c.Assert(err, qt.ErrorMatches, `(?s).*a present `+schema.ChangefeedProperties+` facet has absent coverage.*`)
+		c.Assert(result, qt.IsNil)
+	})
 	t.Run("another comparison", func(t *testing.T) {
 		c := testcheck.New(t)
 		req := request(c, side{table: withTTL(hourly)}, side{table: plain})
