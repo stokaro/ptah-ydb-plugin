@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -97,15 +98,35 @@ func TestHostRefusesAMigrationLockTimeout_FailurePath(t *testing.T) {
 	c.Assert(f.names(c), qt.HasLen, 0)
 }
 
+// Ported from the timeout halves of the host's
+// TestYDBMigrator_WaitsForTheMigrationLock and
+// TestYDBBinary_MigrationsUpWaitsForTheLock: a `migrations up` under a
+// one-second migration lock timeout, against a lock another session holds,
+// gives up saying it timed out, and applies nothing. Each of three runs gives
+// the same answer.
+func TestHostMigrationsUpGivesUpAtTheLockTimeout_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	f := newMigrationsFixture(c)
+	migrations, _ := usersMigrations(c, f)
+	binary, digest := providerBinary(c)
+	holder, session, _ := historySession(c, binary, digest)
+	lock := nativeLockRequest(session, "holder", "ptah_migrate")
+	acquireNativeLock(c, holder, lock)
+	c.Cleanup(func() { _, _ = holder.ReleaseLock(context.Background(), lock) })
+
+	for range 3 {
+		output, err := hostCommand(c, append([]string{"migrations", "up", "--migration-lock-timeout", "1s"}, f.target(migrations)...)...)
+
+		c.Assert(err, qt.ErrorMatches, "exit status 2", qt.Commentf("%s", output))
+		c.Assert(output, qt.Contains, `failed to acquire migration lock for migrate up: timed out acquiring migration lock "ptah_migrate" for ydb after 1s`)
+		c.Assert(f.names(c), qt.Not(qt.Contains), "users")
+	}
+}
+
 // `migrations up` waits for the migration lock another session holds until
 // the holder releases, and not before. Two runs started together over the same
 // directory then apply it once, which the INSERT in the first migration would
 // refuse to do twice.
-//
-// The host's run under --migration-lock-timeout is left out: the host passes
-// its deadline into each provider TryLock, so a deadline that ends while the
-// call is in flight reports the lock's outcome unknown rather than the
-// timeout, and which one a run reports depends on timing.
 func TestHostMigrationsUpWaitsForTheLock_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	f := newMigrationsFixture(c)

@@ -87,6 +87,8 @@ func TestStatementsRefuseTypedArgumentsBeforeRunning(t *testing.T) {
 		{name: "a timestamp outside its range", request: typedRequest("SELECT $p1 AS n", later), want: "YDB timestamp is outside its range"},
 		{name: "a comment statement", request: typedRequest("COMMENT ON TABLE `t` IS 'x'", small),
 			want: "a comment or coordination statement runs without a transaction or bound arguments"},
+		{name: "a coordination statement", request: typedRequest("ALTER COORDINATION NODE `n` SET (read_consistency_mode = 'strict')", small),
+			want: "a comment or coordination statement runs without a transaction or bound arguments"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

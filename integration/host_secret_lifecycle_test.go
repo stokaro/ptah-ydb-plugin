@@ -363,6 +363,31 @@ func TestHostDescribesNoSecretOnALineWithout_HappyPath(t *testing.T) {
 	c.Assert(planned, qt.HasLen, 0)
 }
 
+// Ported from the host's TestYDBSecrets_FailurePath_RefusedOnALineWithout
+// and TestYDBDesiredYQL_SecretsRefusedOnOlderLine: on a line without
+// secrets, a secret declared in YAML or in YQL is refused before anything
+// runs, naming the secret by its path and the capability, and nothing is
+// created.
+func TestHostRefusesASecretOnALineWithout_FailurePath(t *testing.T) {
+	for _, source := range []struct{ name, format, text string }{
+		{name: "yaml", format: "yaml", text: "secrets:\n  pg.pw:\n    schema: {dir}\n    value_env: PTAH_SECRET_ON_25_1_PW\n"},
+		{name: "yql", format: "sql", text: "CREATE SECRET `{dir}/pg.pw` WITH (value = $PTAH_SECRET_ON_25_1_PW);"},
+	} {
+		t.Run(source.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			opened, directory, database := lockFixture(c)
+			_, session := accessSession(c)
+			skipWith(c, session, secrets.Capability)
+
+			output, err := hostApplySource(c, directory, source.format, strings.ReplaceAll(source.text, "{dir}", directory))
+
+			c.Assert(err, qt.IsNotNil, qt.Commentf("%s", output))
+			c.Assert(output, qt.Contains, "secret "+directory+"/pg.pw requires the unavailable target capability secrets")
+			c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.HasLen, 0)
+		})
+	}
+}
+
 // Ported from the host's TestYDBSecrets_DropAllTablesDropsThem: db drop-all
 // of a dev realm drops the secrets it holds and the column table beside them,
 // and removes the directories they leave empty.

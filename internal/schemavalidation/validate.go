@@ -218,9 +218,20 @@ func validateObjects(ctx context.Context, request *protocol.ValidateSchemaReques
 			return fmt.Errorf("YDB validation found a %s object whose normalization differs from its capture", record.Kind)
 		}
 		if record.Kind == schema.SecretProperties && !request.Capabilities["secrets"] {
-			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "secrets", "secret %s requires the unavailable target capability secrets%s", object,
-				featureflags.Clause("secrets"))
+			// The refusal names the secret by its path, as the secret's other
+			// refusals do: two directories may hold secrets of one name.
+			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "secrets", "secret %s requires the unavailable target capability secrets%s",
+				secretPath(record.GetSubject().GetSchema().GetSource(), object), featureflags.Clause("secrets"))
 		}
 	}
 	return nil
+}
+
+// secretPath writes a secret's directory and name as the one path its
+// statements name.
+func secretPath(directory, name string) string {
+	if directory == "" {
+		return name
+	}
+	return directory + "/" + name
 }
