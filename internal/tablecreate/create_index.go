@@ -48,11 +48,20 @@ func declaredIndexes(table *protocol.DeclaredTable, key []string, columns []*Ydb
 
 func declaredIndex(declared *protocol.DeclaredTable, index *protocol.DeclaredIndex, key []string, types map[string]string) (*Ydb_Table.TableIndex, error) {
 	table := declared.GetName()
+	subject := fmt.Sprintf("index %q", index.GetName())
+	refuse := func(reason string) error { return unsupported("%s: %s", subject, reason) }
+	// A condition and NULLS NOT DISTINCT have no YDB clause, and the host's
+	// embedded engine refused each in these words, rather than in the name
+	// of the field that carries it.
+	switch {
+	case index.GetCondition() != "":
+		return nil, refuse("YDB has no partial index")
+	case index.NullsDistinct != nil && !index.GetNullsDistinct():
+		return nil, unsupported("%s treats NULLs as equal; YDB has no unique_nulls_distinct_clause", subject)
+	}
 	if err := only(index, "name", "fields", "parts", "unique", "type", "include_columns", "table_name", "requires", "concurrently"); err != nil {
 		return nil, err
 	}
-	subject := fmt.Sprintf("index %q", index.GetName())
-	refuse := func(reason string) error { return unsupported("%s: %s", subject, reason) }
 	if strings.TrimSpace(index.GetName()) == "" {
 		return nil, unsupported("an index on table %q: YDB names every index, and this one has no name", table)
 	}
