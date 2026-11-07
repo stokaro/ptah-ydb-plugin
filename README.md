@@ -337,7 +337,8 @@ a dev database request with the operator's address instead of a spec, and the
 provider creates a realm of the run's own in the database the address names, as
 the host's embedded engine does: a name of 16 random hexadecimal digits, and an
 address that keeps the operator's scheme, host and credentials and names the
-realm in place of any it named. Releasing the lease removes the realm with
+realm in place of any it named; an address whose `dev_realm` is not a realm
+name is refused, as any address that is not a YDB address is. Releasing the lease removes the realm with
 everything in it, and then `ptah_dev` when no realm is left in it; an object
 there is no statement to drop for stops the removal before anything is dropped.
 The provider also removes the realms it holds when its process ends. A realm is

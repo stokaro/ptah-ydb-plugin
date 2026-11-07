@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	qt "github.com/frankban/quicktest"
@@ -218,6 +219,69 @@ func TestProvisionDevDatabase_FailurePath(t *testing.T) {
 	})
 }
 
+// scriptedProbe answers the n-th readiness probe with answers[n], and every
+// probe after the last with the last answer, counting the probes.
+type scriptedProbe struct {
+	answers []error
+	calls   int
+}
+
+func (p *scriptedProbe) probe(context.Context, string) error {
+	answer := p.answers[min(p.calls, len(p.answers)-1)]
+	p.calls++
+	return answer
+}
+
+// errStorageNotReady is what local-ydb 26.2.1.14 answers a CREATE TABLE with for
+// about a second after it first answers a query.
+var errStorageNotReady = errors.New("Status: GENERIC_ERROR Issues: <main>: Error: " +
+	"database doesn't have storage pools at all to create tablet channels to storage pool kind")
+
+// A server that binds its storage during the wait is ready on the probe after
+// its last refusal, a second later per refusal. Ported from the host's
+// TestUntil_HappyPath.
+func TestProvisionDevDatabase_WaitsForTheServerToTakeDDL(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := testcheck.New(t)
+		runtime := &fakeRuntime{running: true}
+		script := &scriptedProbe{answers: []error{errStorageNotReady, errStorageNotReady, nil}}
+		provisioner := devdatabase.New(runtime, script.probe, nil)
+		start := time.Now()
+
+		reply, err := provisioner.ProvisionDevDatabase(c.Context(), request("docker://ydb"))
+
+		c.Assert(err, qt.IsNil)
+		c.Assert(reply.GetLease(), qt.Not(qt.Equals), "")
+		c.Assert(script.calls, qt.Equals, 3)
+		c.Assert(time.Since(start), qt.Equals, 2*time.Second)
+		c.Assert(runtime.removed, qt.HasLen, 0)
+	})
+}
+
+// The wait is bounded: a server that never takes DDL is probed once a second
+// for two minutes, and the error carries the deadline and the server's last
+// refusal. The container is removed. Ported from the host's TestUntil_FailurePath, whose
+// dev database wait retried every refusal until its two-minute deadline too.
+func TestProvisionDevDatabase_GivesUpOnAServerThatNeverTakesDDL(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := testcheck.New(t)
+		runtime := &fakeRuntime{running: true}
+		script := &scriptedProbe{answers: []error{errStorageNotReady}}
+		provisioner := devdatabase.New(runtime, script.probe, nil)
+		start := time.Now()
+
+		reply, err := provisioner.ProvisionDevDatabase(c.Context(), request("docker://ydb"))
+
+		c.Assert(err, qt.ErrorIs, context.DeadlineExceeded)
+		c.Assert(err, qt.ErrorIs, errStorageNotReady)
+		c.Assert(err, qt.ErrorMatches, `(?s)the dev database did not become ready: .*`)
+		c.Assert(reply, qt.IsNil)
+		c.Assert(time.Since(start), qt.Equals, 2*time.Minute)
+		c.Assert(script.calls >= 121, qt.IsTrue, qt.Commentf("%d probes", script.calls))
+		c.Assert(runtime.removed, qt.DeepEquals, runtime.started)
+	})
+}
+
 func TestDockerCLIAvailable_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	c.Setenv("PATH", c.TempDir())
@@ -305,6 +369,10 @@ func TestProvisionDevRealm_FailurePath(t *testing.T) {
 		{"not a YDB address", &fakeRealms{}, "postgres://db.example:5432/app", protocol.DevDatabaseRefusal_UNSUPPORTED, "the dev realm address is not a YDB address: .*"},
 		{"an unknown parameter", &fakeRealms{}, "ydb://db.example:2136/local?secret-marker=1", protocol.DevDatabaseRefusal_UNSUPPORTED, "the dev realm address is not a YDB address: .*"},
 		{"no database", &fakeRealms{}, "ydb://db.example:2136", protocol.DevDatabaseRefusal_UNSUPPORTED, "the dev realm address is not a YDB address: YDB URL must name a database"},
+		// Ported from the host's TestEnter_FailurePath: a realm the address
+		// names is replaced only when it is a realm name.
+		{"a malformed realm", &fakeRealms{}, "ydb://db.example:2136/local?dev_realm=A", protocol.DevDatabaseRefusal_UNSUPPORTED,
+			"the dev realm address is not a YDB address: the dev_realm parameter is not a realm name: use 1 to 64 lowercase letters, digits and underscores"},
 		{"unreachable", &fakeRealms{createErr: errors.New("the database could not be reached")}, "ydb://db.example:2136/local",
 			protocol.DevDatabaseRefusal_UNAVAILABLE, "the database the dev realm address names could not take a realm: the database could not be reached"},
 	} {
