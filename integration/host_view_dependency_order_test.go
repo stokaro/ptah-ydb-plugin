@@ -17,6 +17,7 @@ import (
 // not create dependencies. This ports the YDB cases of the former host's
 // TestViewLikesForCreateForDialect through authored schema rendering.
 func TestHostRendersYDBViewsInDependencyOrder_HappyPath(t *testing.T) {
+	requireHostChange(testcheck.New(t), "stokaro/ptah#5740, which orders views by what the provider's SQL scanner reads")
 	for _, test := range []struct {
 		name, reference, baseBody string
 	}{

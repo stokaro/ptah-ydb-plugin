@@ -51,11 +51,18 @@ func hostSource(c *qt.C, flag, name, content string) string {
 // selects this provider for ydb. The test is skipped without the host binary.
 func hostManifest(c *qt.C) (host, manifest string) {
 	c.Helper()
-	host = os.Getenv("PTAH_HOST_TEST_BIN")
+	return pinnedHost(c), providerManifest(c)
+}
+
+// pinnedHost returns the host binary PTAH_HOST_TEST_BIN names. The test is
+// skipped without it.
+func pinnedHost(c *qt.C) string {
+	c.Helper()
+	host := os.Getenv("PTAH_HOST_TEST_BIN")
 	if host == "" {
 		c.Skip("PTAH_HOST_TEST_BIN is required for the external host contract")
 	}
-	return host, providerManifest(c)
+	return host
 }
 
 // providerManifest writes a provider manifest that selects this provider for

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -81,11 +82,15 @@ func TestHostReportsTheReleaseLineOfTheServer_HappyPath(t *testing.T) {
 }
 
 // The host explains that a capability enabled by this YDB cluster came from
-// the monitoring endpoint, not the release-line preset. On 25.1 the unique
-// index flag is unavailable, so that particular refinement is absent. Ported from
-// the YDB row of TestWriteProfile_RefinementsNameTheirSource.
+// the monitoring endpoint, not the release-line preset, in the line this
+// provider states under engine.connection-capability-source. A host that does
+// not negotiate the feature prints its own sentence for a provider's
+// connection, so the test needs the feature. On 25.1 the unique index flag is
+// unavailable, so that particular refinement is absent. Ported from the YDB
+// row of TestWriteProfile_RefinementsNameTheirSource.
 func TestHostNamesTheSourceOfYDBCapabilityRefinements_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ConnectionCapabilitySourceFeature)
 	opened, _, _ := inspectionFixture(c)
 	line := serverLine(c, serverVersion(c, opened))
 

@@ -18,6 +18,7 @@ import (
 // TestRender_Comments_HappyPath through the host binary.
 func TestHostRendersCommentsAfterTheirObjects_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, "stokaro/ptah#5736, which renders authored table and index comments")
 	view := "package entities\n\n//ptah:schema:view name=\"active\" schema=\"shop\" body=\"SELECT id FROM `shop/users`\" " +
 		"comment=\"Recent\"\ntype Active struct{}\n"
 	dir := writeFiles(c, filepath.Join(c.TempDir(), "entities"), map[string]string{

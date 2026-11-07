@@ -43,8 +43,10 @@ type Pair struct {
 }
 
 // Invalid UNIQUE declarations are refused before schema render writes a
-// partial script. These are source-expressible cases of the former host's
-// TestRender_UniqueConstraint_FailurePath.
+// partial script. Each refusal names the index or the table and says what YDB
+// lacks; the partial index and the duplicate name are refused in the words of
+// the built-in engine at host 74de0b65b. These are source-expressible cases of
+// the former host's TestRender_UniqueConstraint_FailurePath.
 func TestHostRefusesUnsupportedUniqueSource_FailurePath(t *testing.T) {
 	base := uniqueAccounts("shop")
 	constraint := `//ptah:schema:constraint name="uq_accounts_tenant_login" type="UNIQUE" table="accounts" columns="tenant,login"`
@@ -52,9 +54,12 @@ func TestHostRefusesUnsupportedUniqueSource_FailurePath(t *testing.T) {
 	for _, test := range []struct {
 		name, source, want string
 	}{
-		{"NULLS NOT DISTINCT", strings.Replace(base, constraint, constraint+` nulls_distinct="false"`, 1), "nulls_distinct"},
-		{"partial unique index", strings.Replace(base, field, `//ptah:schema:index name="uq_partial" fields="login" unique="true" condition="login IS NOT NULL"`+"\n\t"+field, 1), "DeclaredIndex.condition"},
-		{"duplicate index name", strings.Replace(base, field, `//ptah:schema:index name="uq_accounts_tenant_login" fields="login"`+"\n\t"+field, 1), "two of its indexes are named"},
+		{"NULLS NOT DISTINCT", strings.Replace(base, constraint, constraint+` nulls_distinct="false"`, 1),
+			`index "uq_accounts_tenant_login" treats NULLs as equal; YDB has no unique_nulls_distinct_clause`},
+		{"partial unique index", strings.Replace(base, field, `//ptah:schema:index name="uq_partial" fields="login" unique="true" condition="login IS NOT NULL"`+"\n\t"+field, 1),
+			`index "uq_partial": YDB has no partial index`},
+		{"duplicate index name", strings.Replace(base, field, `//ptah:schema:index name="uq_accounts_tenant_login" fields="login"`+"\n\t"+field, 1),
+			`table "accounts": two of its indexes are named "uq_accounts_tenant_login", and YDB names an index once per table`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
