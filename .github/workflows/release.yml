@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# The offline subprocess tests ci.yml runs, which need no server and no host
+# binary; the release runs them against the binary it archives.
+env:
+  OFFLINE_TESTS: 'TestRowTableCreationOfflineSubprocess|TestSchemaValidationOfflineSubprocess|TestNativeObjectConversionOfflineSubprocess|TestChildConversionOfflineSubprocess|TestTableConversionOfflineSubprocess|TestColumnConversionOfflineSubprocess|TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestComparisonCountsOfflineSubprocess|TestYQLAnalysisOfflineSubprocess|TestMigrationLintOfflineSubprocess|TestRowServicesOfflineSubprocess|TestStatementFactsOfflineSubprocess|TestStatementFactsAnnotationOfflineSubprocess|TestEmbeddingStoreNeedsTheHostsFeatureSubprocess|TestSQLSchemaOfflineSubprocess|TestTextUnitsOfflineSubprocess|TestStatementStyleOfflineSubprocess|TestCommonObjectsOfflineSubprocess|TestSourceClaimsOfflineSubprocess|TestDeclarationsOfflineSubprocess|TestConformanceOfflineSubprocess'
+
 concurrency:
   group: release-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -37,6 +42,29 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+
+      # The gate: the provider built as the archive builds it, tested before
+      # anything is published. The conformance suite checks it against the
+      # contract as a strict host, offline, and the subprocess tests start this
+      # exact binary rather than a build of their own.
+      - name: Build the provider as the release does
+        run: |
+          set -euo pipefail
+          version="0.0.0-SNAPSHOT-$(git rev-parse --short HEAD)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -X github.com/stokaro/ptah-ydb-plugin/internal/buildversion.linked=$version" \
+            -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
+
+      - name: Check the built provider against the contract
+        run: go run github.com/stokaro/ptah/provider-sdk/cmd/ptah-provider-conformance -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
+
+      - name: Test the built provider
+        env:
+          PTAH_YDB_PROVIDER_BIN: ${{ github.workspace }}/bin/ptah-plugin-ydb
+        run: go test -tags integration ./integration -run "$OFFLINE_TESTS" -count=1 -v -timeout 20m
 
       - name: Check GoReleaser config
         uses: goreleaser/goreleaser-action@v7
@@ -85,6 +113,29 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      # The gate: the provider built as the archive builds it, tested before
+      # anything is published. The conformance suite checks it against the
+      # contract as a strict host, offline, and the subprocess tests start this
+      # exact binary rather than a build of their own.
+      - name: Build the provider as the release does
+        run: |
+          set -euo pipefail
+          version="0.0.0-SNAPSHOT-$(git rev-parse --short HEAD)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -X github.com/stokaro/ptah-ydb-plugin/internal/buildversion.linked=$version" \
+            -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
+
+      - name: Check the built provider against the contract
+        run: go run github.com/stokaro/ptah/provider-sdk/cmd/ptah-provider-conformance -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
+
+      - name: Test the built provider
+        env:
+          PTAH_YDB_PROVIDER_BIN: ${{ github.workspace }}/bin/ptah-plugin-ydb
+        run: go test -tags integration ./integration -run "$OFFLINE_TESTS" -count=1 -v -timeout 20m
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -93,3 +144,34 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # A fresh installed-package check: the newest Ptah release installs the
+  # release this run published into an empty home, verifying the archive
+  # against the release's checksums.txt, and starts it to verify its identity
+  # and protocol. It runs after the publish, since it reads the published
+  # release; a failure says the release is not installable as the docs say.
+  fresh-install:
+    name: fresh install
+    needs: release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download the newest Ptah release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ptah"
+          gh release download --repo stokaro/ptah --pattern 'ptah_*_linux_amd64.tar.gz' --dir "$RUNNER_TEMP/ptah"
+          tar -xzf "$RUNNER_TEMP"/ptah/ptah_*_linux_amd64.tar.gz -C "$RUNNER_TEMP/ptah"
+          "$RUNNER_TEMP/ptah/ptah" version
+
+      - name: Install this release fresh and verify it
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/fresh-home"
+          unset XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
+          mkdir -p "$HOME"
+          "$RUNNER_TEMP/ptah/ptah" providers install ydb --version "${GITHUB_REF_NAME#v}"
+          "$RUNNER_TEMP/ptah/ptah" providers check --provider-engine ydb
