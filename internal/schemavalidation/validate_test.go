@@ -286,3 +286,23 @@ func TestValidateSchema_SecretCapability(t *testing.T) {
 		})
 	}
 }
+
+// A secret refused on a target without secrets is named by its path, as its
+// other refusals name it, so two directories' secrets of one name stay apart.
+func TestValidateSchema_SecretCapabilityNamesThePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := newRequest()
+	request.Capabilities["secrets"] = false
+	model := schema.NativeDesiredModel(schema.SecretProperties)
+	values, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "secret", Representation: protocol.ValueInput_DESIRED,
+		Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.SecretProperties, SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256,
+			Owner: &protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Schema: "app", Name: "pw"}, Payload: []byte(`{"valueEnv":"PTAH_SECRET_PW"}`)}}}})
+	c.Assert(err, qt.IsNil)
+	request.Features.Objects.Records = []*protocol.ComparisonRecord{{Kind: schema.SecretProperties,
+		Subject: &protocol.ComparisonIdentity{Kind: schema.SecretProperties, Schema: testcomparison.Part("app"), Name: testcomparison.Part("pw")}, Value: values.Values[0]}}
+
+	got := diagnostics(c, request)
+
+	c.Assert(got, qt.HasLen, 1)
+	c.Assert(got[0].Message, qt.Matches, `secret app/pw requires the unavailable target capability secrets.*`)
+}
