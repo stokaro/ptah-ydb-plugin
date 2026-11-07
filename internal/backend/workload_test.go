@@ -470,6 +470,9 @@ func TestWorkloadComparisonIgnoresRelations_HappyPath(t *testing.T) {
 	request := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"items": pool(workload.PoolSpec{})}, nil)
 	request.DeclaredRelations = []*protocol.ComparisonIdentity{{Kind: "table", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{},
 		Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part("items")}}
+	// A table is a declared relation from a host that lists every declared
+	// table among them (models.declared-relations).
+	request.TargetFeatures = append(request.TargetFeatures, provider.DeclaredRelationsFeature)
 	c.Assert(compareWorkload(c, request).Changes, qt.HasLen, 1)
 }
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -123,6 +124,27 @@ func TestHostRendersAGrantTheLineCannotWrite_FailurePath(t *testing.T) {
 	c.Assert(err, qt.ErrorAs, &exited, qt.Commentf("%s", out))
 	c.Assert(out, qt.Contains, "unsupported feature: GRANT on table items to alice: YDB takes this object only by its absolute path, "+
 		"which begins with the database's own path; plan it against the database, which names it by that path")
+}
+
+// An enum column fails the offline render before any provider call, and the
+// host names the table and the column: YDB has no enum type, and the engine
+// states its enum columns REFUSED (schema.enum-columns). The host's embedded
+// engine refused the enum too (`enum enum_item_status, which requires target
+// capability enum_custom_type`); without the statement the host sent the enum
+// to the provider, which refused `DeclaredTable.enums`.
+func TestHostRendersAnEnumColumn_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.EnumColumnsFeature)
+	dir := writeFiles(c, filepath.Join(c.TempDir(), "entities"), map[string]string{"entities.go": "package entities\n\n//ptah:schema:table name=\"items\"\n" +
+		"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Int64\" primary=\"true\"\n\tID int64\n" +
+		"\t//ptah:schema:field name=\"status\" type=\"ENUM\" enum=\"active,inactive\"\n\tStatus string\n}\n"})
+
+	out, err := hostCommand(c, "schema", "render", "--root-dir", dir, "--dialect", "ydb")
+
+	var exited *exec.ExitError
+	c.Assert(err, qt.ErrorAs, &exited, qt.Commentf("%s", out))
+	c.Assert(out, qt.Contains, `column "status" of table "items" is an enum column with the values ("active", "inactive"), and the ydb engine builds no enum`)
+	c.Assert(out, qt.Not(qt.Contains), "CREATE TABLE")
 }
 
 // A vector index setting value YDB does not take fails the offline render of
