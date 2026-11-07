@@ -237,3 +237,35 @@ func TestCoordinationPlanningPassesOverMarkersAndColumns_HappyPath(t *testing.T)
 	// The node's path effect names no database, as the host's table does.
 	c.Assert(result.Contributions[0].Steps[0].Metadata.Effects[1].Subject.GetDatabase().GetNormalized(), qt.Equals, "")
 }
+
+// A target without coordination nodes refuses a batch of node changes in
+// planning, whatever each change does, and plans none of them; rendering
+// checks the capability again and refuses a node creation, change or drop.
+// Ported from the host's TestCoordinationPlanRefusesWholeBatch and
+// TestRender_CoordinationNode_FailurePath.
+func TestCoordinationWithoutTheCapability_FailurePath(t *testing.T) {
+	for _, action := range []string{"create", "alter", "drop"} {
+		t.Run(action, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := nativePlan(c, action)
+			plan, err := backend.New().PlanFeatures(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, map[string]bool{"transactional_ddl": false})
+			request.Changes = append(request.Changes, createdNode(c, "second", "app", "second"))
+			request.Capabilities["coordination_nodes"] = false
+
+			refused, err := backend.New().PlanFeatures(t.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(refused.Diagnostics, qt.HasLen, 1)
+			c.Assert(refused.Diagnostics[0].Message, qt.Equals, "Planning a coordination node requires the coordination_nodes capability and nontransactional DDL")
+			c.Assert(refused.Contributions, qt.HasLen, 0)
+			c.Assert(refused.Changes, qt.HasLen, 0)
+
+			rendered, err := backend.New().Render(t.Context(), rendering)
+
+			c.Assert(err, qt.ErrorMatches, `.*native coordination rendering requires established capabilities`)
+			c.Assert(rendered, qt.IsNil)
+		})
+	}
+}

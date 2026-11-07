@@ -217,8 +217,25 @@ func TestExternalComparisonKeepsAnUndescribedObject_HappyPath(t *testing.T) {
 	c.Assert(spec, qt.DeepEquals, *bucketAt("https://a/"))
 }
 
-// A plan that drops a data source a declared table reads, and a declaration
-// on a target without the capability, are refused with the host's words.
+// postgresReading is the PostgreSQL data source app/pg that reads its
+// password from the secret at path.
+func postgresReading(path string) external {
+	return external{name: "pg", source: &ydbdecl.ExternalDataSource{SourceType: "PostgreSQL", Location: "pg:5432", AuthMethod: "BASIC",
+		Options: map[string]string{"LOGIN": "reader", "PASSWORD_SECRET_PATH": path}}}
+}
+
+// withoutSecretPaths is withSources on a line that has no
+// PASSWORD_SECRET_PATH, such as 25.1.
+func withoutSecretPaths() map[string]bool {
+	capabilities := withSources()
+	capabilities["external_data_source_secret_paths"] = false
+	return capabilities
+}
+
+// A plan that drops a data source a declared table reads, a declaration on a
+// target without the capability, and a data source reading a secret by its
+// path on a line without secret paths are refused with the host's words. The
+// last row is ported from the host's TestExternalPlan_RefusesTheWholeBatch.
 func TestExternalComparison_FailurePath(t *testing.T) {
 	bucket, events := external{name: "bucket", source: bucketAt("https://a/")}, external{name: "events", table: eventsOver("app/bucket")}
 	for _, test := range []struct {
@@ -232,6 +249,8 @@ func TestExternalComparison_FailurePath(t *testing.T) {
 			want: "external table app/events reads data source app/bucket, which the plan drops; declare the data source or move the table to one the plan keeps"},
 		{name: "a declaration on a target without external data sources", declared: []external{bucket}, capabilities: map[string]bool{"transactional_ddl": false},
 			want: "external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
+		{name: "a secret path on a target without secret paths", declared: []external{postgresReading("app/pw")}, capabilities: withoutSecretPaths(),
+			want: "external data source app/pg option PASSWORD_SECRET_PATH, which requires target capability external_data_source_secret_paths, unavailable on this ydb target"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -267,11 +286,16 @@ type stepSummary struct {
 
 // The batch plans each statement as one native step of the dependent phase,
 // ordered as the host orders them: tables dropped before the data sources
-// they read and created after. Each operation renders as a native unit and
-// normalizes back to itself.
+// they read and created after. A changed table is dropped and created again
+// on a target without CREATE OR REPLACE and replaced in place with it, and a
+// data source dropped and created again takes along a table that names it by
+// its absolute path. Each operation renders as a native unit and normalizes
+// back to itself. The changed and absolute rows are ported from the host's
+// TestExternalPlan_LowersEachChange and TestExternalTable_Recreates.
 func TestExternalPlanning_HappyPath(t *testing.T) {
 	bucket, moved := external{name: "bucket", source: bucketAt("https://a/")}, external{name: "bucket", source: bucketAt("https://b/")}
-	events := external{name: "events", table: eventsOver("app/bucket")}
+	events, wider := external{name: "events", table: eventsOver("app/bucket")}, external{name: "events", table: eventsOver("app/bucket", "note")}
+	absolute := external{name: "events", table: eventsOver("/local/app/bucket")}
 	for _, test := range []struct {
 		name         string
 		declared     []external
@@ -294,6 +318,16 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 			edges:      [][2]int{{0, 1}, {0, 2}, {1, 2}}},
 		{name: "a data source replaced in place", declared: []external{moved, events}, read: []external{bucket, events}, capabilities: withReplace(),
 			steps: []stepSummary{{"bucket", schema.ExternalReplace, protocol.PlanningEffect_ALTER}}, strategies: []string{"replace the data source in place with CREATE OR REPLACE"}},
+		{name: "a changed table", declared: []external{bucket, wider}, read: []external{bucket, events}, capabilities: withSources(),
+			steps:      []stepSummary{{"events", schema.ExternalDrop, protocol.PlanningEffect_DROP}, {"events", schema.ExternalRestore, protocol.PlanningEffect_CREATE}},
+			strategies: []string{"drop the external table and create it again"}, edges: [][2]int{{0, 1}}},
+		{name: "a changed table replaced in place", declared: []external{bucket, wider}, read: []external{bucket, events}, capabilities: withReplace(),
+			steps: []stepSummary{{"events", schema.ExternalReplace, protocol.PlanningEffect_ALTER}}, strategies: []string{"replace the external table in place with CREATE OR REPLACE"}},
+		{name: "a moved data source takes a table naming it by its absolute path", declared: []external{moved, absolute}, read: []external{bucket, events}, capabilities: withSources(),
+			steps: []stepSummary{{"events", schema.ExternalDrop, protocol.PlanningEffect_DROP}, {"bucket", schema.ExternalRecreate, protocol.PlanningEffect_ALTER},
+				{"events", schema.ExternalRestore, protocol.PlanningEffect_CREATE}},
+			strategies: []string{"drop the data source and create it again, with the external tables over it", "drop the external table and create it again"},
+			edges:      [][2]int{{0, 1}, {0, 2}, {1, 2}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -430,4 +464,91 @@ func TestExternalRendersText_FailurePath(t *testing.T) {
 	c.Assert(rendered.Units, qt.HasLen, 0)
 	c.Assert(rendered.Refusal.Reason, qt.Equals, protocol.RenderRefusal_NO_TEXT_FORM)
 	c.Assert(rendered.Refusal.Message, qt.Matches, ".*an external object dropped and created again is given the owner and the access entries of the old one by a native call")
+}
+
+// externalPlanBeside compares the objects and plans every change that follows
+// beside the host's steps common, on a target with external data sources.
+func externalPlanBeside(c *qt.C, declared, read []external, common []*protocol.CommonPlanningStep) (*protocol.PlanFeaturesRequest, *protocol.PlannedFeatures) {
+	c.Helper()
+	request := externalRequest(c, declared, read, withSources())
+	compared, err := backend.New().CompareModels(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: externalplan.ServiceID, TargetFeatures: backend.Description().Features, Identifiers: request.Identifiers,
+		Capabilities: withSources(), CommonSteps: common}
+	for _, change := range compared.Changes {
+		planning.Changes = append(planning.Changes, &protocol.PlanningChange{Subject: change.Subject, Value: change.Value})
+	}
+	plan, err := backend.New().PlanFeatures(c.Context(), planning)
+	c.Assert(err, qt.IsNil)
+	return planning, plan
+}
+
+// A data source planned beside the host's steps at its path or a path above
+// it takes the path once it is free: a creation runs first unless a drop
+// frees its path or the directory above it, and then follows that drop, and
+// a drop precedes the creation of an object at its path. Ported from the
+// host's TestExternalPlan_PlacesEachStatement.
+func TestExternalOrdersAgainstCommonStepsAtItsPath_HappyPath(t *testing.T) {
+	bucket := external{name: "bucket", source: bucketAt("https://a/")}
+	for _, test := range []struct {
+		name           string
+		declared, read []external
+		common         []*protocol.CommonPlanningStep
+		edges          []string
+	}{
+		{name: "a creation runs first", declared: []external{bucket}},
+		{name: "a creation follows the drop that frees its path", declared: []external{bucket},
+			common: []*protocol.CommonPlanningStep{commonAt("table", "app", "bucket", protocol.PlanningEffect_DROP)},
+			edges:  []string{"drop table app/bucket -> external-data-source/000000/create"}},
+		{name: "a creation follows the drop of its directory", declared: []external{bucket},
+			common: []*protocol.CommonPlanningStep{commonAt("table", "", "app", protocol.PlanningEffect_DROP)},
+			edges:  []string{"drop table /app -> external-data-source/000000/create"}},
+		{name: "a drop runs before a creation at its path", read: []external{bucket},
+			common: []*protocol.CommonPlanningStep{commonAt("table", "app", "bucket", protocol.PlanningEffect_CREATE)},
+			edges:  []string{"external-data-source/000000/drop -> create table app/bucket"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			planning, plan := externalPlanBeside(c, test.declared, test.read, test.common)
+
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
+			c.Assert(stepEdges(plan), qt.DeepEquals, test.edges)
+		})
+	}
+}
+
+// A data source created at a path a host step creates a table at is refused
+// and plans nothing: YDB keeps one object at a path. Ported from the host's
+// TestExternalPlan_RefusesTheWholeBatch.
+func TestExternalAtAPathACommonStepTakes_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+
+	_, plan := externalPlanBeside(c, []external{{name: "bucket", source: bucketAt("https://a/")}}, nil,
+		[]*protocol.CommonPlanningStep{commonAt("table", "app", "bucket", protocol.PlanningEffect_CREATE)})
+
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, "external data source operation conflicts with a common occupant at its path")
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(plan.Changes, qt.HasLen, 0)
+}
+
+// A data source that reads its password from a secret outside the database
+// it is created in is refused when its declaration is read, in the host's
+// words: the data source could not read it. Ported from the host's
+// TestExternalPlan_RefusesTheWholeBatch.
+func TestExternalSourceReadingASecretOutsideTheDatabase_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	intent, err := externals.SourceIntent(*postgresReading("/other/pw").source)
+	c.Assert(err, qt.IsNil)
+	value, err := schema.CaptureExternalIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ExternalSourceProperties, Schema: "app", Name: "pg"}, intent)
+	c.Assert(err, qt.IsNil)
+	value.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
+
+	normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features,
+		Values: []*protocol.ValueInput{{Id: "declared", Representation: protocol.ValueInput_DESIRED, Value: value}}})
+
+	c.Assert(err, qt.ErrorMatches, `.*option PASSWORD_SECRET_PATH names secret "/other/pw", which is outside the database /local, so the data source cannot read it`)
+	c.Assert(normalized, qt.IsNil)
 }
