@@ -17,6 +17,28 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
+// The former host TestCollect_YDBFamilies also required every YDB family to
+// appear with zero when the schema holds none of its objects. The provider's
+// report declarations must reach the host even without values to report.
+func TestHostSchemaStatsListsZeroForEmptyYDBFamilies(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ReportCountsFeature)
+	_, directory, _ := inspectionFixture(c)
+
+	stdout, err := hostCommand(c, "schema", "stats", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", stdout))
+	labels := `{dialect="ydb",schemas="` + directory + `"}`
+	for _, metric := range []string{
+		"topics", "topic_consumers", "changefeeds", "changefeed_consumers", "coordination_nodes",
+		"resource_pools", "resource_pool_classifiers", "async_replications", "transfers", "secrets",
+		"external_data_sources", "external_tables", "external_columns", "streaming_queries",
+	} {
+		c.Assert(stdout, qt.Contains, "ptah_schema_"+metric+labels+" 0\n", qt.Commentf("metric %s", metric))
+	}
+	c.Assert(stdout, qt.Contains, "ptah_schema_tables"+labels+" 0\n")
+	c.Assert(stdout, qt.Contains, "ptah_schema_columns"+labels+" 0\n")
+}
+
 // The host's built-in YDB engine counted the settings of a directory's tables
 // in seven families of `schema stats`. For a host that negotiates
 // models.report-counts, the provider counts them the same way: row tables with
