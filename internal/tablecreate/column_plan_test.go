@@ -327,6 +327,79 @@ func TestColumnPlan_RefusesForgedAddedColumnFacets(t *testing.T) {
 	}
 }
 
+// inSessionTerms names the table of request, the subjects of its captured
+// facets, the parent of each host step and every subject of their effects
+// without a database, as the host names a table of the session's database.
+// The values keep the owners they were normalized with.
+func inSessionTerms(request *protocol.PlanFeaturesRequest) {
+	table := request.Tables[0]
+	table.Subject.Database = nil
+	for _, state := range []*protocol.ComparisonState{table.GetDesired().GetFeatures().GetFacets(), table.GetCurrent().GetFeatures().GetFacets()} {
+		for _, record := range state.GetRecords() {
+			record.Subject.Database = nil
+		}
+		for _, subject := range state.GetCoverage().GetSubjects() {
+			subject.Subject.Database = nil
+		}
+	}
+	for _, step := range request.CommonSteps {
+		step.Parent.Database = nil
+		for _, effect := range step.Metadata.Effects {
+			effect.Subject.Database = nil
+		}
+	}
+}
+
+// The host names a table of the session's database without a database, and
+// the column the rollback of a column drop adds back carries the settings
+// the pre-change declaration converted from the read, whose owner names the
+// database the read came from. The addition reads such a facet in the table's
+// terms, so it is claimed.
+func TestColumnPlan_ReadsAConvertedFacetInTheTablesTerms_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	record := facet(c, schema.ColumnProperties, "payload", `{"family":"archive"}`)
+	request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}},
+		additionStep("add", "payload", func(column *protocol.PlanningColumn) {
+			column.Facets = []*protocol.CapturedFacet{{Kind: record.Kind, Value: record.Value}}
+		}))
+	inSessionTerms(request)
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(rewrites(plan), qt.HasLen, 1)
+}
+
+// Read in the table's terms, a converted facet still names its own directory,
+// table and column, and one that names another is refused.
+func TestColumnPlan_ReadsAConvertedFacetInTheTablesTerms_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		modify func(*protocol.Reference)
+	}{
+		{"other directory", func(owner *protocol.Reference) { owner.Schema = "elsewhere" }},
+		{"other table", func(owner *protocol.Reference) { owner.Path = []string{"elsewhere"} }},
+		{"other column", func(owner *protocol.Reference) { owner.Name = "elsewhere" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			record := facet(c, schema.ColumnProperties, "payload", `{"family":"archive"}`)
+			captured := &protocol.CapturedFacet{Kind: record.Kind, Value: proto.CloneOf(record.Value)}
+			test.modify(captured.Value.Value.Owner)
+			test.modify(captured.Value.NormalizedOwner)
+			request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}},
+				additionStep("add", "payload", func(column *protocol.PlanningColumn) { column.Facets = []*protocol.CapturedFacet{captured} }))
+			inSessionTerms(request)
+
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.ErrorMatches, ".*YDB added column facet belongs to a different owner")
+			c.Assert(plan, qt.IsNil)
+		})
+	}
+}
+
 func TestColumnPlan_RefusesWhatTheDeclarationContradicts(t *testing.T) {
 	for _, test := range []struct {
 		name    string
