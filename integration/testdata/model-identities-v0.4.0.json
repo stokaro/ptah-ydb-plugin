@@ -1,0 +1,274 @@
+[
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/async-replication",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "faa84b8be10b750b58f9154e77499f7a2ce1d357ae66bf2e3ec0342cea1ca3ba"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/async-replication",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "04358766aff94ec6fb27f159ccc04e6dc8daaa09117ac3e548a7963f86db5d54"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/column-properties",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "6dbd837c2dc3fee253658063922d283a5d44206812d8c69b6b2da927ae836824"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/column-properties",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "0773ded4644fd745487ba25cef3fbcacda74959ce83f7f5193add16b4a9b5c57"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/column-storage-properties",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "4627695b85d449a91275117597d386a81ae2afa1f0d44c6332010288325bd9b9"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/column-storage-properties",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "b947e1822a34abb826838d94f34bb42b7e1fa4fc83055773ae851a358a00a5e8"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/coordination-node",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "ed553660048298a63240dac1f471901bf38ca67a18edb9471e6f8a70d0eea912"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/coordination-node",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "ec624d61c345bb3da784e3940222733aaf36bdd8e9317fd19386554daf8b474d"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/external-data-source",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "1157f30e09bac8c99645b962e6cc0f95fcff2837aeea1be56aaa228fdba1d346"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/external-data-source",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "b91173dd14f596cf1e388be13b8b54c6f62d62a3928b044379bd97af412bff96"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/external-table",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "be7a891bb73ed8d18a252057a7ed646705ba2b9a553238ea0475beb8b3b15bba"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/external-table",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "2c77f09575b384903bef488d43f8347c0d7239c4c175303caec5dde30b287f8e"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/index-properties",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "871798aa273839f894a4d366dbde23c5642ca47cd46f1770aa76944af5443e52"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/index-properties",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "1c76fd866a430c004e115e053a019fe5b7557c54e50868d7837fcbadd67b9338"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/resource-pool",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "d678f6cea9521320734cffdebee647881e8eeafb34e5516ca4ec46b75fcdb6c8"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/resource-pool",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "e3436a24163b20716618e7d766c774e2bbd0200e681e545edc973fedf0285254"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/resource-pool-classifier",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "63aa61c0de46edd1cd9ae3548ffca08f9e8abec345909894fe969bbf7b52e81a"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/resource-pool-classifier",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "0ec407fa59872ed011cd6a3a32c2c82f8ab5b3632fb9ff820db175939daf456b"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/row-table-properties",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "6360e79d5b65b9e3a4f404e72eb53a76bb8692d6f1b8dc6830b80f550217d403"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/row-table-properties",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "7b9835c6f9a8295e844a0dc9d95693429991beb5782a7eb0bd8e50f7daad7928"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/secret",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "57fbb7f5560da802b12709e85165f1b77d80b9e2b1e1fcbcb1f8b827c453b5be"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/secret",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "455912224a627c8f1ab3fd04f4a7fc0794b6fed2f668557fd1f2384fb8e01dd8"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/streaming-query",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "447c2e5e18aa2690be7007e0e44c49907a4d173325f8167fa1cc9a2c92ce1d8f"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/streaming-query",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "046bd20ca696b0f1b9b3d9d0a9a7830a416679a3c28bede6f2c217323e8a0944"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/table-changefeeds",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "7c854b7158848a580e0afd3c80d9fc50a7e878f4c4d0e39e87c519a98b3197b1"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/table-changefeeds",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "97bc12f14bcb467fb6ef25f27d8c79fb24361c9c0d91a6898ef72ee2fe3e9d11"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/table-indexes",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "01b06421a1aed46735e706443b785f1f50dbfe39c6b543d82849ea235c12f29f"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/table-indexes",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "ec18ccc368269f19fd26c031e5ec1f0fa8dd10423f8578208f34636ffd07fc0a"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/topic",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "939c4f137bcbb0e2a023b3e77eccc26f1d66ed29d8ce3158d609435d39817d93"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/topic",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "2cb8fd84b712c27904976eb2e6c4f6844a32ab1f27d914cb2fa225686fdb1b00"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/transfer",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "24e2467ce3750c67ea83c64f9ee8989ff863599492dc93e43c8deedcd16fcbc5"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/transfer",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "52ade62f747b253e8ff93b5adfe1457035c8950e1355e1f7b1c3c6135921a1f7"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/view",
+    "representation": "DESIRED",
+    "schema_version": 1,
+    "definition_sha256": "a5149ac552ab72b6f775b69a6fccd223d4aba98a689fd8e1af26b5cc999372eb"
+  },
+  {
+    "owner": "github.com/stokaro/ptah-ydb-plugin",
+    "engine": "ydb",
+    "kind": "github.com/stokaro/ptah-ydb-plugin/view",
+    "representation": "OBSERVED",
+    "schema_version": 1,
+    "definition_sha256": "cca3e615152137b79f615c93e81defbc3e336e3e8681556f3064b2ce304bea7c"
+  }
+]
