@@ -1,0 +1,41 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "topic",
+      "schema": "app/a_sources",
+      "name": "events"
+    },
+    {
+      "kind": "directory",
+      "schema": "app",
+      "name": "a_sources"
+    },
+    {
+      "kind": "streaming query",
+      "schema": "app/z_queries",
+      "name": "copy"
+    },
+    {
+      "kind": "directory",
+      "schema": "app",
+      "name": "z_queries"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "app"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP STREAMING QUERY `app/z_queries/copy`",
+      "DROP TOPIC `app/a_sources/events`"
+    ],
+    "removed": [
+      "/local/app/a_sources",
+      "/local/app/z_queries",
+      "/local/app"
+    ]
+  }
+}

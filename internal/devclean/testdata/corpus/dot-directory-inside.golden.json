@@ -1,0 +1,23 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "table",
+      "schema": "scratch",
+      "name": "t"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "scratch"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP TABLE `scratch/t`"
+    ],
+    "removed": [
+      "/local/scratch"
+    ]
+  }
+}

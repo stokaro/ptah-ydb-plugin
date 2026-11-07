@@ -115,6 +115,11 @@ func TestChangefeedOperation_FailurePath(t *testing.T) {
 		{"no change", tableOwner(), nil, `changefeed operation requires at least one changefeed change`},
 		{"a change without an operand", tableOwner(), []changefeeds.Change{{Name: "f"}}, `changefeed operation change of "f" has no operand`},
 		{"a change without a name", tableOwner(), []changefeeds.Change{{After: declaredFeed(updates)}}, `changefeed operation requires a changefeed name`},
+		// Ported from the host's TestExtensionPayloads_RefuseMalformedDrop: a
+		// drop names a changefeed a read found, which is one path component.
+		{"a drop without a name", tableOwner(), []changefeeds.Change{{Before: named("", readFeed())}}, `changefeed operation requires a changefeed name`},
+		{"a drop of a name with a slash", tableOwner(), []changefeeds.Change{{Name: "table/feed", Before: named("table/feed", readFeed())}},
+			`invalid or duplicate YDB changefeed name`},
 		{"an operand of another changefeed", tableOwner(), []changefeeds.Change{{Name: "f", After: named("g", declaredFeed(updates))}},
 			`changefeed operation operands name another changefeed than "f"`},
 		{"two changes of one changefeed", tableOwner(), []changefeeds.Change{{Name: "f", Before: readFeed()}, {Name: "f", After: declaredFeed(updates)}},

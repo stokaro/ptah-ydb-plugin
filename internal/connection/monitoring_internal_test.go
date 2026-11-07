@@ -6,6 +6,7 @@ package connection
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,6 +54,23 @@ func TestReadMonitoring_RefusesAPlainEndpointForATLSCredential(t *testing.T) {
 	opened := monitored(c, true, "ticket-value", &received)
 	body, err := opened.ReadMonitoring(c.Context(), "feature flags", "/viewer/json/feature_flags", nil)
 	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags: the connection's credential travels over TLS, and the provider does not send it to a plain http:// monitoring endpoint; name the endpoint with https://`)
+	c.Assert(body, qt.IsNil)
+	c.Assert(received.Load(), qt.IsNil)
+}
+
+// TestReadMonitoring_FailsWhenTheCredentialCannotBeRead sends no request for a
+// connection whose credential cannot be read, rather than reading the page
+// without it. Ported from the host's
+// TestGetDatabaseInfoWithCapabilities_FeatureFlagsCredential_FailurePath.
+func TestReadMonitoring_FailsWhenTheCredentialCannotBeRead(t *testing.T) {
+	c := testcheck.New(t)
+	var received atomic.Pointer[string]
+	opened := monitored(c, false, "ticket-value", &received)
+	opened.ticket = func(context.Context) (string, error) {
+		return "", errors.New("ask YDB which user the connection is: the call failed")
+	}
+	body, err := opened.ReadMonitoring(c.Context(), "feature flags", "/viewer/json/feature_flags", nil)
+	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags: ask YDB which user the connection is: the call failed`)
 	c.Assert(body, qt.IsNil)
 	c.Assert(received.Load(), qt.IsNil)
 }

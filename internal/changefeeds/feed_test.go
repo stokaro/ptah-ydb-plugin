@@ -47,6 +47,10 @@ func TestFromObserved_HappyPath(t *testing.T) {
 	disabled.Description.State = native.ChangefeedDescription_STATE_DISABLED
 	replicated := observed()
 	replicated.Description.Attributes = map[string]string{"__async_replication": `{"path":"/local/repl/orders","id":"1","supports_topic_autopartitioning":false}`}
+	// A controller names the stream it creates with a UUID; the name alone
+	// says nothing about who owns the stream.
+	generated := observed()
+	generated.Description.Name = "2b1f0c5e-0d1c-4b1a-9c3e-5d6f7a8b9c0d"
 	tests := []struct {
 		name     string
 		observed *native.ObservedChangefeed
@@ -65,6 +69,8 @@ func TestFromObserved_HappyPath(t *testing.T) {
 			want: changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "feed", Mode: "UPDATES", Format: "JSON"}, Disabled: true}},
 		{name: "a stream a replication controller owns", observed: replicated,
 			want: changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "feed", Mode: "UPDATES", Format: "JSON"}, Replicated: true}},
+		{name: "a stream named like a controller's, without the binding", observed: generated,
+			want: changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "2b1f0c5e-0d1c-4b1a-9c3e-5d6f7a8b9c0d", Mode: "UPDATES", Format: "JSON"}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -77,7 +83,11 @@ func TestFromObserved_HappyPath(t *testing.T) {
 }
 
 // TestFromObserved_FailurePath holds the settings the host's reader records as
-// not described rather than reads.
+// not described rather than reads. The binding rows are ported from the host's
+// TestRead_MalformedReplicationMetadataStaysUnrepresentable and
+// TestReplicationBindingRejectsAmbiguousWireValues: a binding is read only with
+// every field, an absolute replica path, a canonical positive item number and
+// no key the controller does not write.
 func TestFromObserved_FailurePath(t *testing.T) {
 	edit := func(change func(*native.ObservedChangefeed)) *native.ObservedChangefeed {
 		feed := observed()
@@ -101,6 +111,24 @@ func TestFromObserved_FailurePath(t *testing.T) {
 		}), wantErr: `it holds attributes, which Ptah does not model`},
 		{name: "a replication binding without its fields", observed: edit(func(f *native.ObservedChangefeed) {
 			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"/p"}`}
+		}), wantErr: `its replication binding is not one Ptah reads`},
+		{name: "a replication binding whose flag is null", observed: edit(func(f *native.ObservedChangefeed) {
+			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"/replica","id":"1","supports_topic_autopartitioning":null}`}
+		}), wantErr: `its replication binding is not one Ptah reads`},
+		{name: "a replication binding with a relative replica path", observed: edit(func(f *native.ObservedChangefeed) {
+			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"replica","id":"1","supports_topic_autopartitioning":false}`}
+		}), wantErr: `its replication binding is not one Ptah reads`},
+		{name: "a replication binding whose item has a leading zero", observed: edit(func(f *native.ObservedChangefeed) {
+			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"/replica","id":"01","supports_topic_autopartitioning":false}`}
+		}), wantErr: `its replication binding is not one Ptah reads`},
+		{name: "a replication binding whose item is zero", observed: edit(func(f *native.ObservedChangefeed) {
+			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"/replica","id":"0","supports_topic_autopartitioning":false}`}
+		}), wantErr: `its replication binding is not one Ptah reads`},
+		{name: "a replication binding with a key the controller does not write", observed: edit(func(f *native.ObservedChangefeed) {
+			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"/replica","id":"1","supports_topic_autopartitioning":false,"unknown":true}`}
+		}), wantErr: `its replication binding is not one Ptah reads`},
+		{name: "a replication binding followed by more text", observed: edit(func(f *native.ObservedChangefeed) {
+			f.Description.Attributes = map[string]string{"__async_replication": `{"path":"/replica","id":"1","supports_topic_autopartitioning":false} {}`}
 		}), wantErr: `its replication binding is not one Ptah reads`},
 		{name: "a state Ptah does not read", observed: edit(func(f *native.ObservedChangefeed) {
 			f.Description.State = native.ChangefeedDescription_STATE_UNSPECIFIED

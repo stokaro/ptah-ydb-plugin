@@ -82,6 +82,11 @@ func TestAddressRefusesBeforeConnecting(t *testing.T) {
 		{"monitoring with a path", "ydb://host/local?monitoring=http://host:8765/viewer"},
 		{"monitoring with a query", "ydb://host/local?monitoring=http://host:8765%3Ftest-secret=1"},
 		{"monitoring with a fragment", "ydb://host/local?monitoring=http://host:8765%23test-secret"},
+		// Ported from the host's TestParse_FailurePath_NeverRepeatsTheMonitoringSecret:
+		// each check reached with a secret in the endpoint's user.
+		{"monitoring not a URL, with a user", "ydb://host/local?monitoring=http://viewer:test-secret@h:87%2565"},
+		{"monitoring of another scheme, with a user", "ydb://host/local?monitoring=ftp://viewer:test-secret@host:8765"},
+		{"monitoring without a host, with a user", "ydb://host/local?monitoring=http://viewer:test-secret@/viewer"},
 		{"duplicate monitoring", "ydb://host/local?monitoring=http://host:8765&monitoring=http://host:8766"},
 		{"legacy and current balancer", "ydb://host/local?balancer=disable&go_balancer=disable"},
 		{"bad legacy balancer", "ydb://host/local?balancer=test-secret"},
@@ -141,6 +146,8 @@ func TestCheckEnvironment_FailurePath(t *testing.T) {
 		{"nothing set", "no credential variable is", nil},
 		{"metadata switch", "reads only 1", map[string]string{"YDB_METADATA_CREDENTIALS": "true"}},
 		{"static without password", "without YDB_STATIC_CREDENTIALS_PASSWORD and", map[string]string{"YDB_STATIC_CREDENTIALS_USER": "alice"}},
+		{"static without endpoint", "is set without YDB_STATIC_CREDENTIALS_ENDPOINT, and the YDB SDK would connect anonymously instead",
+			map[string]string{"YDB_STATIC_CREDENTIALS_USER": "alice", "YDB_STATIC_CREDENTIALS_PASSWORD": "test-secret"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -197,6 +204,63 @@ func TestAddressRealm(t *testing.T) {
 			c.Assert(address.Realm(), qt.Equals, test.realm)
 			c.Assert(address.Root(), qt.Equals, test.root)
 			c.Assert(address.String(), qt.Equals, test.dsn)
+		})
+	}
+}
+
+// TestAddressRefusalSaysWhy pins the words of each refusal: the parameter it
+// names, why it is refused and what to write instead. Ported from the host's
+// TestOpen_FailurePath and TestParse_FailurePath; the provider names a
+// parameter and never repeats its value, which may be a secret in a mistyped
+// key.
+func TestAddressRefusalSaysWhy(t *testing.T) {
+	for _, test := range []struct{ name, input, want string }{
+		{"no database", "ydb://localhost:2136", "YDB URL must name a database"},
+		{"the path and the parameter disagree", "ydb://localhost:2136/local?database=/dev",
+			"YDB URL database path and parameter must identify the same nonempty database"},
+		{"a parameter given twice", "ydb://localhost:2136/local?go_balancer=disable&go_balancer=single", "YDB URL parameters must appear once"},
+		{"a balancer the SDK does not know", "ydb://localhost:2136/local?go_balancer=disabled",
+			"parameter go_balancer is not a balancer ydb-go-sdk knows: use disable, single, random_choice, round_robin or a JSON balancer config"},
+		{"two balancer spellings", "ydb://localhost:2136/local?go_balancer=disable&balancer=single",
+			"parameters go_balancer and balancer both choose a balancer; give one"},
+		{"the SDK's own binder", "ydb://localhost:2136/local?go_query_bind=positional",
+			"parameter go_query_bind is refused: the provider binds parameters itself, and the SDK's binders rewrite a ? inside a YQL literal"},
+		{"a faked transaction", "ydb://localhost:2136/local?go_fake_tx=query",
+			"parameter go_fake_tx is refused: a schema is read in a snapshot read-only transaction, and a faked transaction would read outside it"},
+		{"a table-service query mode", "ydb://localhost:2136/local?go_query_mode=scripting",
+			"parameter go_query_mode is refused: the provider runs its reads and DDL through the query service; use go_query_mode=query or leave it out"},
+		{"a legacy table-service query mode", "ydb://localhost:2136/local?query_mode=scripting",
+			"parameter query_mode is refused: the provider runs its reads and DDL through the query service; use query_mode=query or leave it out"},
+		{"an idempotence flag that is not a boolean", "ydb://localhost:2136/local?go_default_idempotent=sometimes",
+			"parameter go_default_idempotent is not a boolean"},
+		{"a negative prefetch", "ydb://localhost:2136/local?prefetch_query_result_parts=-1",
+			"parameter prefetch_query_result_parts is not a non-negative integer"},
+		{"a password and a token", "ydb://alice:secret@localhost:2136/local?token=t", "provide exactly one nonempty YDB credential source"},
+		{"a token and the environment", "ydb://localhost:2136/local?token=t&use_env_credentials", "provide exactly one nonempty YDB credential source"},
+		{"an empty token", "ydb://localhost:2136/local?token=", "provide exactly one nonempty YDB credential source"},
+		{"an environment switch that is not a boolean", "ydb://localhost:2136/local?use_env_credentials=maybe", "use_env_credentials must be a boolean"},
+		{"the monitoring parameter is empty", "ydb://h/local?monitoring=", "the monitoring parameter is empty: write monitoring=http://host:8765"},
+		{"the monitoring parameter names no scheme", "ydb://h/local?monitoring=h:8765",
+			"the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765"},
+		{"the monitoring parameter names the gRPC endpoint", "ydb://h/local?monitoring=grpc://h:2136",
+			"the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765"},
+		{"the monitoring parameter names no host", "ydb://h/local?monitoring=http:///viewer",
+			"the monitoring parameter names no host: write monitoring=http://host:8765"},
+		{"the monitoring parameter carries a user", "ydb://h/local?monitoring=http://viewer@h:8765",
+			"the monitoring parameter carries a user; name the endpoint only, as monitoring=http://host:8765"},
+		{"the monitoring parameter names a page", "ydb://h/local?monitoring=http://h:8765/viewer/json/feature_flags",
+			"the monitoring parameter names a page; name the endpoint only, as monitoring=http://host:8765"},
+		{"the monitoring parameter names an escaped slash as its page", "ydb://h/local?monitoring=http://h:8765/%252F",
+			"the monitoring parameter names a page; name the endpoint only, as monitoring=http://host:8765"},
+		{"the monitoring parameter is not a URL", "ydb://h/local?monitoring=http://h:87%2565",
+			"the monitoring parameter is not a URL: write monitoring=http://host:8765"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			address, err := connection.Parse(test.input)
+			c.Assert(err, qt.IsNotNil)
+			c.Assert(err.Error(), qt.Equals, test.want)
+			c.Assert(address.String(), qt.Equals, "")
 		})
 	}
 }

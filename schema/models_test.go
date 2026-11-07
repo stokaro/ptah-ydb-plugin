@@ -153,3 +153,32 @@ func TestTablePropertiesLeaveCommentsOut(t *testing.T) {
 		})
 	}
 }
+
+// A row table whose TTL holds what the provider does not read refuses its
+// capture rather than losing it: a TTL with no mode, an epoch TTL whose unit
+// is unspecified, a field of a TTL mode the provider does not hold, and a
+// tiered TTL, which a row table does not take. Ported from the host's
+// TestReader_FailurePath.
+func TestCaptureTableRefusesATTLItCannotRead_FailurePath(t *testing.T) {
+	unknownDate := &Ydb_Table.DateTypeColumnModeSettings{ColumnName: "ts", ExpireAfterSeconds: 60}
+	unknownDate.ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 3, protowire.VarintType), 1))
+	tiered := &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{DateTypeColumn: &Ydb_Table.DateTypeColumnModeSettings{ColumnName: "ts", ExpireAfterSeconds: 60}}}
+	tiered.ProtoReflect().SetUnknown(protowire.AppendBytes(protowire.AppendTag(nil, 4, protowire.BytesType), nil))
+	for _, test := range []struct {
+		name string
+		ttl  *Ydb_Table.TtlSettings
+	}{
+		{"a TTL with no mode", &Ydb_Table.TtlSettings{}},
+		{"an epoch TTL whose unit is unspecified", &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_ValueSinceUnixEpoch{
+			ValueSinceUnixEpoch: &Ydb_Table.ValueSinceUnixEpochModeSettings{ColumnName: "ts", ExpireAfterSeconds: 60}}}},
+		{"a date TTL with a field the provider does not hold", &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{DateTypeColumn: unknownDate}}},
+		{"a tiered TTL", tiered},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			value, err := schema.CaptureTable(tableOwner(), &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}, TtlSettings: test.ttl})
+			c.Assert(err, qt.IsNotNil)
+			c.Assert(value, qt.IsNil)
+		})
+	}
+}

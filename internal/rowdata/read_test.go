@@ -2,6 +2,7 @@ package rowdata_test
 
 import (
 	"encoding/binary"
+	"math/big"
 	"testing"
 	"time"
 
@@ -134,6 +135,29 @@ func (d decimal) Decimal() (unscaled [16]byte, precision, scale uint32) {
 	return bytes, d.precision, d.scale
 }
 
+// rawDecimal is what the driver scans a Decimal column into, given as the
+// 128-bit two's complement bytes of the unscaled value.
+type rawDecimal struct {
+	bytes            [16]byte
+	precision, scale uint32
+}
+
+func (d rawDecimal) Decimal() (unscaled [16]byte, precision, scale uint32) {
+	return d.bytes, d.precision, d.scale
+}
+
+// decimalOf is the scanned Decimal of the unscaled value digits, which may be
+// wider than 64 bits.
+func decimalOf(digits string, precision, scale uint32) rawDecimal {
+	value, _ := new(big.Int).SetString(digits, 10)
+	if value.Sign() < 0 {
+		value.Add(value, new(big.Int).Lsh(big.NewInt(1), 128))
+	}
+	var bytes [16]byte
+	value.FillBytes(bytes[:])
+	return rawDecimal{bytes: bytes, precision: precision, scale: scale}
+}
+
 type uuidText string
 
 func (u uuidText) String() string { return string(u) }
@@ -156,6 +180,8 @@ func TestScanned_HappyPath(t *testing.T) {
 			&protocol.DataValue{Value: &protocol.DataValue_DecimalValue{DecimalValue: &protocol.DecimalValue{Digits: "1250", Precision: 10, Scale: 2}}}},
 		{"negative decimal", "Decimal(22,9)", decimal{unscaled: -1, precision: 22, scale: 9},
 			&protocol.DataValue{Value: &protocol.DataValue_DecimalValue{DecimalValue: &protocol.DecimalValue{Digits: "-1", Precision: 22, Scale: 9}}}},
+		{"the widest decimal its precision holds", "Decimal(22,9)", decimalOf("-9999999999999999999999", 22, 9),
+			&protocol.DataValue{Value: &protocol.DataValue_DecimalValue{DecimalValue: &protocol.DecimalValue{Digits: "-9999999999999999999999", Precision: 22, Scale: 9}}}},
 		{"utf8", "Utf8", "été", stringValue("été")},
 		{"uuid", "Uuid", uuidText("6f9619ff-8b86-d011-b42d-00c04fc964ff"), stringValue("6f9619ff-8b86-d011-b42d-00c04fc964ff")},
 		{"dynumber", "DyNumber", ".15e1", stringValue(".15e1")},
@@ -187,6 +213,14 @@ func TestScanned_FailurePath(t *testing.T) {
 		{"text for an integer", "Int64", "5", `the driver returned a Go string for a Int64 column`},
 		{"an integer out of range", "Int64", uint64(1 << 63), `the driver returned a Go uint64 for a Int64 column`},
 		{"an unknown type", "Optional<Utf8>", "x", `the driver returned a Go string for a Optional<Utf8> column`},
+		// Ported from the host's TestRowValue_FailurePath: YDB stores
+		// infinity as 10^35, minus infinity as -10^35 and NaN as 10^35+1,
+		// none of which a Decimal(22,9) holds.
+		{"a decimal wider than its precision", "Decimal(22,9)", rawDecimal{bytes: [16]byte{0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
+			0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f}, precision: 22, scale: 9}, `read a Decimal\(22,9\) value that is not a finite number`},
+		{"infinity", "Decimal(22,9)", decimalOf("100000000000000000000000000000000000", 22, 9), `read a Decimal\(22,9\) value that is not a finite number`},
+		{"minus infinity", "Decimal(22,9)", decimalOf("-100000000000000000000000000000000000", 22, 9), `read a Decimal\(22,9\) value that is not a finite number`},
+		{"NaN", "Decimal(35,10)", decimalOf("100000000000000000000000000000000001", 35, 10), `read a Decimal\(35,10\) value that is not a finite number`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -195,6 +229,31 @@ func TestScanned_FailurePath(t *testing.T) {
 
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(value, qt.IsNil)
+		})
+	}
+}
+
+// A column described as String or Yson, Optional or not, holds bytes, and
+// Json, Utf8 and Decimal do not; a type the description spells in a way the
+// provider does not read has no kind. Ported from the host's TestHoldsBytes.
+func TestKindOfADescribedColumn(t *testing.T) {
+	for _, test := range []struct {
+		databaseType string
+		want         protocol.DataKind
+	}{
+		{"String", protocol.DataKind_DATA_KIND_BYTES},
+		{"Optional<String>", protocol.DataKind_DATA_KIND_BYTES},
+		{"Optional<Yson>", protocol.DataKind_DATA_KIND_BYTES},
+		{"Utf8", protocol.DataKind_DATA_KIND_STRING},
+		{"Optional<Json>", protocol.DataKind_DATA_KIND_JSON},
+		{"Optional<JsonDocument>", protocol.DataKind_DATA_KIND_JSON},
+		{"Optional<Decimal(22,9)>", protocol.DataKind_DATA_KIND_DECIMAL},
+		{"Optional<Strin", protocol.DataKind_DATA_KIND_UNSPECIFIED},
+		{"", protocol.DataKind_DATA_KIND_UNSPECIFIED},
+	} {
+		t.Run(test.databaseType, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(rowdata.Kind(rowdata.ColumnType(test.databaseType)), qt.Equals, test.want)
 		})
 	}
 }

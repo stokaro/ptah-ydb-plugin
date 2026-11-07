@@ -2,14 +2,17 @@ package inspect
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -52,9 +55,16 @@ func Workload(ctx context.Context, snapshot *protocol.Schema, database string, s
 	if err != nil {
 		return err
 	}
+	// A pool or a classifier holding a setting outside what YDB keeps is
+	// recorded as unrepresentable rather than read without it, as the host's
+	// embedded engine recorded it: read as it is, a plan would change it.
 	for _, name := range slices.Sorted(maps.Keys(held.Pools)) {
-		value, err := schema.CaptureWorkloadObservation(&protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Database: database, Name: name},
-			schema.PoolSettings(held.Pools[name]))
+		owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Database: database, Name: name}
+		if reason := workload.ObservedPoolRefusal(held.Pools[name]); reason != "" {
+			unrepresentable(snapshot, owner, fmt.Sprintf("resource pool %q: %s", name, reason))
+			continue
+		}
+		value, err := schema.CaptureWorkloadObservation(owner, schema.PoolSettings(held.Pools[name]))
 		if err != nil {
 			return err
 		}
@@ -62,8 +72,12 @@ func Workload(ctx context.Context, snapshot *protocol.Schema, database string, s
 		observe(snapshot, []*protocol.Envelope{value})
 	}
 	for _, name := range slices.Sorted(maps.Keys(held.Classifiers)) {
-		value, err := schema.CaptureWorkloadObservation(&protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolClassifierProperties, Database: database, Name: name},
-			schema.ClassifierSettings(held.Classifiers[name]))
+		owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolClassifierProperties, Database: database, Name: name}
+		if err := workload.ValidateClassifier(name, held.Classifiers[name]); err != nil {
+			unrepresentable(snapshot, owner, err.Error())
+			continue
+		}
+		value, err := schema.CaptureWorkloadObservation(owner, schema.ClassifierSettings(held.Classifiers[name]))
 		if err != nil {
 			return err
 		}
@@ -86,4 +100,13 @@ func Workload(ctx context.Context, snapshot *protocol.Schema, database string, s
 		return strings.Compare(a.Owner.Name, b.Owner.Name)
 	})
 	return provider.ValidateSchema(snapshot)
+}
+
+// unrepresentable records the object owner as one the read found and cannot
+// represent, for reason.
+func unrepresentable(snapshot *protocol.Schema, owner *protocol.Reference, reason string) {
+	snapshot.Coverage.Subjects = append(snapshot.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+		Kind: owner.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner),
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: reason},
+	})
 }

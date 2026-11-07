@@ -178,3 +178,40 @@ func workloadRecords(read *protocol.Schema) map[string]*protocol.ModelKindCovera
 	}
 	return records
 }
+
+// A pool or a classifier holding a setting outside what YDB keeps is recorded
+// as unrepresentable rather than read without it, so a plan neither changes nor
+// drops it, and the rest are read. Ported from the host's
+// TestReadSchema_ResourcePools_UnsupportedSettingsStayUnknown.
+func TestWorkload_UnsupportedSettingsStayUnknown(t *testing.T) {
+	c := testcheck.New(t)
+	read := snapshot()
+	err := inspect.Workload(c.Context(), read, "/local", nil, false, func(context.Context) (nativeapi.HeldWorkload, error) {
+		return nativeapi.HeldWorkload{
+			Pools:       map[string]workload.PoolSpec{"default": {}, "broken": {ResourceWeight: new(-2.0)}},
+			Classifiers: map[string]workload.ClassifierSpec{"etl": {ResourcePool: "default", Rank: 1}, "broken": {ResourcePool: "default", Rank: -1}},
+		}, nil
+	}, "")
+	c.Assert(err, qt.IsNil)
+	var names []string
+	for _, value := range read.NativeObjects {
+		names = append(names, value.Kind+" "+value.Owner.Name)
+	}
+	c.Assert(names, qt.DeepEquals, []string{schema.ResourcePoolProperties + " default", schema.ResourcePoolClassifierProperties + " etl"})
+	c.Assert(incompleteSubjects(read), qt.DeepEquals, []string{
+		schema.ResourcePoolProperties + ` broken UNREPRESENTABLE: resource pool "broken": RESOURCE_WEIGHT takes a percentage from 0 to 100`,
+		schema.ResourcePoolClassifierProperties + ` broken UNREPRESENTABLE: resource pool classifier "broken" requires a pool and a nonnegative rank`,
+	})
+}
+
+// incompleteSubjects describes each subject a read records as anything but
+// complete, as its kind, its name, its state and the reason.
+func incompleteSubjects(read *protocol.Schema) []string {
+	var described []string
+	for _, subject := range read.Coverage.Subjects {
+		if subject.Knowledge.State != protocol.ModelKnowledge_COMPLETE {
+			described = append(described, subject.Kind+" "+subject.Subject.Name+" "+subject.Knowledge.State.String()+": "+subject.Knowledge.Reason)
+		}
+	}
+	return described
+}

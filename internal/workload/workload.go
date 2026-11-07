@@ -306,6 +306,11 @@ func ValidateClassifier(name string, spec ClassifierSpec) error {
 	return nil
 }
 
+// ObservedPoolRefusal says which setting of a pool a read found is out of the
+// range YDB keeps, or "": a read that meets one cannot say what the pool
+// holds.
+func ObservedPoolRefusal(spec PoolSpec) string { return poolValueRefusal(spec) }
+
 // poolValueRefusal says which setting of spec is out of the range YDB keeps,
 // or "".
 func poolValueRefusal(spec PoolSpec) string {

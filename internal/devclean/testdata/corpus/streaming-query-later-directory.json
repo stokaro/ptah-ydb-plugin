@@ -1,0 +1,34 @@
+{
+  "database": "/local",
+  "realm": "",
+  "tree": {
+    "/local": [
+      {
+        "name": "app",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/app": [
+      {
+        "name": "a_sources",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "z_queries",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/app/a_sources": [
+      {
+        "name": "events",
+        "type": "TOPIC"
+      }
+    ],
+    "/local/app/z_queries": [
+      {
+        "name": "copy",
+        "type": "STREAMING_QUERY"
+      }
+    ]
+  }
+}

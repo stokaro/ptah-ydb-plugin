@@ -1,6 +1,7 @@
 package changefeeds_test
 
 import (
+	"maps"
 	"testing"
 	"time"
 
@@ -37,6 +38,19 @@ func held(names ...string) *native.ChangefeedObservations {
 	return set
 }
 
+// mirrorBinding is the replication binding a controller writes on the stream
+// "mirror" it feeds the replica /local/repl/t from.
+const mirrorBinding = `{"path":"/local/repl/t","id":"1","supports_topic_autopartitioning":false}`
+
+// retaining gives every changefeed of set the attributes, as a desired set
+// converted from a read keeps the replication binding the read found.
+func retaining(set *native.ChangefeedSetIntent, attributes map[string]string) *native.ChangefeedSetIntent {
+	for _, intent := range set.Changefeeds {
+		intent.Attributes = maps.Clone(attributes)
+	}
+	return set
+}
+
 // step names one planned change as its action and changefeed.
 type step struct {
 	Action changefeeds.Action
@@ -58,14 +72,15 @@ func TestDiff_HappyPath(t *testing.T) {
 	keysOnly := updates("b")
 	keysOnly.Mode = "KEYS_ONLY"
 	replicated := held("mirror")
-	replicated.Changefeeds[0].Description.Attributes = map[string]string{"__async_replication": `{"path":"/local/repl/t","id":"1","supports_topic_autopartitioning":false}`}
+	replicated.Changefeeds[0].Description.Attributes = map[string]string{"__async_replication": mirrorBinding}
 	longer := updates("a")
 	longer.RetentionPeriod = "P2D"
 	tests := []struct {
-		name    string
-		desired []ydbdecl.Changefeed
-		held    *native.ChangefeedObservations
-		want    []step
+		name     string
+		desired  []ydbdecl.Changefeed
+		retained map[string]string
+		held     *native.ChangefeedObservations
+		want     []step
 	}{
 		{name: "nothing to change", desired: []ydbdecl.Changefeed{updates("a")}, held: held("a")},
 		{name: "a changefeed added", desired: []ydbdecl.Changefeed{updates("a")}, held: held(), want: []step{{Action: changefeeds.Add, Name: "a"}}},
@@ -80,12 +95,13 @@ func TestDiff_HappyPath(t *testing.T) {
 			want: []step{{Action: changefeeds.Topic, Name: "a"}, {Action: changefeeds.Recreate, Name: "b"}, {Action: changefeeds.Add, Name: "c_new"},
 				{Action: changefeeds.Drop, Name: "d_old"}, {Action: changefeeds.Drop, Name: "y_old"}, {Action: changefeeds.Add, Name: "z_new"}}},
 		{name: "a replication-managed stream the declaration leaves out is kept", held: replicated},
-		{name: "a replication-managed stream the declaration states as it is", desired: []ydbdecl.Changefeed{updates("mirror")}, held: replicated},
+		{name: "a replication-managed stream the desired side retains with its binding", desired: []ydbdecl.Changefeed{updates("mirror")},
+			retained: map[string]string{"__async_replication": mirrorBinding}, held: replicated},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			planned, undecided := changefeeds.Diff(declared(c, test.desired...), test.held)
+			planned, undecided := changefeeds.Diff(retaining(declared(c, test.desired...), test.retained), test.held)
 			c.Assert(undecided, qt.Equals, "")
 			c.Assert(steps(planned), qt.DeepEquals, test.want)
 		})
@@ -131,25 +147,46 @@ func TestStatements_HappyPath(t *testing.T) {
 }
 
 // TestDiff_LeavesUndecidedWhatItCannotRead holds the moves the host's
-// comparison leaves undecided rather than plans.
+// comparison leaves undecided rather than plans. The replication rows are
+// ported from the host's TestComparisonWithholdsIndependentReplicationStreamChanges
+// and TestReplicationBindingDoesNotOverrideIncompleteInspection: a stream a
+// controller owns is kept only where the desired side retains the binding the
+// read found, and a binding never makes a stream the read cannot represent one
+// the plan keeps.
 func TestDiff_LeavesUndecidedWhatItCannotRead(t *testing.T) {
 	updates := ydbdecl.Changefeed{Name: "mirror", Mode: "UPDATES", Format: "JSON"}
 	longer := updates
 	longer.RetentionPeriod = "P2D"
 	replicated := held("mirror")
-	replicated.Changefeeds[0].Description.Attributes = map[string]string{"__async_replication": `{"path":"/local/repl/t","id":"1","supports_topic_autopartitioning":false}`}
+	replicated.Changefeeds[0].Description.Attributes = map[string]string{"__async_replication": mirrorBinding}
 	unrepresentable := held("mirror")
 	unrepresentable.Changefeeds[0].Description.AwsRegion = "eu-west-1"
 	fraction := held("mirror")
 	fraction.Changefeeds[0].Topic.RetentionPeriod = durationpb.New(1500 * time.Millisecond)
+	replicatedUnrepresentable := held("mirror")
+	replicatedUnrepresentable.Changefeeds[0].Description.Attributes = map[string]string{"__async_replication": mirrorBinding}
+	replicatedUnrepresentable.Changefeeds[0].Description.AwsRegion = "eu-west-1"
+	retained := map[string]string{"__async_replication": mirrorBinding}
 	tests := []struct {
 		name          string
 		desired       []ydbdecl.Changefeed
+		retained      map[string]string
 		held          *native.ChangefeedObservations
 		wantUndecided string
 	}{
 		{name: "a replication-managed stream the declaration changes", desired: []ydbdecl.Changefeed{longer}, held: replicated,
 			wantUndecided: `changefeed "mirror" is a replication-managed stream, and the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller`},
+		{name: "a replication-managed stream the declaration states without its binding", desired: []ydbdecl.Changefeed{updates}, held: replicated,
+			wantUndecided: `changefeed "mirror" is a replication-managed stream, and the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller`},
+		{name: "a replication-managed stream the desired side retains with another binding", desired: []ydbdecl.Changefeed{updates},
+			retained: map[string]string{"__async_replication": `{"path":"/local/repl/t","id":"2","supports_topic_autopartitioning":false}`}, held: replicated,
+			wantUndecided: `changefeed "mirror" is a replication-managed stream, and the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller`},
+		{name: "a retained binding whose stream the table does not hold", desired: []ydbdecl.Changefeed{updates}, retained: retained, held: held(),
+			wantUndecided: `changefeed "mirror" is declared as a replication-managed stream, and the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller`},
+		{name: "a retained binding whose stream lost it", desired: []ydbdecl.Changefeed{updates}, retained: retained, held: held("mirror"),
+			wantUndecided: `changefeed "mirror" is declared as a replication-managed stream, and the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller`},
+		{name: "a replication-managed stream the read cannot represent, left out", held: replicatedUnrepresentable,
+			wantUndecided: `changefeed "mirror" has settings this provider cannot represent, so the current changefeed was not established: it names an AWS region, which Ptah does not model`},
 		{name: "a changefeed the read cannot represent, declared", desired: []ydbdecl.Changefeed{updates}, held: unrepresentable,
 			wantUndecided: `changefeed "mirror" has settings this provider cannot represent, so the current changefeed was not established: it names an AWS region, which Ptah does not model`},
 		{name: "a changefeed the read cannot represent, left out", held: fraction,
@@ -158,7 +195,7 @@ func TestDiff_LeavesUndecidedWhatItCannotRead(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			planned, undecided := changefeeds.Diff(declared(c, test.desired...), test.held)
+			planned, undecided := changefeeds.Diff(retaining(declared(c, test.desired...), test.retained), test.held)
 			c.Assert(undecided, qt.Matches, test.wantUndecided)
 			c.Assert(planned, qt.HasLen, 0)
 		})

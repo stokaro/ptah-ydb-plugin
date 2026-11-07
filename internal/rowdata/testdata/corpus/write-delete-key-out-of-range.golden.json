@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "error": "datadiff: key column \"id\": Uint32 cannot hold -1: it is outside the range 0 to 4294967295"
+    }
+  ]
+}
