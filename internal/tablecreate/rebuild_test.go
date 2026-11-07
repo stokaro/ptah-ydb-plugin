@@ -11,7 +11,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
@@ -399,6 +401,72 @@ func TestRebuildPlanKeepsAFamilyKeptInMemory(t *testing.T) {
 	check.Assert(err, qt.IsNil)
 	check.Assert(rendered.Units, qt.HasLen, 0)
 	check.Assert(rendered.Refusal.GetMessage(), qt.Matches, `.*column family "default" keeps its columns in memory, and YQL has no family setting for it.*`)
+}
+
+// storageRebuildRequest rebuilds app.records, which holds storage settings.
+func storageRebuildRequest(c *qt.C, storage string) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	held := alterRequest(c, alterCase{heldTable: `{"primaryKey":["id"],"storageSettings":` + storage + `}`})
+	request.Tables[0].Current.Features = held.Tables[0].Current.Features
+	return request
+}
+
+// A rebuild gives the new table the commit log pools and the external pool the
+// old one holds: CreateTable keeps them, measured on 25.1.4.7 and 26.2.1.14.
+// External blobs read as DISABLED for a table that set nothing, which is no
+// setting. The host's embedded engine refused every such rebuild.
+func TestRebuildPlanKeepsTheHeldStorage_HappyPath(t *testing.T) {
+	hdd := &Ydb_Table.StoragePool{Media: "hdd"}
+	for _, tc := range []struct {
+		name, storage string
+		want          *Ydb_Table.StorageSettings
+	}{
+		{name: "commit log pools", storage: `{"tabletCommitLog0":{"media":"hdd"},"tabletCommitLog1":{"media":"hdd"},"storeExternalBlobs":"DISABLED"}`,
+			want: &Ydb_Table.StorageSettings{TabletCommitLog0: hdd, TabletCommitLog1: hdd}},
+		{name: "an external pool", storage: `{"external":{"media":"hdd"},"storeExternalBlobs":"DISABLED"}`, want: &Ydb_Table.StorageSettings{External: hdd}},
+		{name: "nothing set", storage: `{"storeExternalBlobs":"DISABLED"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			check := testcheck.New(t)
+			plan, err := backend.New().PlanFeatures(check.Context(), storageRebuildRequest(check, tc.storage))
+			check.Assert(err, qt.IsNil)
+			check.Assert(plan.Diagnostics, qt.HasLen, 0)
+
+			created, err := tablecreate.Request(plan.Contributions[0].Steps[0].Operation.Value.Value)
+
+			check.Assert(err, qt.IsNil)
+			check.Assert(created.GetStorageSettings(), qt.CmpEquals(protocmp.Transform()), tc.want)
+		})
+	}
+}
+
+// A rebuild of a table that holds storage settings is refused where it would
+// drop them: a migration file, since YQL has no setting for a row table's
+// storage, and external blobs, which YDB does not let a new table store
+// (measured on 25.1.4.7 and 26.2.1.14). Ported from the storage settings row
+// of the host's TestGenerateMigrationAST_TableRebuild_FailurePath.
+func TestRebuildPlanKeepsTheHeldStorage_FailurePath(t *testing.T) {
+	check := testcheck.New(t)
+	request := storageRebuildRequest(check, `{"tabletCommitLog0":{"media":"hdd"},"storeExternalBlobs":"DISABLED"}`)
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+	check.Assert(err, qt.IsNil)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+	rendering.Form = protocol.RenderRequest_TEXT
+
+	rendered, err := backend.New().Render(check.Context(), rendering)
+
+	check.Assert(err, qt.IsNil)
+	check.Assert(rendered.GetUnits(), qt.HasLen, 0)
+	check.Assert(rendered.GetRefusal().GetMessage(), qt.Equals, "no YQL text form: YQL has no setting for a row table's storage settings")
+
+	blobs, err := backend.New().PlanFeatures(check.Context(), storageRebuildRequest(check, `{"storeExternalBlobs":"ENABLED"}`))
+
+	check.Assert(err, qt.IsNil)
+	check.Assert(blobs.Contributions, qt.HasLen, 0)
+	check.Assert(blobs.Diagnostics, qt.HasLen, 1)
+	check.Assert(blobs.Diagnostics[0].Message, qt.Equals, `rebuilding table "app/records": the table stores external blobs, which YDB does not let a new table do `+
+		"(`Setting store_external_blobs to ENABLED is not allowed`), so the new table would drop them; change the table by hand")
 }
 
 // A rebuild creates the new table with what the declaration states, so a

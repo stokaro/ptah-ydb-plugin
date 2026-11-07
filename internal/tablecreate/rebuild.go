@@ -410,6 +410,13 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, table)
 	keepHeldComments(request, table.GetCurrent())
+	// YDB refuses a new table that stores external blobs (`Setting
+	// store_external_blobs to ENABLED is not allowed`), measured on 25.1.4.7
+	// and 26.2.1.14, so a rebuild cannot keep them.
+	if request.GetStorageSettings().GetStoreExternalBlobs() == Ydb.FeatureFlag_ENABLED {
+		return nil, subject + ": the table stores external blobs, which YDB does not let a new table do " +
+			"(`Setting store_external_blobs to ENABLED is not allowed`), so the new table would drop them; change the table by hand", nil
+	}
 	// A cache mode the old table holds is written into the new table too, so
 	// the target must take one.
 	if reason := creationCacheModeRefusal(subject+" with column family cache mode", request, capabilities); reason != "" {
@@ -910,8 +917,44 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 			request.Attributes[key] = value
 		}
 	}
+	keepHeldStorage(request, held)
 	families := keepHeldFamilies(request, held)
 	keepHeldPlacements(request, table, families)
+}
+
+// keepHeldStorage gives the new table of a rebuild each storage setting the
+// declaration leaves out as the old table holds it: its tablet's commit log
+// pools, its external pool and whether it stores external blobs. CreateTable
+// keeps the pools, measured on 25.1.4.7 and 26.2.1.14; a new table that
+// stores external blobs is refused when the rebuild is planned (see
+// planRebuild). A migration file refuses any of them, since YQL has no
+// setting for a row table's storage (see RowTableStatementIn). YDB reads
+// external blobs as DISABLED for a table that set nothing, which is no
+// setting to keep.
+func keepHeldStorage(request *Ydb_Table.CreateTableRequest, held *native.DescribeTableResult) {
+	stored := held.GetStorageSettings()
+	if stored == nil {
+		return
+	}
+	settings := request.GetStorageSettings()
+	if settings == nil {
+		settings = &Ydb_Table.StorageSettings{}
+	}
+	if settings.TabletCommitLog0 == nil {
+		settings.TabletCommitLog0 = proto.CloneOf(stored.GetTabletCommitLog0())
+	}
+	if settings.TabletCommitLog1 == nil {
+		settings.TabletCommitLog1 = proto.CloneOf(stored.GetTabletCommitLog1())
+	}
+	if settings.External == nil {
+		settings.External = proto.CloneOf(stored.GetExternal())
+	}
+	if settings.StoreExternalBlobs == Ydb.FeatureFlag_STATUS_UNSPECIFIED && stored.GetStoreExternalBlobs() == Ydb.FeatureFlag_ENABLED {
+		settings.StoreExternalBlobs = Ydb.FeatureFlag_ENABLED
+	}
+	if !proto.Equal(settings, &Ydb_Table.StorageSettings{}) {
+		request.StorageSettings = settings
+	}
 }
 
 // keepHeldPartitioning gives the new table of a rebuild each automatic
