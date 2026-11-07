@@ -75,6 +75,28 @@ func TestAuthoredClassifierRoutingToAnUndeclaredPool_FailurePath(t *testing.T) {
 	}
 }
 
+// The host's TestRender_ResourcePool_RefusesWhatYDBKeepsDifferently also
+// refused two authored classifiers on one rank before writing any statement.
+// PlanDeclarations is the provider call the host makes for these objects.
+func TestAuthoredClassifiersOnOneRank_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := declarationRequest(c,
+		declaredClassifier(c, "a", workload.DefaultPool, 1),
+		declaredClassifier(c, "b", workload.DefaultPool, 1),
+	)
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].GetObject(), qt.Equals, uint32(1))
+	c.Assert(result.Diagnostics[0].Problem.Kind, qt.Equals, schema.ResourcePoolClassifierProperties)
+	c.Assert(result.Diagnostics[0].Problem.Message, qt.Equals, "authored resource pool classifiers share one rank")
+	c.Assert(result.Declarations, qt.HasLen, 0)
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+}
+
 // A declared classifier may route to a pool the declarations hold, or to the
 // pool default, which YDB creates with the database, without declaring it.
 func TestAuthoredClassifierRoutingToADeclaredPoolOrTheDefault_HappyPath(t *testing.T) {
