@@ -35,7 +35,11 @@ func reversed(c *qt.C, change *protocol.NormalizedValue) *protocol.ReversedChang
 	observe := func(id string, value *protocol.Envelope) (*protocol.NormalizedValue, error) {
 		return &protocol.NormalizedValue{Id: id, Value: value}, nil
 	}
-	result, err := reversal.Reverse(c.Context(), &protocol.ReverseChangesRequest{Changes: []*protocol.PlanningChange{{Value: change}}}, observe)
+	// A target without a family's capability refuses to reverse its change,
+	// so the request states every capability the changes here need.
+	capabilities := map[string]bool{"streaming_queries": true, "topics": true, "async_replication": true, "transfers": true,
+		"secrets": true, "external_data_sources": true, "coordination_nodes": true, "resource_pools": true}
+	result, err := reversal.Reverse(c.Context(), &protocol.ReverseChangesRequest{Changes: []*protocol.PlanningChange{{Value: change}}, Capabilities: capabilities}, observe)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Changes, qt.HasLen, 1)
 	return result.Changes[0]
