@@ -18,17 +18,18 @@ func describedFamilies(families ...*native.ColumnFamily) *native.DescribeTableRe
 	return &native.DescribeTableResult{PrimaryKey: []string{"id"}, ColumnFamilies: families}
 }
 
-// newerFamily is a family as a newer server could describe it: with a field
-// the pinned protocol does not know, number 99, or a compression value it has
-// no name for.
-func newerFamily(field bool) *native.ColumnFamily {
+// unknownFieldFamily is a family as a newer server could describe it, with a
+// field the pinned protocol does not know, number 99.
+func unknownFieldFamily() *native.ColumnFamily {
 	family := &native.ColumnFamily{Name: "cold", Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4}
-	if field {
-		family.ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 99, protowire.VarintType), 1))
-	} else {
-		family.Compression = 42
-	}
+	family.ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 99, protowire.VarintType), 1))
 	return family
+}
+
+// unknownCompressionFamily is a family as a newer server could describe it,
+// with a compression value the pinned protocol has no name for.
+func unknownCompressionFamily() *native.ColumnFamily {
+	return &native.ColumnFamily{Name: "cold", Compression: 42}
 }
 
 // A family that holds what the model does not know leaves the description
@@ -39,16 +40,16 @@ func newerFamily(field bool) *native.ColumnFamily {
 func TestReadableFamilies_FailurePath(t *testing.T) {
 	for _, test := range []struct {
 		name, want string
-		field      bool
+		family     *native.ColumnFamily
 	}{
-		{name: "a field the protocol does not know", field: true,
+		{name: "a field the protocol does not know", family: unknownFieldFamily(),
 			want: `column family "cold" holds what this provider does not read (unknown fields in ptah.ydb.native.ColumnFamily)`},
-		{name: "an enum value the protocol does not know",
+		{name: "an enum value the protocol does not know", family: unknownCompressionFamily(),
 			want: `column family "cold" holds what this provider does not read (unknown enum in ptah.ydb.native.ColumnFamily.compression)`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			description := describedFamilies(&native.ColumnFamily{Name: "default"}, newerFamily(test.field))
+			description := describedFamilies(&native.ColumnFamily{Name: "default"}, test.family)
 			original := proto.CloneOf(description)
 
 			readable, reason := schema.ReadableFamilies(description)
