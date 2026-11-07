@@ -466,21 +466,27 @@ func declaredTableAt(directory, name string) *protocol.ValidationTable {
 			Features: &protocol.CapturedFeatures{Objects: empty(), Facets: empty()}}}
 }
 
-// An authored object at the path of a table the same schema declares, or at
-// the path of another authored object, is refused before anything is planned,
-// naming the object's model: YDB keeps one object at a path (`unexpected path
-// type`). Ported from the host's TestSecretDeclarations_RefusesAPathATableTakes,
-// TestTopicDeclarations_RefusesAPathATableTakes, TestRender_Topic_FailurePath
-// and TestRender_External_FailurePath.
+// An authored object at the path of a table or a view the same schema
+// declares, or at the path of another authored object, is refused before
+// anything is planned, naming the object's model: YDB keeps one object at a
+// path (`unexpected path type`). A view reaches the request as the common
+// step that creates it. Ported from the host's
+// TestSecretDeclarations_RefusesAPathATableTakes,
+// TestTopicDeclarations_RefusesAPathATableTakes, TestRender_Topic_FailurePath,
+// TestRender_External_FailurePath and
+// TestValidateSchema_YDBRefusesACoordinationNodeOnAnotherObjectsPath.
 func TestAuthoredObjectAtATakenPath_FailurePath(t *testing.T) {
 	fixtures := pathFixtures(testcheck.New(t))
 	for _, test := range []struct {
 		name    string
 		objects []string
 		tables  []*protocol.ValidationTable
+		common  []*protocol.CommonPlanningStep
 		kind    string
 		want    string
 	}{
+		{name: "a topic at a declared view's path", objects: []string{"topic app/events"}, common: []*protocol.CommonPlanningStep{commonView("events", createView)},
+			kind: schema.TopicProperties, want: "authored native object conflicts with a declared view path"},
 		{name: "a secret at a declared table's path", objects: []string{"secret ext/pw"}, tables: []*protocol.ValidationTable{declaredTableAt("ext", "pw")},
 			kind: schema.SecretProperties, want: "authored native object conflicts with a declared table path"},
 		{name: "a topic at a declared table's path", objects: []string{"topic app/events"}, tables: []*protocol.ValidationTable{declaredTableAt("app", "events")},
@@ -499,6 +505,7 @@ func TestAuthoredObjectAtATakenPath_FailurePath(t *testing.T) {
 			request := declarationRequest(c, values...)
 			request.Capabilities["secrets"], request.Capabilities["external_data_source_secret_paths"] = true, true
 			request.Tables = test.tables
+			request.CommonSteps = test.common
 
 			result, err := backend.New().PlanDeclarations(c.Context(), request)
 
@@ -512,14 +519,18 @@ func TestAuthoredObjectAtATakenPath_FailurePath(t *testing.T) {
 	}
 }
 
-// The control: the same objects beside a table at another path, and each on
-// its own path, are planned.
+// The control: the same objects beside a table and a view at other paths,
+// and each on its own path, are planned, and so is an object beside a view
+// the plan drops at its path.
 func TestAuthoredObjectBesideATableAtAnotherPath_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	fixtures := pathFixtures(c)
 	request := declarationRequest(c, fixtures["secret ext/pw"], fixtures["topic app/events"], fixtures["data source app/notes"])
 	request.Capabilities["secrets"] = true
 	request.Tables = []*protocol.ValidationTable{declaredTableAt("app", "other")}
+	dropped := commonView("notes", dropView)
+	dropped.Id.Name = "dropped view"
+	request.CommonSteps = []*protocol.CommonPlanningStep{commonView("eventsview", createView), dropped}
 
 	result, err := backend.New().PlanDeclarations(c.Context(), request)
 

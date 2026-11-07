@@ -312,8 +312,11 @@ func refused(index int, kind, message string) *protocol.PlannedDeclarations {
 	}}}
 }
 
-// A table and a native object share one scheme path; no object is a directory
-// under which another declaration can be placed.
+// pathAvailable refuses the declaration at index where a declared table, a
+// declared view or another native object takes its scheme path or a path
+// above or below it: YDB keeps one object at a path, and no object is a
+// directory under which another declaration can be placed. A view reaches
+// the request only as the common step that creates it.
 func pathAvailable(request *protocol.PlanDeclarationsRequest, index int) error {
 	object := request.Objects[index]
 	path := schemePath(object.Subject.GetSchema().GetSource(), object.Subject.GetName().GetSource())
@@ -323,6 +326,15 @@ func pathAvailable(request *protocol.PlanDeclarationsRequest, index int) error {
 	for _, table := range request.Tables {
 		if overlaps(schemePath(table.Declaration.Schema, table.Declaration.Name)) {
 			return fmt.Errorf("authored native object conflicts with a declared table path")
+		}
+	}
+	for _, common := range request.GetCommonSteps() {
+		for _, effect := range common.GetMetadata().GetEffects() {
+			subject := effect.GetSubject()
+			if effect.GetAction() == protocol.PlanningEffect_CREATE && subject.GetKind() == "view" && subject.GetParent().GetNormalized() == "" &&
+				overlaps(schemePath(subject.GetSchema().GetNormalized(), subject.GetName().GetNormalized())) {
+				return fmt.Errorf("authored native object conflicts with a declared view path")
+			}
 		}
 	}
 	for i, other := range request.Objects {

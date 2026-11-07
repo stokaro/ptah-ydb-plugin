@@ -646,8 +646,9 @@ func settleOmitted(request *protocol.CompareModelsRequest, result *protocol.Comp
 }
 
 // settleRelations checks item against what request declares beside it. A
-// declared object of a family that is not database-wide must not collide with
-// a declared relation; an object to remove that a declared dependency
+// declared object of a family that is not database-wide must not take the
+// path of a declared relation, since YDB keeps one object at a path, as the
+// host's embedded engine refused it; an object to remove that a declared dependency
 // requires is refused, as name, when the family gives a reason, and left
 // undecided otherwise. It reports whether item is settled.
 func settleRelations(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, name string) (bool, error) {
@@ -656,7 +657,7 @@ func settleRelations(request *protocol.CompareModelsRequest, result *protocol.Co
 			if relation.GetDatabase().GetNormalized() == item.subject.GetDatabase().GetNormalized() && relation.GetCatalog().GetNormalized() == "" &&
 				relation.GetSchema().GetNormalized() == item.subject.GetSchema().GetNormalized() &&
 				relation.GetName().GetNormalized() == item.subject.GetName().GetNormalized() && len(relation.GetPath()) == 0 {
-				return false, fmt.Errorf("%s collides with a declared relation", family.Noun)
+				return false, authored.New(family.Noun + " " + name + " takes the path of a table or view the schema declares, and YDB keeps one object at a path")
 			}
 		}
 	}

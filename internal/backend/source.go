@@ -379,7 +379,9 @@ func goCoordinationSource(document *protocol.SourceDocument, fragment *protocol.
 }
 
 // coordinationValue reads one declared node. A node may not take the path of
-// a table the same document declares.
+// a table the same document declares: YDB keeps one object at a path and
+// refuses the later one (`unexpected path type`), and the host's embedded
+// engine refused the declaration before anything was written.
 func coordinationValue(document *protocol.SourceDocument, fragment *protocol.SourceFragment, entry *protocol.SourceEntry, id string, path []*protocol.SourcePathStep) (*protocol.SourceModelValue, error) {
 	owner, intent, err := coordinationEntry(entry)
 	if err != nil {
@@ -388,7 +390,8 @@ func coordinationValue(document *protocol.SourceDocument, fragment *protocol.Sou
 	for _, binding := range document.Bindings {
 		object := binding.GetObject()
 		if object.GetKind() == "table" && object.GetDatabase() == owner.Database && object.GetCatalog() == "" && object.GetSchema() == owner.Schema && object.GetName() == owner.Name {
-			return nil, fmt.Errorf("YDB coordination node conflicts with a declared table")
+			return nil, authored.New(fmt.Sprintf("its path %s is the path of a table the document declares, and YDB keeps one object at a path",
+				pathOf(owner.Schema, owner.Name)))
 		}
 	}
 	if err := schema.ValidateManagedCoordinationOwner(owner); err != nil {
@@ -463,3 +466,12 @@ func coordinationEntry(entry *protocol.SourceEntry) (*protocol.Reference, schema
 }
 
 var _ provider.SourceDecoder = (*Provider)(nil)
+
+// pathOf is the scheme path of the object name in directory, relative to the
+// database.
+func pathOf(directory, name string) string {
+	if directory == "" {
+		return name
+	}
+	return directory + "/" + name
+}
