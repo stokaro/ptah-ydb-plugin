@@ -114,8 +114,8 @@ func TestCoordinationSourceRefusesDeclaredTableCollision(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	request.Documents[0].Bindings = []*protocol.SourceBinding{{Id: "table", EntryKey: "node", Object: &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "node"}}}
 	result, err := backend.New().DecodeSource(c.Context(), request)
-	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{`coordination node "node": its path app/node is the path of a table the document declares, `+
-		`and YDB keeps one object at a path`})
+	const reason = `coordination node "node": its path app/node is the path of a table the document declares, and YDB keeps one object at a path`
+	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{reason})
 	c.Assert(result, qt.IsNil)
 	request.Documents[0].Bindings[0].Object.Schema = "other"
 	_, err = backend.New().DecodeSource(c.Context(), request)
