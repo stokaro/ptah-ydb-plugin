@@ -1,3 +1,0 @@
-# Draft only: the live test of this change needs stokaro/ptah#5720, which this
-# branch of the host carries. Remove this file before marking the PR ready.
-fix/g167-reverse-prior-codec
