@@ -80,6 +80,26 @@ func TestHostReportsTheReleaseLineOfTheServer_HappyPath(t *testing.T) {
 	c.Assert(refined, qt.Not(qt.Contains), "coordination_nodes")
 }
 
+// The host explains that a capability enabled by this YDB cluster came from
+// the monitoring endpoint, not the release-line preset. On 25.1 the unique
+// index flag is unavailable, so that particular refinement is absent. Ported from
+// the YDB row of TestWriteProfile_RefinementsNameTheirSource.
+func TestHostNamesTheSourceOfYDBCapabilityRefinements_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, _ := inspectionFixture(c)
+	line := serverLine(c, serverVersion(c, opened))
+
+	out, err := hostCommand(c, "db", "capabilities", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+	_, refinements, found := strings.Cut(out, "\nSet by this server rather than by its release line:\n")
+	c.Assert(found, qt.IsTrue, qt.Commentf("%s", out))
+	refinements, _, _ = strings.Cut(refinements, "\n\n")
+	wantUnique, measuredLine := map[string]bool{"25.1": false, "26.2": true}[line]
+	c.Assert(measuredLine, qt.IsTrue, qt.Commentf("unmeasured YDB release line %q", line))
+	c.Assert(strings.Contains(refinements, "unique_index_on_existing_table  supported  (the release line answers unsupported)"), qt.Equals, wantUnique)
+	c.Assert(refinements, qt.Contains, "read from this cluster's feature flags at its monitoring endpoint, not from its release line")
+}
+
 // A --server-version newer than every line this provider declares is planned
 // with the newest line, and one older than every line with the oldest, with
 // the warning the built-in engine at host 74de0b65b printed; the provider path
