@@ -42,3 +42,38 @@ func TestHostMigrationsLintJudgesByTheServerVersion_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+// The host's former TestRunLint_LintsYQLForYDB checks three independent YQL
+// findings and the 25.1/26.2 difference through the CLI. The lint run reads
+// the migration directory without connecting to a database.
+func TestHostMigrationsLintReportsYQLRules_HappyPath(t *testing.T) {
+	for _, line := range []struct {
+		name, dialect, version string
+		want, absent           []string
+	}{
+		{"26.2", "ydb", "26.2.1.14", []string{"YD101", "YD104"}, []string{"YD103"}},
+		{"25.1 TLS alias", "ydbs", "25.1.4.7", []string{"YD101", "YD103", "YD104"}, nil},
+	} {
+		t.Run(line.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			migrations := writeFiles(c, c.TempDir(), map[string]string{
+				"0000000001_users.up.sql": "CREATE TABLE `shop/users` (id Uint64 NOT NULL, email Utf8, PRIMARY KEY (id), " +
+					"INDEX users_email GLOBAL ON (email));\n",
+				"0000000001_users.down.sql": "DROP TABLE `shop/users`;\n",
+				"0000000002_change.up.sql": "ALTER TABLE `shop/users` ADD COLUMN score Int32 DEFAULT 0;\n" +
+					"ALTER TABLE `shop/users` ADD INDEX users_score GLOBAL UNIQUE SYNC ON (score);\n" +
+					"ALTER TABLE `shop/users` DROP COLUMN email;\n",
+				"0000000002_change.down.sql": "ALTER TABLE `shop/users` DROP COLUMN score;\n",
+			})
+			out, err := hostCommand(c, "migrations", "lint", "--dialect", line.dialect, "--server-version", line.version,
+				"--dir", migrations, "--fail-on", "none")
+			c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+			for _, code := range line.want {
+				c.Assert(out, qt.Contains, code+":", qt.Commentf("%s", out))
+			}
+			for _, code := range line.absent {
+				c.Assert(out, qt.Not(qt.Contains), code+":", qt.Commentf("%s", out))
+			}
+		})
+	}
+}
