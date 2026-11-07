@@ -77,15 +77,20 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[
 	if err != nil {
 		return nil, nil, err
 	}
+	settings, columns, err := features(owner, table.Features)
+	if err != nil {
+		return nil, nil, err
+	}
+	key = effectiveUniqueKey(table, key, settings.PrimaryKey)
+	table, err = lowerUniqueness(table, key)
+	if err != nil {
+		return nil, nil, err
+	}
 	if err := only(table, "name", "schema", "primary_key", "primary_key_parts", "columns", "features", "indexes"); err != nil {
 		return nil, nil, err
 	}
 	if table.Name != owner.Name || table.Schema != owner.Schema {
 		return nil, nil, fmt.Errorf("YDB table declaration has a different identity")
-	}
-	settings, columns, err := features(owner, table.Features)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	if err := validateTableAttributes(settings.Attributes); err != nil {
