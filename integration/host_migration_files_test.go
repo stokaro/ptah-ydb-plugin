@@ -64,7 +64,7 @@ func generatedPair(c *qt.C, dir string) (up, down string) {
 		c.Assert(err, qt.IsNil)
 		var text strings.Builder
 		for _, name := range names {
-			body, err := os.ReadFile(name)
+			body, err := os.ReadFile(name) // #nosec G703 -- a name a glob found under a directory of the test's c.TempDir()
 			c.Assert(err, qt.IsNil)
 			text.Write(body)
 		}
