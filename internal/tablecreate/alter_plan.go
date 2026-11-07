@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -310,7 +311,7 @@ func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabili
 			return alterationIndexes{}, "", err
 		}
 	}
-	if a.desired.indexes != nil && a.observed.indexes == nil {
+	if a.desired.indexes != nil && a.observed.indexes == nil && !commonIndexesReplacedByNative(a.table, steps, result.wanted) {
 		return alterationIndexes{}, "The table's current indexes were not captured", nil
 	}
 	indexes, indexSettings, reason := planIndexes(indexInput{managed: a.desired.indexes != nil, desired: result.wanted, held: result.held, columns: a.family.columns})
@@ -332,10 +333,8 @@ func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabili
 	if err != nil || reason != "" {
 		return alterationIndexes{}, reason, err
 	}
-	for _, change := range claimed {
-		if slices.ContainsFunc(indexes, func(other indexChange) bool { return other.name() == change.name() }) {
-			return alterationIndexes{}, fmt.Sprintf("Index %q is declared both in the native index set and as a common index", change.name()), nil
-		}
+	if conflict := conflictingIndexClaims(claimed, indexes); conflict != "" {
+		return alterationIndexes{}, conflict, nil
 	}
 	indexes = append(claimed, indexes...)
 	if reason := uniqueAdditionRefusal(a.table.Subject, indexes, capabilities); reason != "" {
@@ -348,6 +347,83 @@ func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabili
 	indexSettings = append(indexSettings, own...)
 	result.changes, result.settings = indexes, indexSettings
 	return result, "", nil
+}
+
+// commonIndexesReplacedByNative permits a known-empty observed native index
+// set only when every desired native index replaces a named common global
+// index the host explicitly drops. The host's observed index and drop step
+// capture the old definition; an addition without a complete index read
+// still refuses, since it could collide with an index the table already holds.
+func commonIndexesReplacedByNative(table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, wanted *native.IndexSetIntent) bool {
+	if !FacetKnown(table.GetCurrent().GetFeatures().GetFacets().GetCoverage(), schema.IndexProperties, table.Subject, ObservedSide) {
+		return false
+	}
+	if len(wanted.GetIndexes()) == 0 {
+		return false
+	}
+	for _, declaration := range wanted.GetIndexes() {
+		spec := declaration.GetSpecification()
+		if !nativeOnlyIndex(spec) {
+			return false
+		}
+		observed := 0
+		for _, index := range table.GetCurrent().GetIndexes() {
+			if index.GetName() != spec.GetName() {
+				continue
+			}
+			kind, err := ydbdecl.IndexKindOf(index.GetMethod())
+			if err != nil || kind != ydbdecl.IndexSync && kind != ydbdecl.IndexAsync {
+				return false
+			}
+			observed++
+		}
+		if observed != 1 {
+			return false
+		}
+		drops := 0
+		for _, step := range steps {
+			name, action, shaped := indexFootprint(step, table.GetSubject())
+			if shaped && name == spec.GetName() && action == protocol.PlanningEffect_DROP {
+				drops++
+			}
+		}
+		if drops != 1 {
+			return false
+		}
+	}
+	return true
+}
+
+// conflictingIndexClaims refuses a name changed twice by the provider and
+// host, except when they provide the two halves of one cross-family replacement.
+func conflictingIndexClaims(claimed, indexes []indexChange) string {
+	for _, change := range claimed {
+		overlaps := 0
+		complementary := false
+		for _, other := range indexes {
+			if other.name() == change.name() {
+				overlaps++
+				complementary = crossFamilyIndexReplacement(change, other)
+			}
+		}
+		if overlaps > 1 || overlaps == 1 && !complementary {
+			return fmt.Sprintf("Index %q is declared both in the native index set and as a common index", change.name())
+		}
+	}
+	return ""
+}
+
+// crossFamilyIndexReplacement recognizes the two halves of a replacement
+// split between the host's common global index and this provider's native
+// vector or full-text index. Changes in the same family remain a conflict.
+func crossFamilyIndexReplacement(common, nativeChange indexChange) bool {
+	if common.add != nil && nativeChange.drop != nil {
+		return !nativeOnlyIndex(common.add) && nativeOnlyIndex(schema.IndexSpecification(nativeChange.drop))
+	}
+	if common.drop != nil && nativeChange.add != nil {
+		return !nativeOnlyIndex(schema.IndexSpecification(common.drop)) && nativeOnlyIndex(nativeChange.add)
+	}
+	return false
 }
 
 // ownIndexSettings plans the partitioning and read replicas an index's own

@@ -77,8 +77,8 @@ func withoutNativeIndexes(in indexInput) indexInput {
 // is dropped, and one whose columns, kind or settings differ is dropped and
 // added again under its name. A renamed index is one of each. An index the
 // declaration states as one family under the name the table holds the other
-// family under, a global index against a vector or full-text one, is refused:
-// planIndexes refuses to rebuild a global index.
+// family under, a global index against a vector or full-text one, is planned
+// together with the host's common index step by alterationSides.indexes.
 func planNativeIndexes(in nativeIndexInput) ([]indexChange, string) {
 	if !in.managed {
 		return nil, ""
