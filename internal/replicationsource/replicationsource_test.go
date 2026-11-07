@@ -113,6 +113,13 @@ func TestDecode_FailurePath(t *testing.T) {
 			wantErr: `transfer "ingest": invalid using: a transfer turns each message into rows through a lambda, .*`},
 		{name: "a lambda that ends the statement", key: 1, source: `{"transfers": {"ingest": {"source": "tp", "target": "t", "using": "($m) -> { return []; };"}}}`,
 			wantErr: `transfer "ingest": invalid using .*: ends with a semicolon, .*`},
+		// Ported from the host's TestValidateIdentity_FailurePath: a
+		// replication's directory is a clean path relative to the database
+		// root.
+		{name: "a parent directory", key: 0, source: `{"async_replications": {"mirror": {"schema": "../app", "connection_string": "grpc://primary:2136/?database=/prod", "items": [{"source": "a", "target": "ra"}]}}}`,
+			wantErr: `async replication "mirror": invalid schema "\.\./app": is not a directory path relative to the database root`},
+		{name: "an unclean directory", key: 0, source: `{"async_replications": {"mirror": {"schema": "app//etl", "connection_string": "grpc://primary:2136/?database=/prod", "items": [{"source": "a", "target": "ra"}]}}}`,
+			wantErr: `async replication "mirror": invalid schema "app//etl": is not a directory path relative to the database root`},
 		{name: "a name with a slash", key: 1, source: `{"transfers": {"ingest": {"name": "a/b", "source": "tp", "target": "t", "using": "($m) -> { return []; }"}}}`,
 			wantErr: `transfer "ingest": invalid name "a/b": holds a slash; name the directory with schema`},
 	}

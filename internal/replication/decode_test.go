@@ -79,6 +79,19 @@ func TestDecodeReplication_HappyPath(t *testing.T) {
 			want:  ydbreplication.ReplicationSpec{Connection: ydbreplication.Connection{ConnectionString: "grpc://localhost:2136/?database=/local"}, ConsistencyLevel: ydbreplication.ConsistencyGlobal},
 			state: ydbreplication.StateError,
 		},
+		{
+			// Ported from the host's TestModelValidate_ObservationsTheReaderWrites:
+			// a secret path outside the database is read as written.
+			name: "a password secret path outside the database",
+			described: &Ydb_Replication.DescribeReplicationResult{
+				ConnectionParams: &Ydb_Replication.ConnectionParams{Endpoint: "primary:2135", Database: "/prod",
+					Credentials: &Ydb_Replication.ConnectionParams_StaticCredentials_{StaticCredentials: &Ydb_Replication.ConnectionParams_StaticCredentials{User: "replicator", PasswordSecretName: "/other/secrets/replicator"}}},
+				Items: items("/prod/ledger", "/local/replica/ledger"),
+			},
+			root: "/local",
+			want: ydbreplication.ReplicationSpec{Connection: ydbreplication.Connection{ConnectionString: "grpc://primary:2135/?database=/prod", User: "replicator",
+				PasswordSecretPath: "/other/secrets/replicator"}, Items: []ydbreplication.Item{{Source: "ledger", Target: "replica/ledger"}}},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -151,6 +164,21 @@ func TestDecodeTransfer_HappyPath(t *testing.T) {
 				State:         &Ydb_Replication.DescribeTransferResult_Paused{Paused: &Ydb_Replication.DescribeTransferResult_PausedState{}}},
 			want:  ydbreplication.TransferSpec{Source: "tp", Target: "t", Lambda: "($m) -> { return []; }", Consumer: "c", BatchSizeBytes: size, FlushInterval: "PT10S"},
 			state: ydbreplication.StatePaused,
+		},
+		// Ported from the host's TestResolvePath_HappyPath: an absolute topic
+		// path under the session root reads relative to it, in a directory
+		// and at the root.
+		{
+			name: "a local topic written absolute in a directory",
+			described: &Ydb_Replication.DescribeTransferResult{ConnectionParams: &Ydb_Replication.ConnectionParams{}, SourcePath: "/local/app/events", DestinationPath: "/local/t",
+				TransformationLambda: "$__ydb_transfer_lambda = ($m) -> { return []; };\n", ConsumerName: "c"},
+			want: ydbreplication.TransferSpec{Source: "app/events", Target: "t", Lambda: "($m) -> { return []; }", Consumer: "c"},
+		},
+		{
+			name: "a local topic written absolute at the root with a dot",
+			described: &Ydb_Replication.DescribeTransferResult{ConnectionParams: &Ydb_Replication.ConnectionParams{}, SourcePath: "/local/events.v1", DestinationPath: "/local/t",
+				TransformationLambda: "$__ydb_transfer_lambda = ($m) -> { return []; };\n", ConsumerName: "c"},
+			want: ydbreplication.TransferSpec{Source: "events.v1", Target: "t", Lambda: "($m) -> { return []; }", Consumer: "c"},
 		},
 		{
 			name: "a topic of another database and a lambda under a pragma",
