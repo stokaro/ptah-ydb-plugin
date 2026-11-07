@@ -228,6 +228,7 @@ func TestHostRunsInferenceThroughTheProvider(t *testing.T) {
 	through := providerInference{host: host, manifest: manifest, address: f.address}
 
 	plan := through.run(c, "plan", first)
+	c.Assert(plan, qt.Contains, "Consistency mode: immutable")
 	c.Assert(plan, qt.Contains, "source.estimated_rows = 5 (measured)")
 	c.Assert(plan, qt.Contains, "target.capability.vector_type = true (measured)")
 	c.Assert(plan, qt.Contains, "target.capability.vector_index = true (measured)")
@@ -242,6 +243,7 @@ func TestHostRunsInferenceThroughTheProvider(t *testing.T) {
 	evaluated := through.run(c, "evaluate", first, "--corpus", corpus)
 	c.Assert(evaluated, qt.Contains, " over 3 cases")
 	c.Assert(evaluated, qt.Contains, "the index agrees with an exhaustive search on ")
+	c.Assert(evaluated, qt.Contains, "measured under ydb.KMeansTreeSearchTopSize=(server default)")
 	through.cutover(c, first, "first", "")
 
 	secondGeneration := through.build(c, second, "second")
@@ -264,7 +266,17 @@ func TestHostRunsInferenceThroughTheProvider(t *testing.T) {
 	f.exec(c, "UPDATE articles SET body = 'renewal renewal renewal renewal', updated_at = Timestamp('2026-10-02T00:00:00Z') WHERE id = 1")
 	through.run(c, "prepare", first, "--run-id", "rewrite")
 	output, err := through.refused(c, "backfill", first, "--run-id", "rewrite", "--batch-rows", "10")
-	c.Assert(err == nil, qt.Equals, f.maintainedOnWrite(c), qt.Commentf("%s", output))
+	maintained := f.maintainedOnWrite(c)
+	c.Assert(err == nil, qt.Equals, maintained, qt.Commentf("%s", output))
+	c.Assert(output, qt.Contains, rewriteAnswers[maintained], qt.Commentf("%s", output))
+}
+
+// rewriteAnswers is what a backfill of a changed source row prints, keyed by
+// whether the line's vector index takes in later writes: the row is embedded
+// again, or the backfill is refused for want of the capability.
+var rewriteAnswers = map[bool]string{
+	true:  "backfill finished: 5 scanned, 5 embedded",
+	false: "has no vector_index_maintained_on_write",
 }
 
 // build takes a run from prepare to a passing verification and returns the
@@ -333,7 +345,10 @@ func TestHostRunsAChunkedGenerationThroughTheProvider(t *testing.T) {
 
 // What YDB cannot run is refused through the provider before anything is
 // created: the outbox mode, which needs row triggers, and a pgvector
-// representation.
+// representation. The plan and the prepare of the outbox spec are refused in
+// the provider's words, which name the mode YDB builds in, where the host's
+// engine said the source has no triggers; both point the author at the
+// immutable mode.
 func TestHostRefusesWhatYDBCannotRunThroughTheProvider(t *testing.T) {
 	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
@@ -343,8 +358,13 @@ func TestHostRefusesWhatYDBCannotRunThroughTheProvider(t *testing.T) {
 	through := providerInference{host: host, manifest: manifest, address: f.address}
 
 	outbox := writeInferenceSpec(c, endpoint, inferenceTarget{column: "embedding", revision: "1", mode: "outbox"})
-	_, err := through.refused(c, "prepare", outbox, "--run-id", "outbox")
+	planned, planErr := through.refused(c, "plan", outbox)
+	c.Assert(planErr, qt.IsNotNil)
+	c.Assert(planned, qt.Contains, `engine "ydb" builds generations in consistency mode immutable, and the specification selects "outbox"`)
+	prepared, err := through.refused(c, "prepare", outbox, "--run-id", "outbox")
 	c.Assert(err, qt.IsNotNil)
+	c.Assert(prepared, qt.Contains, `engine "ydb" builds generations in consistency mode immutable, and the specification selects "outbox"`)
+	c.Assert(prepared, qt.Not(qt.Contains), "prepared run")
 	pgvector := writeInferenceSpec(c, endpoint, inferenceTarget{column: "embedding", revision: "1", representation: "vector"})
 	output, err := through.refused(c, "prepare", pgvector, "--run-id", "pgvector")
 	c.Assert(err, qt.IsNotNil)
