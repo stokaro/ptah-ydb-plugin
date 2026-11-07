@@ -177,6 +177,11 @@ func TestNativeIndexPlan_HappyPath(t *testing.T) {
 			[]string{"row-table-drop-index/000000 row-table-alter-operation", "row-table-add-index/000000 row-table-native-index-operation"},
 			[]string{"row-table-drop-index/000000 -> row-table-add-index/000000"},
 			[]string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;", strings.Replace(addDocsEmbSQL, "(`gen`, `emb`)", "(`emb`)", 1)}},
+		// A column declared as a vector of the index's dimension is the
+		// String column YDB builds it as. Ported from the host's
+		// TestRender_VectorIndex_FailurePath, whose control this is.
+		{"adds a vector index over a column declared as a vector", vectorColumn(documents(indexSet(nativeDeclared(docsEmb, prefixedTables)), indexSet()), "vector(3)"),
+			[]string{"row-table-add-index/000000 row-table-native-index-operation"}, nil, []string{addDocsEmbSQL}},
 		{"another tokenizer rebuilds a full-text index", documents(indexSet(nativeDeclared(keywordBody, relevanceTables)), indexSet(nativeHeld(standardBody, relevanceTables))),
 			[]string{"row-table-drop-index/000000 row-table-alter-operation", "row-table-add-index/000000 row-table-native-index-operation"},
 			[]string{"row-table-drop-index/000000 -> row-table-add-index/000000"},
@@ -226,6 +231,13 @@ func TestNativeIndexPlan_NoChange(t *testing.T) {
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 		})
 	}
+}
+
+// vectorColumn is in with its vector column emb declared as declared.
+func vectorColumn(in alterCase, declared string) alterCase {
+	in.types = maps.Clone(in.types)
+	in.types["emb"] = declared
+	return in
 }
 
 // statedNone is a case whose source states the native index set of every
@@ -330,6 +342,10 @@ func TestNativeIndexPlan_FailurePath(t *testing.T) {
 		{"the snowball filter with an n-gram filter", documents(indexSet(nativeDeclared(fullTextJSON("globalFulltextPlainIndex", "ft", "body",
 			`{"tokenizer":"STANDARD","useFilterSnowball":true,"useFilterEdgeNgram":true,"filterNgramMinLength":3,"filterNgramMaxLength":4}`), plainTables)), indexSet()),
 			`index "ft": a full-text index takes no n-gram filter with use_filter_snowball .*`},
+		// Ported from the host's TestRender_VectorIndex_FailurePath and
+		// TestCompareWithDatabaseInfo_VectorIndexSettings_FailurePath.
+		{"a vector column declared with another dimension", vectorColumn(documents(indexSet(nativeDeclared(docsEmb, prefixedTables)), indexSet()), "vector(4)"),
+			`index "docs_emb": its vector column "emb" is declared with dimension 4 and the index with vector_dimension 3; YDB checks neither, .*`},
 		// Ported from the host's TestVectorIndexService_ChangesAnIndexBuiltOtherwise.
 		{"vector settings on an index the table holds as a global one", documents(indexSet(nativeDeclared(docsEmb, prefixedTables)),
 			indexSet(nativeHeld(indexJSON("globalIndex", "docs_emb", []string{"gen"}, nil), plainTables))),

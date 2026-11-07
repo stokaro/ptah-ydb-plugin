@@ -216,6 +216,9 @@ func implementationSettings(spec *native.IndexIntent) []*native.GlobalIndexSetti
 type nativeIndexColumns struct {
 	types map[string]string
 	key   []string
+	// dimensions are the dimensions the declaration gives its VECTOR(n)
+	// columns; a column without one is left out.
+	dimensions map[string]uint64
 }
 
 // nativeIndexRefusal returns why a vector or full-text index cannot be added
@@ -296,6 +299,10 @@ func vectorIndexRefusal(subject string, index *native.GlobalVectorKMeansTreeInde
 	if kind := table.types[vector]; kind != "String" {
 		return fmt.Sprintf("%s: its vector column %q is %s, and a YDB vector index reads a String column (`Embedding column '%s' expected type 'String'`)",
 			subject, vector, kind, vector)
+	}
+	if dimension := table.dimensions[vector]; dimension != 0 && dimension != uint64(index.GetVectorSettings().GetSettings().GetVectorDimension()) {
+		return fmt.Sprintf("%s: its vector column %q is declared with dimension %d and the index with vector_dimension %d; "+
+			"YDB checks neither, and leaves a vector of the wrong length out of the index", subject, vector, dimension, index.GetVectorSettings().GetSettings().GetVectorDimension())
 	}
 	for _, name := range prefix {
 		if !keyComparable(table.types[name]) {

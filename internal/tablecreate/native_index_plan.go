@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -162,7 +163,14 @@ func keptColumns(spec *native.IndexIntent, columns nativeIndexColumns) string {
 // declaredKeyTypes returns the YDB type of every column a declaration states,
 // and its key in order, for the rules a vector or full-text index follows.
 func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableIntent) nativeIndexColumns {
-	result := nativeIndexColumns{types: declaredTypes(table.GetColumns())}
+	result := nativeIndexColumns{types: declaredTypes(table.GetColumns()), dimensions: make(map[string]uint64)}
+	for _, column := range table.GetColumns() {
+		// A declared VECTOR(n) is bytes in a String column, as the creation
+		// maps it, and the vector index keeps the dimension it names.
+		if mapping, err := ydbtype.Map(column.GetType(), nil); err == nil && mapping.Dimension != 0 {
+			result.types[column.GetName()], result.dimensions[column.GetName()] = mapping.Type, mapping.Dimension
+		}
+	}
 	for _, column := range table.GetColumns() {
 		if column.GetPrimary() && !slices.Contains(result.key, column.GetName()) {
 			result.key = append(result.key, column.GetName())
