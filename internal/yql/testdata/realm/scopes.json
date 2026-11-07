@@ -1,5 +1,5 @@
 {
-  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "host_commit": "74de0b65b3a167bdf9597eb41a399fb2c643a7b1",
   "rows": [
     {
       "statement": "CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
@@ -2088,6 +2088,310 @@
         "session": {
           "outcome": "refused",
           "operation": "the path ../up, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE `./app/t` (`id` Int64 NOT NULL, PRIMARY KEY (`id`))",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "UPDATE `users` ON SELECT 1 AS `id`, 'x'u AS `email`",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "UPSERT INTO `users` SELECT * FROM `/local/users`",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "$rows = SELECT * FROM `/local/users`",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE VIEW `v` WITH (security_invoker = TRUE) AS SELECT * FROM `/local/users`",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE `users` RENAME TO `app/people`",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ALTER SEQUENCE `/local/users/_serial_column_id` RESTART WITH 5",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/users/_serial_column_id"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/users/_serial_column_id"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/users/_serial_column_id"
+        }
+      }
+    },
+    {
+      "statement": "IMPORT m SYMBOLS $f",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "unrecognized statement IMPORT"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "unrecognized statement IMPORT"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "unrecognized statement IMPORT"
+        }
+      }
+    },
+    {
+      "statement": "ALTER COORDINATION NODE $n SET (read_consistency_mode = 'strict')",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a target named through $n"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a target named through $n"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a target named through $n"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TOPIC `/local/events`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/events"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/events"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/events"
+        }
+      }
+    },
+    {
+      "statement": "DROP TOPIC IF EXISTS `../events`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../events, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../events, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../events, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE SECRET `/local/pw` WITH (value = $PTAH_SECRET_PW)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/pw"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/pw"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/pw"
+        }
+      }
+    },
+    {
+      "statement": "DROP SECRET `../pw`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../pw, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../pw, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../pw, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLESTORE `s`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE TABLESTORE"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE TABLESTORE"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE TABLESTORE"
         }
       }
     }

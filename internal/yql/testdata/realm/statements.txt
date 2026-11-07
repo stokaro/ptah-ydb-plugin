@@ -92,3 +92,17 @@ CREATE TRANSFER tr FROM a TO b USING ($x) -> { RETURN $x; }
 CREATE ASYNC REPLICATION r FOR a AS b WITH (CONNECTION_STRING = "grpc://x/?database=/y")
 PRAGMA TablePathPrefix = "/local"
 DROP TABLE `../up`
+CREATE TABLE `./app/t` (`id` Int64 NOT NULL, PRIMARY KEY (`id`))
+UPDATE `users` ON SELECT 1 AS `id`, 'x'u AS `email`
+UPSERT INTO `users` SELECT * FROM `/local/users`
+$rows = SELECT * FROM `/local/users`
+CREATE VIEW `v` WITH (security_invoker = TRUE) AS SELECT * FROM `/local/users`
+ALTER TABLE `users` RENAME TO `app/people`
+ALTER SEQUENCE `/local/users/_serial_column_id` RESTART WITH 5
+IMPORT m SYMBOLS $f
+ALTER COORDINATION NODE $n SET (read_consistency_mode = 'strict')
+CREATE TOPIC `/local/events`
+DROP TOPIC IF EXISTS `../events`
+CREATE SECRET `/local/pw` WITH (value = $PTAH_SECRET_PW)
+DROP SECRET `../pw`
+CREATE TABLESTORE `s`
