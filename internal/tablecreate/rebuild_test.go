@@ -77,6 +77,7 @@ func TestRebuildPlan_FailurePath(t *testing.T) {
 func TestRebuildPlanNamesEachChange(t *testing.T) {
 	check := testcheck.New(t)
 	key := facet(check, schema.TableProperties, "", `{"primaryKey":["id","payload"]}`)
+	layout := facet(check, schema.TableProperties, "", `{"primaryKey":["id"],"uniformPartitions":"4"}`)
 	for _, tc := range []struct {
 		name   string
 		modify func(*protocol.PlanFeaturesRequest)
@@ -107,6 +108,15 @@ func TestRebuildPlanNamesEachChange(t *testing.T) {
 				ColumnNames: []string{"payload", "id"}}}
 		}, want: `adding constraint records_pkey, the primary key, which requires target capability primary_key_alterable, unavailable on this ydb target; ` +
 			`YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild`},
+		// A starting layout gives only a new table its partitions, so the
+		// reason names the layout and the minimum it would bring. Ported from
+		// the host's TestTablePartitioningRebuildReason.
+		{name: "a starting layout the table was not created with", modify: func(r *protocol.PlanFeaturesRequest) {
+			r.Tables[0].Desired.Columns[2].Type = "Int32"
+			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{layout}
+		}, want: "table \"app/records\": it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table (`UNIFORM_PARTITIONS alter is not supported`) " +
+			"and which gives a new table a minimum of 4 partitions, where this table holds 2. Declare auto_partitioning_min_partitions_count to change the minimum in place; " +
+			"YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			check := testcheck.New(t)
@@ -266,6 +276,14 @@ func TestRebuildPlanCarriesChangefeeds_FailurePath(t *testing.T) {
 				"carries one \\(`Cannot move table with cdc streams`\\); the rebuild cannot drop it and add it again"},
 		{name: "a target without changefeeds", held: heldUpdates,
 			want: `rebuilding table "app/records": changefeed "updates" of table "app/records", which requires target capability changefeeds, unavailable on this ydb target`},
+		// The host's embedded engine kept a disabled changefeed a source does
+		// not describe in the rebuild it captured; YDB has no statement that
+		// writes it disabled again, so the rebuild is refused rather than
+		// enabled behind the operator's back. Ported from the host's
+		// TestFeatureComparison_AdoptsBeforeCapturingARebuild.
+		{name: "a disabled changefeed the declaration does not describe", capabilities: newest(),
+			held: `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_DISABLED"},"topic":{"partitioningSettings":{}}}]}`,
+			want: `rebuilding table "app/records": changefeed "updates" of table "app/records": YDB has no statement that disables a changefeed .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			check := testcheck.New(t)

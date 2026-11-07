@@ -109,6 +109,17 @@ const (
 	heldRegion     = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED","awsRegion":"eu-west-1"},"topic":{"partitioningSettings":{}}}]}`
 	heldReplicated = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
 		`"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`
+	// heldReplicatedTransfer is heldReplicated with the consumer YDB gave a
+	// transfer that reads the stream, which the read marks as the transfer's.
+	heldReplicatedTransfer = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
+		`"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},` +
+		`"topic":{"partitioningSettings":{},"consumers":[{"name":"generated","important":true,"transfer":"app/ingest"}]}}]}`
+)
+
+const (
+	// epochSeconds and epochMilliseconds count the same TTL in another unit.
+	epochSeconds      = `{"valueSinceUnixEpoch":{"columnName":"stamp","columnUnit":"UNIT_SECONDS","expireAfterSeconds":3600}}`
+	epochMilliseconds = `{"valueSinceUnixEpoch":{"columnName":"stamp","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":3600}}`
 )
 
 func owner(kind, name string) *protocol.Reference {
@@ -149,6 +160,16 @@ func record(c *qt.C, representation protocol.ValueInput_Representation, kind, na
 	}})
 	c.Assert(err, qt.IsNil)
 	return &protocol.ComparisonRecord{Kind: kind, Subject: subject(subjectKind, name), Value: values.Values[0]}
+}
+
+// observedModel is the observed model of kind.
+func observedModel(kind string) *protocol.ValueModel {
+	for _, candidate := range schema.ObservedModels() {
+		if candidate.Kind == kind {
+			return candidate
+		}
+	}
+	return nil
 }
 
 func state(c *qt.C, representation protocol.ValueInput_Representation, facets side) (*protocol.ComparisonState, []*protocol.ComparisonParent) {
@@ -320,6 +341,15 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"an index without the declared read replicas", side{indexes: declaredIndexes(replicasByLabel)}, side{indexes: heldIndexes(heldDefaultsByLabel)}, []string{"records"}},
 		{"an index and a TTL in one table change", side{table: withTTL(hourly), indexes: declaredIndexes(syncByLabel)}, side{table: plain, indexes: heldIndexes()}, []string{"records", "records"}},
 		{"a TTL on a table the source states no properties for", side{}, side{table: withTTL(hourly)}, []string{"records"}},
+		// Ported from the host's TestEquivalentTTL and TestCompare_YDBTTL_Changes:
+		// a unit is part of the TTL, and YDB compares column names exactly.
+		{"a TTL in another epoch unit", side{table: withTTL(epochSeconds)}, side{table: withTTL(epochMilliseconds)}, []string{"records"}},
+		{"a TTL column that differs only in case", side{table: withTTL(`{"dateTypeColumn":{"columnName":"TS","expireAfterSeconds":3600}}`)}, side{table: withTTL(hourly)}, []string{"records"}},
+		{"a TTL moved to another column", side{table: withTTL(`{"dateTypeColumn":{"columnName":"day","expireAfterSeconds":3600}}`)}, side{table: withTTL(hourly)}, []string{"records"}},
+		// A replication-managed stream the declaration leaves out plans
+		// nothing beside a change of its table. Ported from the host's
+		// TestTableChangeCapturesRetainedReplicationState.
+		{"a table change beside a replication-managed stream", side{table: withTTL(hourly)}, side{table: plain, changefeeds: heldReplicated}, []string{"records"}},
 		{"a table and a column",
 			side{table: withTTL(hourly), columns: map[string]string{"note": `{"family":"archive"}`}},
 			side{table: plain, columns: map[string]string{"note": `{}`}}, []string{"note", "records"}},
@@ -418,6 +448,18 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"no changefeed on either side", side{changefeeds: `{"changefeeds":[]}`}, side{changefeeds: `{"changefeeds":[]}`}},
 		{"a table with no changefeed the source states none for", side{}, side{changefeeds: `{"changefeeds":[]}`}},
 		{"changefeeds beside a table that differs in no setting", side{table: plain, changefeeds: declaredFeed}, side{table: plain, changefeeds: heldFeed}},
+		// Ported from the host's TestColumnFamiliesCompareFacets_HoldingWhatIsDeclaredIsNoChange
+		// and TestColumnFamilies_EncodeCanonically: families compare by name, and
+		// a default family that states nothing keeps what a table profile gave it.
+		{"families declared in another order", side{table: withFamily(`{"name":"warm"},{"name":"cold","data":{"media":"hdd"}}`)},
+			side{table: `{"primaryKey":["id"],"columnFamilies":[{"name":"cold","data":{"media":"hdd"}},{"name":"default"},{"name":"warm"}]}`}},
+		{"a default family stating nothing against one a table profile set", side{table: plain},
+			side{table: `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_LZ4","keepInMemory":"ENABLED"}]}`}},
+		// The consumer a transfer reads a replication-managed stream through
+		// is the transfer's, so a declaration of the stream as held changes
+		// nothing. Ported from the host's
+		// TestTransferConsumerAdoptionPreservesReplicationBinding.
+		{"a replication-managed stream as held, with a transfer's consumer", side{changefeeds: declaredFeed}, side{changefeeds: heldReplicatedTransfer}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -554,6 +596,20 @@ func TestCompare_FailurePath(t *testing.T) {
 		_, err := tablecompare.Compare(ctx, request(c, side{table: withTTL(hourly)}, side{table: plain}))
 
 		c.Assert(err, qt.ErrorIs, context.Canceled)
+	})
+	// YDB keeps zstd for column tables only, so a row table read with it, or
+	// with any family value the model does not name, is refused before a
+	// comparison reads it, never compared as a family that holds nothing.
+	// Ported from the host's TestReader_RecordsColumnFamiliesItDoesNotRead.
+	t.Run("a held family compression the model does not name", func(t *testing.T) {
+		c := testcheck.New(t)
+		model := observedModel(schema.TableProperties)
+		values, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{
+			{Id: "zstd", Representation: protocol.ValueInput_OBSERVED, Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.TableProperties, SchemaVersion: 1,
+				Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: owner("table", ""), Payload: []byte(withFamily(`{"name":"cold","compression":3}`))}},
+		}})
+		c.Assert(err, qt.ErrorMatches, `(?s).*unknown enum.*`)
+		c.Assert(values, qt.IsNil)
 	})
 	t.Run("another comparison", func(t *testing.T) {
 		c := testcheck.New(t)

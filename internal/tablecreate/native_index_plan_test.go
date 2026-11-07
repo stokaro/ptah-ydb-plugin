@@ -169,6 +169,14 @@ func TestNativeIndexPlan_HappyPath(t *testing.T) {
 			[]string{"row-table-drop-index/000000 row-table-alter-operation"}, nil, []string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;"}},
 		{"a vector index a source of index kinds states none for is dropped", statedNone(documents("", indexSet(nativeHeld(docsEmbRead, prefixedTables)))),
 			[]string{"row-table-drop-index/000000 row-table-alter-operation"}, nil, []string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;"}},
+		// An index whose key the plan changes is built once, with the
+		// declared vector settings. Ported from the host's
+		// TestVectorIndexService_LeavesACommonReplacementAlone.
+		{"another key drops the index and adds it again with its settings", documents(indexSet(nativeDeclared(vectorJSON("docs_emb", []string{"emb"}, []string{"body"}, cosine3(2), ""), vectorTables)),
+			indexSet(nativeHeld(docsEmbRead, prefixedTables))),
+			[]string{"row-table-drop-index/000000 row-table-alter-operation", "row-table-add-index/000000 row-table-native-index-operation"},
+			[]string{"row-table-drop-index/000000 -> row-table-add-index/000000"},
+			[]string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;", strings.Replace(addDocsEmbSQL, "(`gen`, `emb`)", "(`emb`)", 1)}},
 		{"another tokenizer rebuilds a full-text index", documents(indexSet(nativeDeclared(keywordBody, relevanceTables)), indexSet(nativeHeld(standardBody, relevanceTables))),
 			[]string{"row-table-drop-index/000000 row-table-alter-operation", "row-table-add-index/000000 row-table-native-index-operation"},
 			[]string{"row-table-drop-index/000000 -> row-table-add-index/000000"},
@@ -322,6 +330,10 @@ func TestNativeIndexPlan_FailurePath(t *testing.T) {
 		{"the snowball filter with an n-gram filter", documents(indexSet(nativeDeclared(fullTextJSON("globalFulltextPlainIndex", "ft", "body",
 			`{"tokenizer":"STANDARD","useFilterSnowball":true,"useFilterEdgeNgram":true,"filterNgramMinLength":3,"filterNgramMaxLength":4}`), plainTables)), indexSet()),
 			`index "ft": a full-text index takes no n-gram filter with use_filter_snowball .*`},
+		// Ported from the host's TestVectorIndexService_ChangesAnIndexBuiltOtherwise.
+		{"vector settings on an index the table holds as a global one", documents(indexSet(nativeDeclared(docsEmb, prefixedTables)),
+			indexSet(nativeHeld(indexJSON("globalIndex", "docs_emb", []string{"gen"}, nil), plainTables))),
+			`index "docs_emb": the table holds a global index and the declaration states a vector index under its name; .*`},
 		{"a global index under the name of a vector one", documents(indexSet(nativeDeclared(indexJSON("globalIndex", "docs_emb", []string{"gen"}, nil), plainTables)),
 			indexSet(nativeHeld(docsEmbRead, prefixedTables))),
 			`index "docs_emb": the table holds a vector index and the declaration states a global index under its name; .*`},
@@ -354,6 +366,11 @@ func TestNativeIndexPlan_FullTextNeedsAUint64Key(t *testing.T) {
 	c.Assert(plan.Diagnostics[0].Message, qt.Matches, `index "ft": a YDB full-text index requires exactly one Uint64 primary key column .*`)
 }
 
+// vectorIndexOf is the index set that declares docs_emb with settings.
+func vectorIndexOf(settings string) string {
+	return indexSet(nativeDeclared(vectorJSON("docs_emb", []string{"gen", "emb"}, []string{"body"}, settings, ""), prefixedTables))
+}
+
 // The comparison reads a vector or full-text index as the planner does, so a
 // difference it reports is one the planner acts on, and a read of what was
 // declared reports none.
@@ -373,6 +390,17 @@ func TestNativeIndexComparison(t *testing.T) {
 			indexSet(nativeHeld(fullTextJSON("globalFulltextPlainIndex", "ft", "body", `{"tokenizer":"KEYWORD","useFilterLowercase":true}`), plainTables)), false},
 		{"another tokenizer", indexSet(nativeDeclared(keywordBody, relevanceTables)), indexSet(nativeHeld(standardBody, relevanceTables)), true},
 		{"a plain index in place of a relevance one", indexSet(nativeDeclared(plainKeyword, plainTables)), indexSet(nativeHeld(keywordBody, relevanceTables)), true},
+		// Each vector setting is part of the index. Ported from the host's
+		// TestVectorIndexService_ChangesAnIndexBuiltOtherwise.
+		{"another distance", vectorIndexOf(kmeans("DISTANCE_EUCLIDEAN", "VECTOR_TYPE_FLOAT", 3, 1, 2)), indexSet(nativeHeld(docsEmbRead, prefixedTables)), true},
+		{"a similarity of the same name", vectorIndexOf(kmeans("SIMILARITY_COSINE", "VECTOR_TYPE_FLOAT", 3, 1, 2)), indexSet(nativeHeld(docsEmbRead, prefixedTables)), true},
+		{"another element type", vectorIndexOf(kmeans("DISTANCE_COSINE", "VECTOR_TYPE_UINT8", 3, 1, 2)), indexSet(nativeHeld(docsEmbRead, prefixedTables)), true},
+		{"another dimension", vectorIndexOf(kmeans("DISTANCE_COSINE", "VECTOR_TYPE_FLOAT", 4, 1, 2)), indexSet(nativeHeld(docsEmbRead, prefixedTables)), true},
+		{"other levels", vectorIndexOf(kmeans("DISTANCE_COSINE", "VECTOR_TYPE_FLOAT", 3, 2, 2)), indexSet(nativeHeld(docsEmbRead, prefixedTables)), true},
+		{"an index 25.1 reads without levels and clusters", indexSet(nativeDeclared(docsEmb, prefixedTables)), indexSet(nativeHeld(vectorJSON("docs_emb", []string{"gen", "emb"}, []string{"body"},
+			`{"settings":{"metric":"DISTANCE_COSINE","vectorType":"VECTOR_TYPE_FLOAT","vectorDimension":3}}`, ""), prefixedTables)), true},
+		{"vector settings on an index read as a global one", indexSet(nativeDeclared(docsEmb, prefixedTables)),
+			indexSet(nativeHeld(indexJSON("globalIndex", "docs_emb", []string{"gen", "emb"}, []string{"body"}), plainTables)), true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

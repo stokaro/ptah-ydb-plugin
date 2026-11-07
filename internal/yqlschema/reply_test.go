@@ -546,6 +546,10 @@ var claimedHostKinds = map[string][]string{
 	schema.ResourcePoolProperties:           {"ptah.run/ydb/resource-pool"},
 	schema.ResourcePoolClassifierProperties: {"ptah.run/ydb/resource-pool-classifier"},
 	schema.ChangefeedProperties:             {"ptah.run/ydb/changefeed"},
+	// The host claims every async replication and transfer of a complete
+	// load, as its TestReadYQLReplication and TestReadYQLTransfer assert.
+	schema.ReplicationProperties: {"ptah.run/ydb/async-replication"},
+	schema.TransferProperties:    {"ptah.run/ydb/transfer"},
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
@@ -586,7 +590,8 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
 	}
 	for _, subject := range coverage.Subjects {
-		if !slices.Contains([]string{"ptah.run/ydb/secret", "ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier"}, subject.Kind) {
+		if !slices.Contains([]string{"ptah.run/ydb/secret", "ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier",
+			"ptah.run/ydb/async-replication", "ptah.run/ydb/transfer"}, subject.Kind) {
 			continue
 		}
 		var knowledge struct {

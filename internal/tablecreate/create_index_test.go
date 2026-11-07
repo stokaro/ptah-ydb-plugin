@@ -137,6 +137,10 @@ func TestCompileDeclaredIndexes_FailurePath(t *testing.T) {
 			want: "a YDB index column has no prefix length"},
 		{name: "a condition", index: &protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}, Condition: "mail <> ''"},
 			want: "YDB table creation does not support ptah.provider.experimental.DeclaredIndex.condition"},
+		// Ported from the host's TestRender_IndexPartitioning_FailurePath: a
+		// YDB global index takes no PostgreSQL storage parameter.
+		{name: "a storage parameter", index: &protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}, StorageParameters: map[string]string{"fillfactor": "70"}},
+			want: "YDB table creation does not support ptah.provider.experimental.DeclaredIndex.storage_parameters"},
 		{name: "another table", index: &protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}, TableName: "other"},
 			want: `it names table "other", and the table declaring it is "records"`},
 	} {

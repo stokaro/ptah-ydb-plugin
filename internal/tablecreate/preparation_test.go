@@ -74,6 +74,7 @@ func indexKindRequest(c *qt.C) *protocol.PrepareTablesRequest {
 	request.Tables[0].Desired.Indexes = []*protocol.DeclaredIndex{
 		{Name: "by_value", Fields: []string{"value"}, Type: "GLOBAL SYNC"},
 		{Name: "by_value_async", Fields: []string{"value"}, Type: "global_async"},
+		{Name: "by_value_btree", Fields: []string{"value"}, Type: "BTREE"},
 	}
 	return request
 }
@@ -81,14 +82,19 @@ func indexKindRequest(c *qt.C) *protocol.PrepareTablesRequest {
 // A host that lists schema.index-methods gets the kind of each declared
 // index in the spelling inspection reports a held index's method with: GLOBAL
 // SYNC for a synchronous index and GLOBAL ASYNC for an asynchronous one,
-// whatever the source wrote. A host that does not list it gets none.
+// whatever the source wrote. A declared BTREE index is the GLOBAL SYNC index
+// YDB builds, as the host's embedded engine compared it (the host's
+// TestComparisonRules_YDBRegistersItsRules and
+// TestIndexesWithDialect_YDBKeepsAnUnchangedIndex). A host that does not list
+// it gets none.
 func TestPrepareTablesStatesIndexKinds(t *testing.T) {
 	for _, row := range []struct {
 		name     string
 		features []string
 		want     []*protocol.PreparedIndex
 	}{
-		{"negotiated", []string{provider.IndexMethodsFeature}, []*protocol.PreparedIndex{{Name: "by_value", Method: "GLOBAL SYNC"}, {Name: "by_value_async", Method: "GLOBAL ASYNC"}}},
+		{"negotiated", []string{provider.IndexMethodsFeature}, []*protocol.PreparedIndex{{Name: "by_value", Method: "GLOBAL SYNC"}, {Name: "by_value_async", Method: "GLOBAL ASYNC"},
+			{Name: "by_value_btree", Method: "GLOBAL SYNC"}}},
 		{"not negotiated", nil, nil},
 	} {
 		t.Run(row.name, func(t *testing.T) {

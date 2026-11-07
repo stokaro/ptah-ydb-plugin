@@ -46,6 +46,12 @@ func TestConfineToRealm_FailurePath(t *testing.T) {
 		{"comment on a column outside", "COMMENT ON COLUMN `../t`.`id` IS 'text'", "the path ../t, which climbs out of the dev database"},
 		{"comment on an index outside", "COMMENT ON INDEX `i` ON `/local/t` IS 'text'", "the absolute path /local/t"},
 		{"comment on another object", "COMMENT ON SCHEMA `app` IS 'text'", "unrecognized object COMMENT ON SCHEMA"},
+		// Ported from the host's TestBaselineGuard_RefusesOnASharedDevServer:
+		// a pool, its classifiers and the realm's root belong to the whole
+		// database, and a permission on the root outlives a reset of the realm.
+		{"resource pool change", "ALTER RESOURCE POOL default WITH (resource_weight = 50);", "a resource pool of the whole database"},
+		{"resource pool classifier", "CREATE RESOURCE POOL CLASSIFIER etl WITH (resource_pool = 'batch', rank = 1);", "a resource pool of the whole database"},
+		{"grant on the realm's root", "GRANT 'ydb.access.grant' ON `/local/ptah_dev/abc` TO `ACCESS-ADMINS`;", "GRANT permission change"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

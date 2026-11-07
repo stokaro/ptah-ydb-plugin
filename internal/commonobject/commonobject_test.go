@@ -102,6 +102,11 @@ func TestRender_FailurePath(t *testing.T) {
 			`unsupported feature: the comment on column ` + strings.Repeat("c", 81) + `: YDB keeps the comment as the table attribute .*, 101 bytes long, and an attribute key takes at most 100 bytes; a column name takes at most 80`},
 		{"comment not UTF-8", setComment(table, "\xff"), `unsupported feature: the comment on table t: the comment is not UTF-8 text, which YDB keeps in an attribute value`},
 		{"column without its table", setComment(&protocol.Reference{Engine: "ydb", Kind: "column", Name: "c"}, "x"), `a YDB column comment names its table`},
+		// Ported from the host's TestRender_Comments_FailurePath_ByKey.
+		{"constraint comment", setComment(&protocol.Reference{Engine: "ydb", Kind: "constraint", Name: "t_pkey", Path: []string{"t"}}, "x"),
+			`unsupported feature: the comment on constraint t_pkey: YDB keeps comments on tables, their columns and indexes, and views`},
+		{"sequence comment", setComment(&protocol.Reference{Engine: "ydb", Kind: "sequence", Name: "s"}, "x"),
+			`unsupported feature: the comment on sequence s: YDB keeps comments on tables, their columns and indexes, and views`},
 		{"sequence", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateSequence{CreateSequence: &protocol.SQLSequence{Name: "s"}}},
 			`unsupported feature: the YDB provider cannot render this common object change`},
 	} {
@@ -165,6 +170,11 @@ func TestSupport(t *testing.T) {
 	capabilities := commonobject.Capabilities()
 	c.Assert(capabilities["views"] && capabilities["view_comments"] && capabilities["comment_attributes"], qt.IsTrue)
 	c.Assert(capabilities["create_or_replace_view"] || capabilities["materialized_views"] || capabilities["schema_comments"], qt.IsFalse)
+	// YDB keeps no comment on a constraint, such as the primary key, or on a
+	// sequence, so the host refuses both before it renders them. Ported
+	// from the host's TestRender_Comments_FailurePath_ByKey.
+	c.Assert(capabilities["constraint_comments"], qt.IsFalse)
+	c.Assert(capabilities["sequence_comments"], qt.IsFalse)
 }
 
 // A refused view change is a reason the host prints after the call's code,

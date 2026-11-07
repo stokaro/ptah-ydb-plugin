@@ -139,6 +139,11 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 		{name: "a column default", storage: `{}`, modify: withFacet(facet(c, schema.ColumnProperties, "count",
 			`{"literal":{"type":{"typeId":"UINT64"},"value":{"uint64Value":"7"}}}`)),
 			wantErr: `column tables do not support defaults or Serial columns`},
+		// A column table takes local indexes only, which its storage
+		// declares. Ported from the host's TestRender_ColumnTableRejectsGlobalIndex.
+		{name: "a global index", storage: `{}`, modify: func(table *protocol.DeclaredTable) {
+			table.Indexes = []*protocol.DeclaredIndex{{Name: "global", Fields: []string{"body"}}}
+		}, wantErr: `YDB table creation does not support ptah.provider.experimental.DeclaredTable.indexes`},
 		{name: "no key", storage: `{}`, modify: func(table *protocol.DeclaredTable) {
 			table.PrimaryKey, table.Columns[0].Primary, table.Columns[1].Primary = nil, false, false
 		}, wantErr: `YDB table creation requires an ordered primary key`},

@@ -93,6 +93,23 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 		{name: "a group's password input", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
 			Role: &protocol.SQLRole{Name: "team", Group: true}, PasswordInput: passwordInput("PTAH_SECRET_PASSWORD_TEAM")}}}, want: "cannot have a password"},
 		{name: "empty membership", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_AddMember{AddMember: &protocol.RoleMembership{Group: "team"}}}, want: "names a group and a member"},
+		// The grant rows below are ported from the host's
+		// TestRender_AccessStatements_FailurePath, TestValidateDeclared_FailurePath
+		// and TestRenderSchema_DatabaseGrant_FailurePath. The capabilities name
+		// neither external data sources nor secrets.
+		{name: "a column grant", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, Columns: []string{"a"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "t"}}), want: "a YDB permission is on a whole object, not on columns"},
+		{name: "a sequence", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "sequence", Name: "s"}}), want: `a YDB grant cannot name object kind "sequence"`},
+		{name: "a grant with the grant option", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, WithGrantOption: true,
+			Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "t"}}), want: "YDB stores the grant option as permission ydb.access.grant; grant or revoke that permission directly"},
+		{name: "a revoke on an external table with external data sources off", change: revokeChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT ROW"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "external table", Schema: "ext", Name: "events"}}),
+			want: "YDB access operation requires target capability external_data_sources"},
+		{name: "a grant on a secret on a line without secrets", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT ROW"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "secret", Schema: "ext", Name: "pw"}}), want: "YDB access operation requires target capability secrets"},
+		{name: "the database with no path to name it by", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"CONNECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "database"}}), want: "YDB takes this grant target only by its absolute database path; plan it against the database"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -106,13 +123,59 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 	}
 }
 
+func grantChange(grant *protocol.SQLGrant) *protocol.CommonObjectChange {
+	return &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: grant}}
+}
+
+func revokeChange(grant *protocol.SQLGrant) *protocol.CommonObjectChange {
+	return &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Revoke{Revoke: grant}}
+}
+
+// Each access operation is refused on a target without the capability it
+// needs, which the refusal names; every other capability is established.
+// The rows past the first are ported from the host's
+// TestRender_AccessStatements_RefusedWithoutTheKeys.
 func TestRenderAccessRequiresAnEstablishedCapability(t *testing.T) {
-	c := testcheck.New(t)
-	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "app"}}}}
-	got, err := commonobject.Render(change, nil)
-	c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
-	c.Assert(err.Error(), qt.Contains, "role_management")
-	c.Assert(got, qt.Equals, "")
+	for _, test := range []struct {
+		name    string
+		change  *protocol.CommonObjectChange
+		without string
+	}{
+		{"a user", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "app"}}}},
+			"role_management"},
+		{"a group", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "readers", Group: true}}}},
+			"group_principals"},
+		{"a membership", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_AddMember{AddMember: &protocol.RoleMembership{Group: "readers", Member: "app"}}},
+			"role_membership"},
+		{"an untyped path cannot bypass database grant restrictions", grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"CONNECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "path", Name: "/local"}}), "database_grants"},
+		{"a grant on the database", grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"CONNECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "database", Database: "/local"}}), "database_grants"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			capabilities := accessCapabilities()
+			delete(capabilities, test.without)
+			got, err := commonobject.Render(test.change, capabilities)
+			c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
+			c.Assert(err.Error(), qt.Contains, "requires target capability "+test.without)
+			c.Assert(got, qt.Equals, "")
+		})
+	}
+}
+
+// ALL and ALL PRIVILEGES name YDB's full permission, as the host's embedded
+// engine writes them. Ported from the host's TestRender_AccessStatements_HappyPath.
+func TestRenderGrantOfAllIsTheFullPermission(t *testing.T) {
+	for _, privilege := range []string{"ALL", "all privileges"} {
+		t.Run(privilege, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := commonobject.Render(grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{privilege},
+				Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "events"}}), accessCapabilities())
+			c.Assert(err, qt.IsNil)
+			c.Assert(got, qt.Equals, "GRANT 'ydb.generic.full' ON `events` TO `app`;")
+		})
+	}
 }
 
 func TestRenderGrant_HappyPath(t *testing.T) {
@@ -195,6 +258,8 @@ func TestDeclaredAccessRefusesUnsupportedIntent(t *testing.T) {
 		{"unknown permission", &protocol.SQLGrant{Role: "app", Privileges: []string{"MADE UP"}, Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "items"}}},
 		{"escaping path", &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, Target: &protocol.Reference{Engine: "ydb", Kind: "topic", Schema: "..", Name: "items"}}},
 		{"qualified pool", &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, Target: &protocol.Reference{Engine: "ydb", Kind: "resource pool", Name: "/other/pool"}}},
+		// Ported from the host's TestValidateDeclared_HoldsYDBToItsModel.
+		{"the grant option", &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, WithGrantOption: true, Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "items"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

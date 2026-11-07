@@ -70,6 +70,10 @@ func TestAnalysisNativeSafety(t *testing.T) {
 		{"CREATE OR REPLACE EXTERNAL TABLE t (id Int64)", protocol.SQLStatement_BEHAVIORAL},
 		{"DROP STREAMING QUERY q", protocol.SQLStatement_DESTRUCTIVE},
 		{"CREATE OR REPLACE STREAMING QUERY q AS DO BEGIN SELECT 1; END DO;", protocol.SQLStatement_DESTRUCTIVE},
+		// IF NOT EXISTS takes precedence over OR REPLACE, so the guarded
+		// replacement keeps the checkpoint; its body is the review. Ported
+		// from the host's TestStreamingQueryCreateGuardsAgreeAcrossAssessments.
+		{"CREATE OR REPLACE STREAMING QUERY IF NOT EXISTS q AS DO BEGIN SELECT 1; END DO;", protocol.SQLStatement_UNKNOWN},
 		{"ALTER STREAMING QUERY q AS DO BEGIN SELECT 1; END DO;", protocol.SQLStatement_DESTRUCTIVE},
 		{"ALTER STREAMING QUERY q SET (RUN = FALSE)", protocol.SQLStatement_BEHAVIORAL},
 		{"ALTER TABLE t SET (TTL = Interval(\"P1D\") ON created)", protocol.SQLStatement_UNKNOWN},
