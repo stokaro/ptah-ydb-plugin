@@ -659,7 +659,7 @@ var limitedKinds = map[string]struct {
 }{
 	"secret":                   {schema.SecretProperties, topicLimit, "the source leaves secrets unmanaged"},
 	"coordination_node":        {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
-	"streaming_query":          {schema.StreamingQueryProperties, topicLimit, "the source leaves streaming queries unmanaged"},
+	"streaming_query":          {schema.StreamingQueryProperties, coordinationLimit, "the source leaves streaming queries unmanaged"},
 	"topic":                    {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
 	"external_data_source":     {schema.ExternalSourceProperties, externalLimit, "the source leaves external data sources unmanaged"},
 	"external_table":           {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},
@@ -749,8 +749,8 @@ func externalLimit(written string) (directory, name string) {
 	return path.Schema, path.Name
 }
 
-// coordinationLimit is the directory and the name of the node a header
-// names: a path, or a name qualified by its directory with a dot.
+// coordinationLimit is the directory and name of a coordination node or
+// streaming query named by a path or a dot-qualified directory.
 func coordinationLimit(written string) (directory, name string) {
 	physical := written
 	if !strings.Contains(written, "/") {
