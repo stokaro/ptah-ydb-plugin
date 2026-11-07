@@ -36,6 +36,10 @@ var acceptedParameters = []string{
 	paramQueryMode, paramLegacyQueryMode, paramDefaultIdempotent, paramPrefetchParts,
 }
 
+// refusedParameters lists the parameters the SDK reads that an address may
+// not carry, each refused with the reason sdkParameters gives.
+var refusedParameters = []string{paramFakeTx, paramQueryBind}
+
 // sdkParameters checks the parameters the SDK reads and returns them as the
 // SDK's address carries them. A refusal names the parameter and never its
 // value, which may be a secret in a mistyped key.
