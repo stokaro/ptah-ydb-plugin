@@ -3,6 +3,7 @@ package tablecreate_test
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -204,6 +205,85 @@ func TestNativeIndexPlan_HappyPath(t *testing.T) {
 			c.Assert(textUnits(c, plan, request.Capabilities), qt.DeepEquals, test.sql)
 		})
 	}
+}
+
+// The host drops its common global index before the provider adds the vector
+// index under the same name. The host's captured index and complete native
+// index coverage are sufficient even without an observed native index facet.
+func TestNativeIndexPlan_ReplacesCommonGlobalWithVector(t *testing.T) {
+	c := testcheck.New(t)
+	request := columnRequest(c, documents(indexSet(nativeDeclared(docsEmb, prefixedTables)), ""),
+		commonIndexStep("drop-global", "docs_emb", protocol.PlanningEffect_DROP))
+	request.Tables[0].Current.Indexes = []*protocol.ObservedIndex{{Name: "docs_emb", TableName: "records", Schema: "app",
+		Columns: []string{"gen", "emb"}, IncludeColumns: []string{"body"}}}
+	request.Tables[0].Current.Features.Facets.Coverage.Kinds = []*protocol.ComparisonKindCoverage{observedIndexCoverage(protocol.ModelKnowledge_COMPLETE)}
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"drop-global => row-table-drop-index/000000"})
+	c.Assert(edges(plan), qt.DeepEquals, []string{"row-table-drop-index/000000 -> row-table-add-index/000000"})
+	c.Assert(textUnits(c, plan, request.Capabilities), qt.DeepEquals, []string{
+		"ALTER TABLE `app/records` DROP INDEX `docs_emb`;", addDocsEmbSQL,
+	})
+}
+
+func TestNativeIndexPlan_RefusesGlobalReplacementWithoutCompleteRead(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		indexes   []*protocol.ObservedIndex
+		steps     []*protocol.CommonPlanningStep
+		knowledge protocol.ModelKnowledge_State
+	}{
+		{"unknown native indexes", []*protocol.ObservedIndex{{Name: "docs_emb", TableName: "records", Schema: "app", Columns: []string{"gen", "emb"}}},
+			[]*protocol.CommonPlanningStep{commonIndexStep("drop-global", "docs_emb", protocol.PlanningEffect_DROP)}, protocol.ModelKnowledge_UNINSPECTED},
+		{"missing common index", nil,
+			[]*protocol.CommonPlanningStep{commonIndexStep("drop-global", "docs_emb", protocol.PlanningEffect_DROP)}, protocol.ModelKnowledge_COMPLETE},
+		{"missing common drop", []*protocol.ObservedIndex{{Name: "docs_emb", TableName: "records", Schema: "app", Columns: []string{"gen", "emb"}}},
+			nil, protocol.ModelKnowledge_COMPLETE},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := columnRequest(c, documents(indexSet(nativeDeclared(docsEmb, prefixedTables)), ""))
+			request.Tables[0].Current.Indexes = test.indexes
+			request.CommonSteps = test.steps
+			request.Tables[0].Current.Features.Facets.Coverage.Kinds = []*protocol.ComparisonKindCoverage{observedIndexCoverage(test.knowledge)}
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].Message, qt.Equals, "The table's current indexes were not captured")
+		})
+	}
+}
+
+func observedIndexCoverage(state protocol.ModelKnowledge_State) *protocol.ComparisonKindCoverage {
+	for _, model := range schema.ObservedModels() {
+		if model.Kind == schema.IndexProperties {
+			return &protocol.ComparisonKindCoverage{Model: model, Sources: []*protocol.ComparisonKnowledgeSource{{
+				Outside: &protocol.ModelKnowledge{State: state, Reason: "fixture"}}}}
+		}
+	}
+	panic("observed index model not found")
+}
+
+// The host adds a common global index after the provider drops the vector
+// index under the same name. The two sources describe complementary steps.
+func TestNativeIndexPlan_ReplacesVectorWithCommonGlobal(t *testing.T) {
+	c := testcheck.New(t)
+	request := columnRequest(c, documents(indexSet(), indexSet(nativeHeld(docsEmbRead, prefixedTables))),
+		commonIndexStep("add-global", "docs_emb", protocol.PlanningEffect_CREATE))
+	request.Tables[0].Desired.Indexes = []*protocol.DeclaredIndex{{Name: "docs_emb", Fields: []string{"gen", "emb"}, IncludeColumns: []string{"body"}}}
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"add-global => row-table-add-index/000000"})
+	c.Assert(edges(plan), qt.DeepEquals, []string{"row-table-drop-index/000000 -> row-table-add-index/000000"})
+	units := textUnits(c, plan, request.Capabilities)
+	slices.Sort(units)
+	c.Assert(units, qt.DeepEquals, []string{
+		"ALTER TABLE `app/records` ADD INDEX `docs_emb` GLOBAL SYNC ON (`gen`, `emb`) COVER (`body`);",
+		"ALTER TABLE `app/records` DROP INDEX `docs_emb`;",
+	})
 }
 
 // An index the table holds as declared plans nothing, whatever the server

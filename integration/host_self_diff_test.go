@@ -188,3 +188,40 @@ func TestHostDiffsChangedYDBVectorIndexPrefix_HappyPath(t *testing.T) {
 		qt.Commentf("%s", out))
 	c.Assert(out, qt.Contains, "ON (`gen`, `emb`)")
 }
+
+// The remaining cases of the former host's changed-vector comparison test
+// move one index name between the host's common global index and this
+// provider's native vector index. Both changes require a drop before an add.
+func TestHostDiffsYDBGlobalAndVectorIndexKinds_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.IndexKindsFeature)
+	realm := newCLIRealm(c)
+	const table = "tables:\n  docs:\n    columns:\n" +
+		"      id: {type: Uint64, primary: true, not_null: true}\n" +
+		"      gen: {type: Uint64}\n      emb: {type: String}\n      body: {type: Utf8}\n" +
+		"    indexes:\n      by_emb: %s\n"
+	const vector = "{fields: [emb], type: vector_kmeans_tree, distance: cosine, " +
+		"vector_type: float, vector_dimension: 3, levels: 1, clusters: 2}"
+	for _, test := range []struct {
+		name, before, after, added string
+	}{
+		{"global to vector", "{fields: [emb]}", vector, "vector_kmeans_tree"},
+		{"vector to global", vector, "{fields: [emb]}", "GLOBAL SYNC"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			files := writeFiles(c, c.TempDir(), map[string]string{
+				"from.yaml": strings.Replace(table, "%s", test.before, 1),
+				"to.yaml":   strings.Replace(table, "%s", test.after, 1),
+			})
+			out, err := hostCommand(c, "schema", "diff", "--from", filepath.Join(files, "from.yaml"),
+				"--to", filepath.Join(files, "to.yaml"), "--dev-url", realm.address)
+			c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+			c.Assert(strings.Count(out, "DROP INDEX `by_emb`"), qt.Equals, 1, qt.Commentf("%s", out))
+			c.Assert(strings.Count(out, "ADD INDEX `by_emb`"), qt.Equals, 1, qt.Commentf("%s", out))
+			c.Assert(strings.Index(out, "DROP INDEX `by_emb`") < strings.Index(out, "ADD INDEX `by_emb`"), qt.IsTrue,
+				qt.Commentf("%s", out))
+			c.Assert(out, qt.Contains, test.added)
+		})
+	}
+}
