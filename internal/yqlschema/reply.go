@@ -299,8 +299,7 @@ func (w *wiring) tables(reading *Reading) {
 	}
 }
 
-// grants writes the grants of the reading, then its revocations. A grant on a
-// resource pool whose name the host would rename is refused.
+// grants writes the grants of the reading, then its revocations.
 func (w *wiring) grants(reading *Reading) {
 	for _, revoked := range []bool{false, true} {
 		grants := reading.Grants
@@ -308,10 +307,6 @@ func (w *wiring) grants(reading *Reading) {
 			grants = reading.RevokedGrants
 		}
 		for _, grant := range grants {
-			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
-				w.gaps = append(w.gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
-					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
-			}
 			w.trace(protocol.SQLObjectTrace_GRANTS, len(w.reply.Grants), grant.document, grant.span)
 			w.reply.Grants = append(w.reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
 				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})

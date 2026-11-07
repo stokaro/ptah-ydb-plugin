@@ -75,13 +75,6 @@ func gaps(reading *yqlschema.Reading) []string {
 			found = append(found, "index "+index.Name)
 		}
 	}
-	// The host names a pool it reads from a provider as it names a table, so
-	// a pool whose name needs quoting would come back renamed.
-	for _, grant := range append(slices.Clone(reading.Grants), reading.RevokedGrants...) {
-		if grant.ObjectKind == "RESOURCE POOL" && strings.ContainsAny(grant.OnObject, ".\"`[]") {
-			found = append(found, "grant on resource pool "+grant.OnObject)
-		}
-	}
 	for _, object := range reading.Objects {
 		switch object.Kind {
 		case yqlschema.KindSecret:
@@ -150,8 +143,9 @@ func TestReply_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return complete(c, r) })
 	// The users with a password reach a complete reply under
-	// source.sql-role-passwords, which the request lists.
-	c.Assert(len(rows) >= 8, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
+	// source.sql-role-passwords, which the request lists. The dotted resource
+	// pool grant is now complete through the host's database-wide naming.
+	c.Assert(len(rows) >= 7, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -310,6 +304,8 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 			object["OnSchema"] = target.GetName()
 		case "database":
 			object["OnDatabase"] = true
+		case "resource pool":
+			object["OnObject"], object["ObjectKind"] = target.GetName(), strings.ToUpper(kind)
 		default:
 			object["OnObject"], object["ObjectKind"] = canonical(target.GetSchema(), target.GetName()), strings.ToUpper(kind)
 		}
