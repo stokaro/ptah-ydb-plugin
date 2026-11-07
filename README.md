@@ -3318,7 +3318,9 @@ steps and one more for each index whose held settings differ from a new
 index's (see below): it creates the table anew from the declaration under a
 scratch name (`__ptah_rebuild_<table>`), copies the rows with one `INSERT ...
 SELECT`, renames the old table out of the way (`__ptah_replaced_<table>`),
-renames the new one into its place, and drops the old one. The host's steps for the table
+renames the new one into its place, and drops the old one. Where a table the
+declaration holds or the plan drops already has a scratch name, the rebuild
+takes the next free one (`__ptah_rebuild_<table>_1` and on). The host's steps for the table
 are rewritten to the rename that puts the new table in place. A REBUILD the
 host proposes is planned the same way, and refused like any other rebuild
 without the policy.
