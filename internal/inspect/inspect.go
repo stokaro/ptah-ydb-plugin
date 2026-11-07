@@ -11,6 +11,7 @@ import (
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
@@ -46,8 +47,11 @@ const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
 type ColumnTables func(ctx context.Context, absolute string) ([]byte, error)
 
 // Read captures exact common column fields and native property facets. A
-// partial traversal, unmodeled object, or incomplete native description returns
-// no snapshot. Filtered schemas are exact directories, not recursive prefixes.
+// partial traversal, an object of a kind it does not know, or an incomplete
+// native description returns no snapshot. A column store and a sequence, which
+// Ptah does not model, and a queue of the older persistent queue kind are
+// recorded rather than read, and the read goes on. Filtered schemas are exact
+// directories, not recursive prefixes.
 //
 // columns reads the monitoring description a column table needs beside the
 // table service's: the table service leaves out the shard count and the local
@@ -167,6 +171,9 @@ type traversal struct {
 	// replicas it cannot name.
 	replicas           []*protocol.Reference
 	replicationsUnread bool
+	// unmodeled are the objects of a kind Ptah does not model the read
+	// leaves out, reported as unread tables where the host takes them.
+	unmodeled []*protocol.UnreadTable
 	// nested are the roots of the nested databases the walk left out,
 	// relative to database; see leftOut.
 	nested []string
@@ -351,8 +358,15 @@ func (t *traversal) entry(ctx context.Context, selected, name string, kind Ydb_S
 		}
 		t.common.primaryKey(table, key)
 		t.addColumnTable(table)
-	case Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP:
+	case Ydb_Scheme.Entry_TOPIC:
 		return t.readTopic(ctx, selected, name)
+	case Ydb_Scheme.Entry_PERS_QUEUE_GROUP:
+		// A queue of the older persistent queue kind is recorded, not
+		// read, as the host's embedded engine recorded it: no statement
+		// Ptah writes creates one, and read as a topic it would be
+		// altered or dropped as one. A plan neither keeps nor drops it.
+		t.unread(&protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: schema.TopicProperties, Name: name},
+			protocol.ModelKnowledge_UNINSPECTED, queueGroupReason)
 	case Ydb_Scheme.Entry_REPLICATION, Ydb_Scheme.Entry_TRANSFER:
 		return t.readReplication(ctx, selected, name, kind)
 	case Ydb_Scheme.Entry_COORDINATION_NODE:
@@ -367,10 +381,60 @@ func (t *traversal) entry(ctx context.Context, selected, name string, kind Ydb_S
 		fallthrough
 	case Ydb_Scheme.Entry_SECRET, Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
 		return t.readDescribed(ctx, selected, name, kind)
+	case Ydb_Scheme.Entry_COLUMN_STORE, Ydb_Scheme.Entry_SEQUENCE:
+		// An object Ptah does not model is recorded and the read goes
+		// on, as the host's embedded engine recorded it as not described.
+		// It holds its path, so a table declared there could not be
+		// created: a host that takes unread tables is told so.
+		t.unmodeled = append(t.unmodeled, &protocol.UnreadTable{Table: &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name},
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: unmodeledReason(selected, name, kind)}})
+	case Ydb_Scheme.Entry_SYS_VIEW:
+		// A system view outside a dot-directory belongs to the server
+		// too, as the host's embedded engine left it out.
 	default:
-		return fmt.Errorf("YDB object kind %s needs an extracted reader", kind)
+		return fmt.Errorf("YDB object %s is a %s, which Ptah does not read; remove it from the database or read a schema that does not hold it",
+			path.Join(t.database, selected, name), entryTypeName(kind))
 	}
 	return nil
+}
+
+// queueGroupReason is why a read records a queue of the older persistent
+// queue kind rather than reading it, in the host's words.
+const queueGroupReason = "a persistent queue group, which Ptah does not read"
+
+// unread records the object ref as one the read lists and does not describe,
+// with knowledge in state for reason.
+func (t *traversal) unread(ref *protocol.Reference, state protocol.ModelKnowledge_State, reason string) {
+	t.result.Coverage.Subjects = append(t.result.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+		Kind: ref.Kind, Subject: proto.CloneOf(ref), NormalizedSubject: proto.CloneOf(ref),
+		Knowledge: &protocol.ModelKnowledge{State: state, Reason: reason},
+	})
+}
+
+// unmodeledReason says why a read leaves out the object name of the directory
+// selected, an entry of a kind Ptah does not model.
+func unmodeledReason(selected, name string, kind Ydb_Scheme.Entry_Type) string {
+	if selected != "" {
+		name = selected + "." + name
+	}
+	what := "a column store"
+	if kind == Ydb_Scheme.Entry_SEQUENCE {
+		what = "a sequence"
+	}
+	reason := fmt.Sprintf("%s is %s, which Ptah does not read", name, what)
+	if len(reason) > maxReasonBytes {
+		reason = fmt.Sprintf("it is %s, which Ptah does not read", what)
+	}
+	return reason
+}
+
+// entryTypeName names a scheme entry type, including one the pinned protocol
+// buffers do not know.
+func entryTypeName(kind Ydb_Scheme.Entry_Type) string {
+	if name, known := Ydb_Scheme.Entry_Type_name[int32(kind)]; known {
+		return name
+	}
+	return fmt.Sprintf("scheme entry of type %d", int32(kind))
 }
 
 // readStreamingQuery reads the stored settings of a listed streaming query. A
@@ -501,7 +565,9 @@ func (t *traversal) readReplication(ctx context.Context, selected, name string, 
 
 // readDescribed reads a listed secret, view, external data source, external
 // table or coordination node. A view goes to the common objects when the read
-// takes common views, and anything else is a native object.
+// takes common views, and anything else is a native object. A coordination
+// node whose description holds what the provider does not model is recorded
+// as unrepresentable, and the read goes on.
 func (t *traversal) readDescribed(ctx context.Context, selected, name string, entryType Ydb_Scheme.Entry_Type) error {
 	kind, described, err := t.source.readObject(ctx, path.Join(t.database, selected, name), entryType)
 	if err != nil {
@@ -512,6 +578,12 @@ func (t *traversal) readDescribed(ctx context.Context, selected, name string, en
 		return nil
 	}
 	owner := &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: kind, Name: name}
+	if node, isNode := described.(*Ydb_Coordination.DescribeNodeResult); isNode {
+		if reason := unrepresentableNode(node); reason != "" {
+			t.unread(owner, protocol.ModelKnowledge_UNREPRESENTABLE, fmt.Sprintf("YDB coordination node %s: %s", path.Join(t.database, selected, name), reason))
+			return nil
+		}
+	}
 	value, err := schema.CaptureObject(owner, described)
 	if err != nil {
 		return err
@@ -545,12 +617,17 @@ func (t *traversal) addColumnTable(table *protocol.Table) {
 	}
 }
 
-// unreadTables names the replica tables the read left out that no replication
-// writes, when the read is asked for them: against the targets of the
-// replications the snapshot holds for a read of the whole database, and of
-// every replication of the database for a selected read.
+// unreadTables names, when the read is asked for them, the objects of a kind
+// Ptah does not model the read left out, and the replica tables it left out
+// that no replication writes: against the targets of the replications the
+// snapshot holds for a read of the whole database, and of every replication
+// of the database for a selected read.
 func (t *traversal) unreadTables(ctx context.Context, selectors []string) error {
-	if !t.common.UnreadTables || len(t.replicas) == 0 {
+	if !t.common.UnreadTables {
+		return nil
+	}
+	defer func() { t.result.UnreadTables = append(t.result.UnreadTables, t.unmodeled...) }()
+	if len(t.replicas) == 0 {
 		return nil
 	}
 	targets, complete := []string(nil), !t.replicationsUnread

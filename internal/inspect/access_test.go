@@ -237,3 +237,67 @@ func TestAccessOfANestedDatabase_HappyPath(t *testing.T) {
 	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
 	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Object.Kind, qt.Equals, "database")
 }
+
+// accessPool is a snapshot holding the resource pool named, as a read of the
+// workload records one.
+func accessPool(name string) *protocol.Schema {
+	snapshot := accessSnapshot()
+	snapshot.NativeObjects = []*protocol.Envelope{{Kind: schema.ResourcePoolProperties,
+		Owner: &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Database: "/local", Name: name}}}
+	return snapshot
+}
+
+// describedOr answers the paths entries holds and every other one with
+// failure, recording each path it is asked about in asked.
+func describedOr(entries map[string]*Ydb_Scheme.Entry, failure error, asked *[]string) func(context.Context, string) (*Ydb_Scheme.Entry, error) {
+	return func(_ context.Context, absolute string) (*Ydb_Scheme.Entry, error) {
+		*asked = append(*asked, absolute)
+		entry, found := entries[absolute]
+		if !found {
+			return nil, failure
+		}
+		return entry, nil
+	}
+}
+
+// A pool whose scheme object the account cannot see fails the access read, and
+// so does the pool default when its request fails for another reason; only
+// the default pool's scheme object, which YDB creates after it lists the pool,
+// may be missing. Ported from the host's
+// TestReadSchema_ResourcePoolPermissions_FailurePath.
+func TestAccessOfAPoolItCannotRead_FailurePath(t *testing.T) {
+	reset := errors.New("connection reset")
+	for _, test := range []struct {
+		name, pool, path string
+		answer           error
+	}{
+		{name: "a pool the path does not reach", pool: "batch", path: "/local/.metadata/workload_manager/pools/batch", answer: nativeapi.ErrAccessPathNotVisible},
+		{name: "the pool default unreachable for another reason", pool: "default", path: "/local/.metadata/workload_manager/pools/default", answer: reset},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			snapshot := accessPool(test.pool)
+			before := proto.CloneOf(snapshot)
+			var asked []string
+			err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope,
+				describedOr(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}, test.answer, &asked),
+				func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+			c.Assert(err, qt.ErrorIs, test.answer)
+			c.Assert(proto.Equal(snapshot, before), qt.IsTrue)
+			c.Assert(asked, qt.Contains, test.path)
+		})
+	}
+}
+
+// The pool default whose scheme object YDB has not created yet describes no
+// owner and no grant, and the read goes on: the control for the refusals
+// above.
+func TestAccessOfTheDefaultPoolBeforeItsObject_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	snapshot := accessPool("default")
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
+		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+	c.Assert(err, qt.IsNil)
+	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
+	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Object.Kind, qt.Equals, "database")
+}

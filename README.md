@@ -1277,8 +1277,18 @@ No changes planned, but 1 comparison limit remains unresolved.
 
 Name the directory with `--schemas` to create the object.
 
-Unknown native fields and enum values are refused before JSON conversion.
-Shared topic consumers and unextracted native object kinds refuse inspection.
+Unknown native fields and enum values are refused before JSON conversion,
+except where the host's embedded engine recorded the object and read the rest:
+a coordination node whose description holds a mode or a field the provider
+does not model is reported unrepresentable, and so is a resource pool or a
+classifier holding a setting outside what YDB keeps. A column store and a
+sequence, which the provider does not model, are left out and named in
+`unread_tables` where the host lists `schema.unread-tables`. A queue of the
+older persistent queue kind (`PERS_QUEUE_GROUP`) is reported uninspected, so a
+plan neither keeps nor drops it, and a system view outside a dot-directory is
+the server's and is left out. Any other kind of scheme entry refuses
+inspection, naming the object and its kind. Shared topic consumers refuse
+inspection.
 A table an async replication writes is left out of the tables, and the
 replication's items name it (see [Async replications and
 transfers](#async-replications-and-transfers)). Right after `CREATE ASYNC
