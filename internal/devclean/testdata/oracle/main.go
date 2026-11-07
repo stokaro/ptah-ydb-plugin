@@ -88,14 +88,24 @@ func newFake(in input, realm string) (*fake, error) {
 	for dir, entries := range in.Tree {
 		f.tree[dir] = []*Ydb_Scheme.Entry{}
 		for _, e := range entries {
-			kind, known := Ydb_Scheme.Entry_Type_value[e.Type]
+			kind, known := entryType(e.Type)
 			if !known {
 				return nil, fmt.Errorf("unknown entry type %q", e.Type)
 			}
-			f.tree[dir] = append(f.tree[dir], &Ydb_Scheme.Entry{Name: e.Name, Type: Ydb_Scheme.Entry_Type(kind)})
+			f.tree[dir] = append(f.tree[dir], &Ydb_Scheme.Entry{Name: e.Name, Type: kind})
 		}
 	}
 	return f, nil
+}
+
+// entryType reads an entry type by its name: a name the pinned YDB bindings
+// give, or STREAMING_QUERY, which they do not name.
+func entryType(name string) (Ydb_Scheme.Entry_Type, bool) {
+	if name == "STREAMING_QUERY" {
+		return ydbschema.EntryStreamingQuery, true
+	}
+	kind, known := Ydb_Scheme.Entry_Type_value[name]
+	return Ydb_Scheme.Entry_Type(kind), known
 }
 
 func (f *fake) ListDirectory(_ context.Context, dir string) ([]*Ydb_Scheme.Entry, error) {

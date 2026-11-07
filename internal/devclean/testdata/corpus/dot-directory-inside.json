@@ -1,0 +1,28 @@
+{
+  "database": "/local",
+  "realm": "",
+  "tree": {
+    "/local": [
+      {
+        "name": "scratch",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/scratch": [
+      {
+        "name": "t",
+        "type": "TABLE"
+      },
+      {
+        "name": ".tmp",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/scratch/.tmp": [
+      {
+        "name": "x",
+        "type": "TABLE"
+      }
+    ]
+  }
+}

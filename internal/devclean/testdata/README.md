@@ -1,7 +1,8 @@
 # Dev cleanup corpus
 
 Each `corpus/<case>.json` is a scheme tree: the entries of each absolute
-directory, the database, the realm the cleanup treats as its root (empty for
+directory, each typed by its name in the YDB bindings or as `STREAMING_QUERY`,
+which they do not name, the database, the realm the cleanup treats as its root (empty for
 the database itself), and for some cases a realm to remove through the
 database. `corpus/<case>.golden.json` holds what the host's embedded YDB engine
 did with the tree (`internal/dbschema/ydb`): the objects `Writer.ResetObjects`

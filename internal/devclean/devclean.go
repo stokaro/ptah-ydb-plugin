@@ -42,8 +42,10 @@ const RealmDirectory = "ptah_dev"
 const LockNode = "ptah_locks"
 
 // EntryStreamingQuery is the scheme entry type of a streaming query, which
-// the pinned YDB bindings do not name.
-const EntryStreamingQuery Ydb_Scheme.Entry_Type = 24
+// the pinned YDB bindings do not name. The host measured it on 26.2.1.14:
+// ListDirectory reports a streaming query, at the root and in a directory
+// alike, as type 26. Type 24 is a system view.
+const EntryStreamingQuery Ydb_Scheme.Entry_Type = 26
 
 // Scheme is what the walk needs of YDB's scheme service. Paths are absolute.
 type Scheme interface {
