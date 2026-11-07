@@ -16,6 +16,7 @@ import (
 // TestLoadAll_AYQLFileChangesWhatTheLoadDeclares through schema render.
 func TestHostYQLSourceListCarriesAChangefeed_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, "stokaro/ptah#5743, which reads a provider's SQL source list as one load")
 	root := c.TempDir()
 	dir := writeFiles(c, filepath.Join(root, "tables"), map[string]string{
 		"001.sql": "CREATE TABLE users (id Int64 NOT NULL, PRIMARY KEY (id));\n",

@@ -35,6 +35,10 @@ func TestHostDiffsAYQLSchemaAgainstItself_HappyPath(t *testing.T) {
 	c.Assert(out, qt.Equals, "Schemas are synced, no changes to be made.\n")
 }
 
+// selfDiffIndexChange is the host change a document diffed against itself
+// needs once it declares a global index.
+const selfDiffIndexChange = "stokaro/ptah#5742, which describes a converted document's indexes as the provider prepares them"
+
 // The host's TestCompare_YDBUniqueConstraintIsItsIndex and
 // TestCompareSchemas_YDBSelfCompareReportsNothing exercise the file-to-file
 // path. Every declared global index must be described as the provider would
@@ -43,6 +47,7 @@ func TestHostDiffsAYQLSchemaAgainstItself_HappyPath(t *testing.T) {
 // drops and additions, or refuses to add the unique index on older servers.
 func TestHostDiffsYQLIndexesAgainstThemselves_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, selfDiffIndexChange)
 	realm := newCLIRealm(c)
 	const schema = "CREATE TABLE `accounts` (id Int64 NOT NULL, email Utf8, login Utf8, balance Decimal(22,9), nickname Utf8, PRIMARY KEY (id), " +
 		"INDEX by_login GLOBAL ON (login), INDEX by_nickname GLOBAL SYNC ON (nickname), " +
@@ -61,6 +66,7 @@ func TestHostDiffsYQLIndexesAgainstThemselves_HappyPath(t *testing.T) {
 // this test covers both type conversion and the prepared index kinds.
 func TestHostDiffsYDBTypesAndIndexesAgainstThemselves_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, selfDiffIndexChange)
 	realm := newCLIRealm(c)
 	const schema = "tables:\n  accounts:\n    columns:\n" +
 		"      id: {type: BIGINT, primary: true}\n" +
