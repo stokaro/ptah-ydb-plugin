@@ -7,6 +7,7 @@ package workloadcompare
 
 import (
 	"context"
+	"fmt"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
@@ -49,7 +50,23 @@ func PoolFamily() objectcompare.Family {
 		return workload.PoolsEqual(after, before), nil
 	}
 	family.Change = schema.CaptureResourcePoolChange
+	family.UndeclaredRequired = undeclaredPool
 	return family
+}
+
+// undeclaredPool refuses a declared classifier that names a pool the schema
+// does not declare, other than the pool default, which YDB creates with the
+// database, whatever the database holds. YDB takes such a classifier and runs
+// its member's queries in the pool default without a word, so a misspelled
+// pool routes nothing; the host's embedded engine refused the schema in
+// these words, on its render and its plan alike.
+func undeclaredPool(required *protocol.ComparisonIdentity) string {
+	name := required.GetName().GetSource()
+	if name == workload.DefaultPool {
+		return ""
+	}
+	return fmt.Sprintf("a declared resource pool classifier names resource pool %q, which is not declared; "+
+		"YDB runs the queries of a classifier whose pool does not exist in the pool %q without a word", name, workload.DefaultPool)
 }
 
 // ClassifierFamily is the classifier's part of a comparison.
