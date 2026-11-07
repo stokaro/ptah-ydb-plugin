@@ -296,6 +296,13 @@ func applyColumnSettings(subject string, column *protocol.DeclaredColumn, settin
 	if err := only(settings, "family", "literal", "sequence", "drop_default"); err != nil {
 		return err
 	}
+	literal := proto.CloneOf(settings.GetLiteral())
+	// DescribeTable reports a bare typed literal even when the column itself
+	// is optional. Compare and write the default in the column's type, as the
+	// common column's default does.
+	if literal != nil && result.Type.GetOptionalType() != nil && proto.Equal(literal.Type, result.Type.GetOptionalType().GetItem()) {
+		literal.Type = proto.CloneOf(result.Type)
+	}
 	// A declaration converted from a read states a column's default twice,
 	// as the common column's default and as the native one, and the two must
 	// agree. Any other declaration states a default once.
@@ -304,18 +311,18 @@ func applyColumnSettings(subject string, column *protocol.DeclaredColumn, settin
 		if err := sameSerial(subject, column.Name, stored, sequence, settings.GetSequence()); err != nil {
 			return err
 		}
-	case settings.GetLiteral() != nil && proto.Equal(settings.GetLiteral(), result.GetFromLiteral()):
+	case literal != nil && proto.Equal(literal, result.GetFromLiteral()):
 	case settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil):
 		return unsupported("a column default must have one declaration, common or native")
 	}
 	result.Family = settings.Family
-	if literal := settings.GetLiteral(); literal != nil {
+	if literal != nil {
 		// A literal is a typed native value, never SQL text. Type conversion
 		// belongs to the server; require an exact type to avoid implicit casts.
 		if !proto.Equal(literal.Type, result.Type) {
 			return fmt.Errorf("YDB literal default type differs from the column type")
 		}
-		result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: proto.CloneOf(literal)}
+		result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: literal}
 	}
 	return nil
 }
