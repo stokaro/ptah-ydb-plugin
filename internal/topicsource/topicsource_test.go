@@ -3,6 +3,7 @@ package topicsource_test
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -113,6 +114,48 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			values, err := topicsource.Decode(context.Background(), yamlDocument(test.value))
 			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(values, qt.IsNil)
+		})
+	}
+}
+
+// A setting a topic declaration refuses says what the setting takes: a count
+// that is a whole number, a percentage from 1 to 100, a period of whole
+// positive seconds, each codec once, and an auto-partitioning setting only
+// beside a strategy that enables it. Ported from the host's ydbtopic
+// TestParseTopic_FailurePath.
+func TestDecodeYAMLRefusalSaysWhatTheSettingTakes_FailurePath(t *testing.T) {
+	const shaping = "it shapes auto-partitioning, which this topic does not enable; declare " +
+		"auto_partitioning_strategy as scale_up, scale_up_and_down or paused"
+	tests := []struct {
+		name     string
+		settings []*protocol.SourceEntry
+		want     string
+	}{
+		{name: "a count that is no number", settings: []*protocol.SourceEntry{entry("partition_write_burst_bytes", text("1MB"))},
+			want: `invalid partition_write_burst_bytes "1MB": takes a whole number above zero`},
+		{name: "a percentage over 100", settings: []*protocol.SourceEntry{entry("auto_partitioning_strategy", text("scale_up")),
+			entry("auto_partitioning_up_utilization_percent", text("101"))},
+			want: `invalid auto_partitioning_up_utilization_percent "101": takes a whole percentage from 1 to 100`},
+		{name: "a fraction of a second", settings: []*protocol.SourceEntry{entry("retention_period", text("PT1.5S"))},
+			want: `invalid retention_period "PT1.5S": YDB keeps whole seconds, and drops the fraction of this one`},
+		{name: "no time at all", settings: []*protocol.SourceEntry{entry("retention_period", text("PT0S"))},
+			want: `invalid retention_period "PT0S": is no positive time, and YDB takes only a positive interval`},
+		{name: "a codec named twice", settings: []*protocol.SourceEntry{entry("supported_codecs", text("raw,RAW"))},
+			want: `invalid supported_codecs "raw,RAW": names codec raw twice`},
+		{name: "a threshold with the strategy disabled", settings: []*protocol.SourceEntry{entry("auto_partitioning_strategy", text("disabled")),
+			entry("auto_partitioning_down_utilization_percent", text("10"))},
+			want: "invalid auto_partitioning_down_utilization_percent: " + shaping},
+		{name: "a window without a strategy", settings: []*protocol.SourceEntry{entry("auto_partitioning_stabilization_window", text("PT1M"))},
+			want: "invalid auto_partitioning_stabilization_window: " + shaping},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			values, err := topicsource.Decode(context.Background(), yamlDocument(mapping(entry("events", mapping(test.settings...)))))
+
+			c.Assert(err, qt.ErrorMatches, regexp.QuoteMeta(`topic "events": `+test.want))
 			c.Assert(values, qt.IsNil)
 		})
 	}

@@ -2,6 +2,7 @@ package backend_test
 
 import (
 	"context"
+	"regexp"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -160,4 +161,31 @@ func TestSourceDecodeRetainsPendingAbsoluteDependencies(t *testing.T) {
 	normalized := normalizeContextValue(c, bound, protocol.ValueInput_DESIRED)
 	c.Assert(normalized.RequiresDatabaseContext, qt.IsFalse)
 	c.Assert(normalized.RequiredObjects, qt.HasLen, 2)
+}
+
+// A source or a diff whose YDB address names no database Ptah can bind is
+// refused with what the address lacks, before anything opens: the scheme, the
+// database, a URL Ptah reads, and a realm name. Ported from the host's
+// dburlext TestRefusals, whose refusals the host now takes from
+// ResolveDatabaseContext.
+func TestDatabaseContextRefusalSaysWhatTheAddressLacks_FailurePath(t *testing.T) {
+	tests := []struct {
+		name, address, reason string
+	}{
+		{name: "another scheme", address: "postgres://host/db", reason: "YDB requires a ydb:// or ydbs:// address"},
+		{name: "no database", address: "ydb://host", reason: "YDB URL must name a database"},
+		{name: "no URL", address: "not a url", reason: "invalid YDB connection URL"},
+		{name: "a realm that is no name", address: "ydb://host/local?dev_realm=../x",
+			reason: "the dev_realm parameter is not a realm name: use 1 to 64 lowercase letters, digits and underscores"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().ResolveDatabaseContext(c.Context(), &protocol.DatabaseContextRequest{Engine: "ydb", Address: test.address})
+
+			c.Assert(err, qt.ErrorMatches, `rpc error: code = InvalidArgument desc = `+regexp.QuoteMeta(test.reason))
+			c.Assert(result, qt.IsNil)
+		})
+	}
 }

@@ -234,3 +234,42 @@ func TestStatementsRefuseOversizedMetadata(t *testing.T) {
 	c.Assert(result, qt.IsNil)
 	c.Assert(probe.closes.Load(), qt.Equals, int32(1))
 }
+
+// A comment statement is refused before anything reaches YDB: with bound
+// arguments, inside a transaction, as a read-only query, and with a comment it
+// cannot read. Ported from the host's
+// TestBindingConnector_FailurePath_CommentStatements.
+func TestStatementsRefuseACommentStatementBeforeRunning(t *testing.T) {
+	tests := []struct {
+		name, text, transaction string
+		arguments               []*protocol.DataValue
+		access                  protocol.RunStatementRequest_Access
+		refusal                 string
+	}{
+		{name: "with arguments", text: "COMMENT ON TABLE t IS 'x'", access: protocol.RunStatementRequest_READ_WRITE,
+			arguments: []*protocol.DataValue{{Value: &protocol.DataValue_Int64Value{Int64Value: 1}}},
+			refusal:   "a comment or coordination statement runs without a transaction or bound arguments"},
+		{name: "inside a transaction", text: "COMMENT ON TABLE t IS 'x'", access: protocol.RunStatementRequest_READ_WRITE, transaction: "tx",
+			refusal: "a comment or coordination statement runs without a transaction or bound arguments"},
+		{name: "as a read-only query", text: "COMMENT ON TABLE t IS 'x'", access: protocol.RunStatementRequest_READ_ONLY,
+			refusal: "a YDB statement is proved read-only only when it is one SELECT"},
+		{name: "with a comment that is not a string", text: "COMMENT ON TABLE t IS 5", access: protocol.RunStatementRequest_READ_WRITE,
+			refusal: `invalid comment statement: COMMENT ON TABLE: the comment 5 is not a string Ptah reads; write it in quotes, with the escapes \\, \', \", \n, \r, \t and \xHH`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			probe := &statementProbe{}
+			p := statementProvider(c, probe)
+			request := statementRequest()
+			request.Sql, request.Access, request.TransactionId, request.Arguments = test.text, test.access, test.transaction, test.arguments
+
+			result, err := p.RunStatement(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Outcome, qt.Equals, protocol.StatementResult_REFUSED)
+			c.Assert(result.Refusal, qt.Equals, test.refusal)
+			c.Assert(probe.queries.Load(), qt.Equals, int32(0))
+		})
+	}
+}
