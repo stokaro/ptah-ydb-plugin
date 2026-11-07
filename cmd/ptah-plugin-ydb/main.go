@@ -32,6 +32,7 @@ func main() {
 		ValueNormalizer: owner,
 		ValueConverter:  owner,
 		ModelComparer:   owner,
+		ViewComparer:    owner,
 		FeaturePlanner:  owner,
 		Declarations:    owner,
 		TablePreparer:   owner,

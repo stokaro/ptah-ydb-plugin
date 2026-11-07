@@ -273,6 +273,10 @@ func providerFeatures() []string {
 		// start and increment an offline creation cannot set; see
 		// renderOmissions.
 		provider.RenderOmissionsFeature,
+		// A view query is compared in the form YDB stores it, keeping case,
+		// in place of the host's reading, which folds it; see
+		// CompareViewQueries.
+		provider.ViewQueryEquivalenceFeature,
 	}
 }
 

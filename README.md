@@ -739,6 +739,15 @@ Views and comments use these shared stages:
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
 | PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes; a comment on the table or a column also skips a step that changes only an index |
 
+Under `schema.view-query-equivalence` (contract 25.33, ADR 0108 in Ptah) the
+host asks the provider whether the query a declared view states and the query
+the held view keeps are one query, and compares no YDB view query by its own
+reading, which folds case. The provider reads both into the server's form and
+compares them as they stand, as the host's embedded engine did: YDB names keep
+case, so a query that changes only the case of a name, of a keyword or inside a
+string is another query, and the plan replaces the view; a comment, a line
+break or a terminator the server drops changes nothing.
+
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
 `> >`; `$x` is `$ x`; a number keeps its exponent and its suffix; a quoted
