@@ -45,7 +45,10 @@ func TestHostRollsBackAColumnDrop_HappyPath(t *testing.T) {
 			after := table + columns
 			hostRun(c, directory, "the table", before, `(?s).*Schema apply completed successfully.*`)
 
-			migrations, up, down := hostGenerate(c, directory, "yaml", after)
+			migrations, generated, generateErr := hostGenerateOutput(c, directory, "yaml", after)
+			skipWithoutColumnDropReversal(c, generated)
+			c.Assert(generateErr, qt.IsNil, qt.Commentf("migrations generate:\n%s", generated))
+			up, down := generatedPair(c, migrations)
 			applied, upErr := hostMigrate(c, directory, migrations, "migrations", "up", "--allow-destructive")
 			settled := hostPlanned(c, directory, "yaml", after)
 			rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
@@ -59,5 +62,16 @@ func TestHostRollsBackAColumnDrop_HappyPath(t *testing.T) {
 			c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s\n%s", rolledBack, down))
 			c.Assert(hostPlanned(c, directory, "yaml", before), qt.HasLen, 0)
 		})
+	}
+}
+
+// skipWithoutColumnDropReversal skips on a host whose reverse planning
+// refuses a column drop that a provider plans (stokaro/ptah#5720), such as
+// Ptah v0.22.1. It skips on that refusal alone, so any other answer still
+// fails the test.
+func skipWithoutColumnDropReversal(c *qt.C, output string) {
+	c.Helper()
+	if strings.Contains(output, "error planning reverse migration: invalid feature value: model value is unresolved or belongs to another contract") {
+		c.Skip("the selected host refuses to reverse a column drop a provider plans (stokaro/ptah#5720)")
 	}
 }
