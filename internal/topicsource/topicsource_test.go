@@ -108,6 +108,11 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 			`topic "events", consumer "c": invalid availability_period "PT1H": .*`},
 		{"two names for one topic", mapping(entry("a", mapping(entry("name", text("same")))), entry("b", mapping(entry("name", text("same"))))), `topic same is declared twice`},
 		{"a slash in a name", mapping(entry("events", mapping(entry("name", text("a/b"))))), `topic "events": invalid name "a/b": holds a slash; name the directory with schema`},
+		// Ported from the host's TestValidateIdentity_FailurePath and
+		// TestParseConsumer_FailurePath.
+		{"an empty name", mapping(entry("events", mapping(entry("name", text(" "))))), `.*invalid name: a topic needs a name`},
+		{"a consumer with a slash in its name", mapping(entry("events", mapping(entry("consumers", mapping(entry("a/b", mapping())))))),
+			`topic "events", consumer "a/b": invalid name "a/b": a consumer's name cannot hold a slash`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -158,6 +163,19 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 		{"a topic without a name", [][2]any{{topicsource.DirectiveTopic, map[string]string{"schema": "app"}}}, `missing required annotation attribute "name"`},
 		{"a topic declared twice", [][2]any{topic, topic}, `topic events is declared twice`},
 		{"an absolute directory", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": "events", "schema": "/local/app"}}}, `invalid schema "/local/app": starts with a slash; .*`},
+		// Ported from the host's TestValidateIdentity_FailurePath,
+		// TestDeclare_FailurePath and TestCheckDirectory_FailurePath: a topic's
+		// name is one path segment, and its directory a clean path relative
+		// to the database root.
+		{"a parent segment as the name", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": ".."}}}, `invalid name "\.\.": is not a path segment`},
+		{"an unclean directory", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": "events", "schema": "app//queues"}}},
+			`invalid schema "app//queues": is not a directory path relative to the database root; write it without a trailing slash or an empty, \. or \.\. segment`},
+		{"a trailing slash", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": "events", "schema": "app/"}}},
+			`invalid schema "app/": is not a directory path relative to the database root; .*`},
+		{"a parent directory", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": "events", "schema": "../app"}}},
+			`invalid schema "\.\./app": is not a directory path relative to the database root; .*`},
+		{"a consumer of a topic in an unclean directory", [][2]any{topic, {topicsource.DirectiveConsumer, map[string]string{"name": "c", "topic": "events", "schema": "app//queues"}}},
+			`invalid schema "app//queues": is not a directory path relative to the database root; .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
