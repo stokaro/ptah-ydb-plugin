@@ -11,6 +11,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -109,12 +110,33 @@ func TestChangefeedOperation_FailurePath(t *testing.T) {
 	replicated.Description.Attributes = map[string]string{"__async_replication": `{"path":"/local/repl/records","id":"1","supports_topic_autopartitioning":false}`}
 	importantFor := declaredFeed(updates, "c")
 	importantFor.Topic.Consumers[0].Important, importantFor.Topic.Consumers[0].AvailabilityPeriod = true, durationpb.New(time.Hour)
+	// Values a declared changefeed cannot carry, each refused at the
+	// operation's boundary. Ported from the host's
+	// TestCodecs_RefuseMalformedAndLossyValues.
+	lossyRetention := declaredFeed(updates)
+	lossyRetention.Topic.RetentionPeriod = durationpb.New(1500 * time.Millisecond)
+	lossyReadFrom := declaredFeed(updates, "worker")
+	lossyReadFrom.Topic.Consumers[0].ReadFrom = timestamppb.New(time.Date(2026, time.January, 1, 0, 0, 0, 5e8, time.UTC))
+	unknownCodec := declaredFeed(updates, "worker")
+	unknownCodec.Topic.Consumers[0].SupportedCodecs = &Ydb_Topic.SupportedCodecs{Codecs: []int32{99}}
 	for _, test := range []struct {
 		name    string
 		owner   *protocol.Reference
 		changes []changefeeds.Change
 		wantErr string
 	}{
+		{"a nested name", tableOwner(), []changefeeds.Change{{Name: "nested/name", After: named("nested/name", declaredFeed(updates))}},
+			`invalid or duplicate YDB changefeed name`},
+		{"a name that is not UTF-8", tableOwner(), []changefeeds.Change{{Name: "\xff", After: named("\xff", declaredFeed(updates))}},
+			`.*contains invalid UTF-8`},
+		{"a retention with a fraction of a second", tableOwner(), []changefeeds.Change{{Name: "f", After: lossyRetention}},
+			`changefeed "f": its topic's retention period is 1.5s, which is not a whole number of seconds a declaration can hold`},
+		{"a consumer read_from with a fraction of a second", tableOwner(), []changefeeds.Change{{Name: "f", After: lossyReadFrom}},
+			`changefeed "f": consumer "worker": its read_from 2026-01-01T00:00:00.5Z is not a whole second`},
+		{"a codec Ptah does not declare", tableOwner(), []changefeeds.Change{{Name: "f", After: unknownCodec}},
+			`changefeed "f": consumer "worker": its codec list names codec 99, which Ptah does not declare`},
+		{"a consumer declared twice", tableOwner(), []changefeeds.Change{{Name: "f", After: declaredFeed(updates, "worker", "worker")}},
+			`invalid or duplicate YDB topic consumer`},
 		{"no change", tableOwner(), nil, `changefeed operation requires at least one changefeed change`},
 		{"a change without an operand", tableOwner(), []changefeeds.Change{{Name: "f"}}, `changefeed operation change of "f" has no operand`},
 		{"a change without a name", tableOwner(), []changefeeds.Change{{After: declaredFeed(updates)}}, `changefeed operation requires a changefeed name`},
