@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -36,7 +38,11 @@ func TestDescriptionNamesTheBuiltinHeaderModel(t *testing.T) {
 	c := testcheck.New(t)
 	description := backend.Description()
 	var named []capturedModel
-	for _, predecessor := range description.Engines[0].ModelPredecessors {
+	builtin := slices.DeleteFunc(slices.Clone(description.Engines[0].ModelPredecessors), func(predecessor *protocol.ModelPredecessor) bool {
+		return predecessor.FormerOwner != "ptah.run/ydb"
+	})
+	c.Assert(builtin, qt.HasLen, 1)
+	for _, predecessor := range builtin {
 		c.Assert(predecessor.Kind, qt.Equals, schema.CoordinationProperties)
 		c.Assert(predecessor.Representation, qt.Equals, protocol.ValueInput_DESIRED)
 		named = append(named, capturedModel{Owner: predecessor.FormerOwner, Kind: predecessor.FormerKind, Representation: "desired",
@@ -63,4 +69,22 @@ func TestDescriptionNamesTheBuiltinHeaderModel(t *testing.T) {
 	c.Assert(provider.ValidateDescription(description, []string{provider.ModelPredecessorsFeature}), qt.IsNil)
 	negotiated := provider.NegotiatedDescription(description, nil)
 	c.Assert(negotiated.Engines[0].ModelPredecessors, qt.HasLen, 0)
+}
+
+// The provider names the identity release v0.4.0 gave its observed
+// changefeeds, whose definition gained foreign_replication: a value written
+// under it leaves the field empty, which reads as it did. The conformance
+// suite's models.recorded check reads every identity of that release.
+func TestDescriptionNamesTheFormerObservedChangefeedModel(t *testing.T) {
+	c := testcheck.New(t)
+	description := backend.Description()
+
+	own := slices.DeleteFunc(slices.Clone(description.Engines[0].ModelPredecessors), func(predecessor *protocol.ModelPredecessor) bool {
+		return predecessor.FormerOwner != schema.ProviderID
+	})
+
+	c.Assert(own, qt.CmpEquals(protocmp.Transform()), []*protocol.ModelPredecessor{{Kind: schema.ChangefeedProperties, Representation: protocol.ValueInput_OBSERVED,
+		FormerOwner: schema.ProviderID, FormerKind: schema.ChangefeedProperties, SchemaVersion: 1,
+		DefinitionSha256: "97bc12f14bcb467fb6ef25f27d8c79fb24361c9c0d91a6898ef72ee2fe3e9d11"}})
+	c.Assert(provider.ValidateDescription(description, []string{provider.ModelPredecessorsFeature, provider.OwnPredecessorsFeature}), qt.IsNil)
 }
