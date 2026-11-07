@@ -136,7 +136,9 @@ func TestCompileDeclaredIndexes_FailurePath(t *testing.T) {
 		{name: "a prefix", index: &protocol.DeclaredIndex{Name: "i", Parts: []*protocol.CapturedIndexPart{{Column: "mail", Prefix: "8"}}},
 			want: "a YDB index column has no prefix length"},
 		{name: "a condition", index: &protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}, Condition: "mail <> ''"},
-			want: "YDB table creation does not support ptah.provider.experimental.DeclaredIndex.condition"},
+			want: `index "i": YDB has no partial index`},
+		{name: "NULLS NOT DISTINCT", index: &protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}, Unique: true, NullsDistinct: new(false)},
+			want: `index "i" treats NULLs as equal; YDB has no unique_nulls_distinct_clause`},
 		// Ported from the host's TestRender_IndexPartitioning_FailurePath: a
 		// YDB global index takes no PostgreSQL storage parameter.
 		{name: "a storage parameter", index: &protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}, StorageParameters: map[string]string{"fillfactor": "70"}},
