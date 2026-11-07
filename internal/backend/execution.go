@@ -313,6 +313,8 @@ func (s *session) applyNative(ctx context.Context, native *protocol.Envelope, bi
 		return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, s.capabilities, checkLocks)
 	case tablecreate.DefaultOperationKind:
 		return nativeapi.NewColumnDefault(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
+	case tablecreate.NullabilityOperationKind:
+		return nativeapi.NewColumnNullability(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.AlterOperationKind:
 		return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.IndexSettingsOperationKind:

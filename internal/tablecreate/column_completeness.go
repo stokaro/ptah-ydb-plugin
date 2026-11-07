@@ -14,8 +14,8 @@ import (
 // completeColumnAlteration refuses a parent receipt that would acknowledge an
 // owned column change without an operation. Common steps can be absent because
 // the host delegates the complete parent definition to this planner.
-func completeColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, claims []*columnClaim, defaults []defaultStep, inventory []inventoryStep,
-	sequences []sequenceStep, caps map[string]bool) string {
+func completeColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, claims []*columnClaim, defaults []defaultStep, nullables []nullabilityStep,
+	inventory []inventoryStep, sequences []sequenceStep, caps map[string]bool) string {
 	columns, err := compileDefinitionColumns(owner, table.Desired, caps)
 	if err != nil {
 		return err.Error()
@@ -34,7 +34,8 @@ func completeColumnAlteration(owner *protocol.Reference, table *protocol.Plannin
 		if err != nil {
 			return err.Error()
 		}
-		if heldType(held) != typ || held.IsNullable == "" || (held.IsNullable == "YES") != nullable {
+		dropsNotNull := slices.ContainsFunc(nullables, func(n nullabilityStep) bool { return n.name == column.Name })
+		if heldType(held) != typ || held.IsNullable == "" || ((held.IsNullable == "YES") != nullable && !dropsNotNull) {
 			return fmt.Sprintf("Column %q definition change requires an owned column operation", column.Name)
 		}
 		var literal string

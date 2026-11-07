@@ -277,7 +277,7 @@ func (p *planner) planTableAlteration(i int, table *protocol.PlanningTable, owne
 	}
 	if columnPlan.columnTable {
 		if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
-			if reason := completeColumnAlteration(owner, table, nil, nil, nil, nil, request.Capabilities); reason != "" {
+			if reason := completeColumnAlteration(owner, table, nil, nil, nil, nil, nil, request.Capabilities); reason != "" {
 				return refused(i, reason), nil
 			}
 		}
@@ -386,9 +386,9 @@ func (p *planner) planAlterationColumns(owner *protocol.Reference, table *protoc
 	return nil, nil
 }
 
-// planColumnFeature plans the column inventory, the default changes and the
-// sequence changes of the table item alters, and holds them, with the claims,
-// to a complete column alteration.
+// planColumnFeature plans the column inventory, the default changes, the
+// sequence changes and the DROP NOT NULL changes of the table item alters, and
+// holds them, with the claims, to a complete column alteration.
 func (p *planner) planColumnFeature(owner *protocol.Reference, table *protocol.PlanningTable, item *alteration) (*protocol.PlannedFeatures, error) {
 	capabilities := p.request.Capabilities
 	var reason string
@@ -414,7 +414,14 @@ func (p *planner) planColumnFeature(owner *protocol.Reference, table *protocol.P
 	if reason != "" {
 		return refused(item.index, reason), nil
 	}
-	if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, item.inventory, item.sequences, capabilities); reason != "" {
+	item.nullables, reason, err = planNullability(owner, table, capabilities)
+	if err != nil {
+		return nil, err
+	}
+	if reason != "" {
+		return refused(item.index, reason), nil
+	}
+	if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, item.nullables, item.inventory, item.sequences, capabilities); reason != "" {
 		return refused(item.index, reason), nil
 	}
 	return nil, nil
@@ -670,7 +677,7 @@ func (p *planner) contributeRebuilds() {
 type alterationNumbers struct {
 	families, additions, removals, ttls, partitionings int
 	indexAdditions, indexRemovals, indexRenames        int
-	defaults, inventories, sequences                   int
+	defaults, inventories, sequences, nullables        int
 }
 
 // contributeAlterations contributes the steps of the altered tables in subject
@@ -714,7 +721,7 @@ func (p *planner) contributeAlteration(item *alteration, numbers *alterationNumb
 	// its phase. A sequence through them would contradict that order and
 	// close a cycle, since the host drops an index before it adds a
 	// column, and adds a common index before a TTL changes.
-	if len(item.inventory)+len(item.defaults)+len(item.sequences) > 0 {
+	if len(item.inventory)+len(item.defaults)+len(item.nullables)+len(item.sequences) > 0 {
 		columns := slices.Concat(added, kept, dropped)
 		for n := 1; n < len(columns); n++ {
 			p.contribution.Dependencies = append(p.contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(columns[n-1]), After: proto.CloneOf(columns[n])})
@@ -765,14 +772,20 @@ func (p *planner) contributeColumnSteps(item *alteration, numbers *alterationNum
 	return added, dropped
 }
 
-// contributeKeptColumns contributes the default changes, then the sequence
-// changes, of the columns the altered table keeps, and returns their steps in
-// that order.
+// contributeKeptColumns contributes the default changes, the DROP NOT NULL
+// changes, then the sequence changes, of the columns the altered table keeps,
+// and returns their steps in that order.
 func (p *planner) contributeKeptColumns(item *alteration, numbers *alterationNumbers) []*protocol.StepIdentity {
 	var kept []*protocol.StepIdentity
 	for _, change := range item.defaults {
 		step := change.plan(item.table.Subject, numbers.defaults)
 		numbers.defaults++
+		p.contribution.Steps = append(p.contribution.Steps, step)
+		kept = append(kept, step.Id)
+	}
+	for _, change := range item.nullables {
+		step := change.plan(item.table.Subject, numbers.nullables)
+		numbers.nullables++
 		p.contribution.Steps = append(p.contribution.Steps, step)
 		kept = append(kept, step.Id)
 	}

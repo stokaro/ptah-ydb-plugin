@@ -114,6 +114,12 @@ func rowTableText(value *protocol.Envelope, database, path string) (string, erro
 			return "", err
 		}
 		return tablecreate.DefaultStatement(path, change)
+	case tablecreate.NullabilityOperationKind:
+		change, err := tablecreate.DecodeNullability(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.NullabilityStatement(path, change), nil
 	case tablecreate.AlterOperationKind:
 		alteration, err := tablecreate.DecodeAlteration(value)
 		if err != nil {
