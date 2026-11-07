@@ -24,6 +24,17 @@ import (
 // up and the down text. The generation must succeed.
 func hostGenerate(c *qt.C, selectors, format, text string, flags ...string) (migrations, up, down string) {
 	c.Helper()
+	migrations, output, err := hostGenerateOutput(c, selectors, format, text, flags...)
+	c.Assert(err, qt.IsNil, qt.Commentf("migrations generate:\n%s", output))
+	up, down = generatedPair(c, migrations)
+	return migrations, up, down
+}
+
+// hostGenerateOutput is hostGenerate without the requirement that the
+// generation succeed: it returns the directory it wrote into, what the host
+// printed and how it exited.
+func hostGenerateOutput(c *qt.C, selectors, format, text string, flags ...string) (migrations, output string, err error) {
+	c.Helper()
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql"}[format]
 	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
@@ -33,10 +44,8 @@ func hostGenerate(c *qt.C, selectors, format, text string, flags ...string) (mig
 	}
 	migrations = c.TempDir()
 	args := append([]string{"migrations", "generate", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--migrations-dir", migrations, "--schemas", selectors, "--name", "change"}, source...)
-	output, err := hostCommand(c, append(args, flags...)...)
-	c.Assert(err, qt.IsNil, qt.Commentf("migrations generate:\n%s", output))
-	up, down = generatedPair(c, migrations)
-	return migrations, up, down
+	output, err = hostCommand(c, append(args, flags...)...)
+	return migrations, output, err
 }
 
 // hostMigrate runs one versioned verb of the host over migrations, with the
