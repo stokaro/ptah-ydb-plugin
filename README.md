@@ -2828,7 +2828,14 @@ declaration of such a stream that does not retain the controller's binding, as
 a desired side converted from a read retains it; such a stream the declaration
 leaves out is kept. A binding is read only with every field, an absolute
 replica path, a canonical positive item number and no other key; any other is
-an attribute the read cannot represent.
+an attribute the read cannot represent. YDB drops a table whose stream a
+controller owns and leaves the replication failing (`Discovery for all topics
+failed`), so such a table is dropped only with a replication of this database
+the plan drops too. The table planner refuses the drop where the binding names
+a replica outside the database, in a database nested in it, or at a path where
+this database holds no table, which is a database of the same name on another
+server; the read lists the replica's path to tell. The replication planner
+refuses it where the plan keeps the replication.
 
 The table lifecycle service plans every changefeed change of a table as one
 step, outside a transaction: the host runs a step that drops an object after

@@ -137,6 +137,47 @@ func TestDropPlanRefusesATableAReplicationOfAnotherDatabaseReads(t *testing.T) {
 	}
 }
 
+// foreignFeed is a changefeed an asynchronous replication controls, which
+// writes the replica at path, with the read's reason why that replication
+// lives in another database.
+func foreignFeed(path, reason string) string {
+	return `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
+		`"attributes":{"__async_replication":"{\"path\":\"` + path + `\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},` +
+		`"topic":{"partitioningSettings":{}},"foreignReplication":"` + reason + `"}]}`
+}
+
+// A replica path below this database's root is no proof that the replication
+// lives here: where the read says why it does not, in a nested database or
+// on another server, the drop is refused as for a replica outside the root,
+// with the read's reason. Without the reason the drop is left to the planner
+// of replications, which finds none here and plans it.
+func TestDropPlanRefusesATableAReplicationTheReadPlacesElsewhere(t *testing.T) {
+	for _, test := range []struct {
+		name, replica, reason string
+	}{
+		{name: "a nested database", replica: "/local/db2/replica/records", reason: "the replica lies in the database /local/db2, which is nested in this one"},
+		{name: "another server", replica: "/local/replica/records",
+			reason: "this database holds no table at that path, so a database of the same name on another server holds the replica"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := dropRequest(c)
+			request.DatabasePath = "/local"
+			request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records,
+				observedFacet(c, schema.ChangefeedProperties, "", foreignFeed(test.replica, test.reason)))
+
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].Message, qt.Equals, `table "app/records": changefeed "updates" is a replication-managed stream that depends on this table; `+
+				`its replication's controller must release it before the table is dropped, and the replication, which writes `+
+				test.replica+`, lives in another database (`+test.reason+`); drop it there first, or keep the table`)
+		})
+	}
+}
+
 // A table a replication of the database reads is left to the planner of
 // replications, which reads whether the plan keeps the replication: a plan
 // that drops the replication drops it first, with CASCADE, which releases the

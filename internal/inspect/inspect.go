@@ -523,7 +523,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 		return err
 	}
 	table.Facets = append(table.Facets, facet)
-	feeds, err := t.source.readChangefeeds(ctx, path.Join(t.database, selected, name), description)
+	feeds, err := t.source.readChangefeeds(ctx, t.database, path.Join(t.database, selected, name), description)
 	if err != nil {
 		return err
 	}

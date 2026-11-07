@@ -126,7 +126,9 @@ func TestAReplacedIdentityCanBeDeclaredAPredecessor(t *testing.T) {
 		return model.GetRepresentation() == protocol.ValueInput_DESIRED
 	})]
 	replaced := exportedModel{kind: model.GetKind(), version: model.GetSchemaVersion(), digest: strings.Repeat("0", 64)}
-	builtin := len(engine.GetModelPredecessors())
+	builtin := len(slices.DeleteFunc(slices.Clone(engine.GetModelPredecessors()), func(predecessor *protocol.ModelPredecessor) bool {
+		return predecessor.GetFormerOwner() == schema.ProviderID
+	}))
 	engine.ModelPredecessors = append(engine.ModelPredecessors, &protocol.ModelPredecessor{Kind: replaced.kind, Representation: protocol.ValueInput_DESIRED,
 		FormerOwner: schema.ProviderID, FormerKind: replaced.kind, SchemaVersion: replaced.version, DefinitionSha256: replaced.digest})
 	hostFeatures := []string{provider.ModelPredecessorsFeature, provider.OwnPredecessorsFeature}

@@ -24,6 +24,13 @@ import (
 // the meaning is not named, and an earlier export that claims the model is
 // then refused, as it has to be.
 //
+// An observed model's earlier identity is named the same way where a value
+// written under it reads as it did: the observed changefeeds gained
+// foreign_replication, which a value without it leaves empty, as the read
+// does for a changefeed whose replication lives in this database. The
+// conformance suite's models.recorded check holds the identities of the last
+// release (integration/testdata).
+//
 // The built-in engine's HCL export records what it knows of the coordination
 // nodes in a ptah:feature-coverage header, and names no other model there. It
 // writes the same identity on 25.1.4.7 and 26.2.1.14, with and without
@@ -39,6 +46,14 @@ func modelPredecessors() []*protocol.ModelPredecessor {
 			FormerKind:       "ptah.run/ydb/coordination-node",
 			SchemaVersion:    1,
 			DefinitionSha256: "4c044f15565424fd0212b50fa50c1f760e53c228028c0f0e9ac8399ad3d2183a",
+		},
+		{
+			Kind:             schema.ChangefeedProperties,
+			Representation:   protocol.ValueInput_OBSERVED,
+			FormerOwner:      schema.ProviderID,
+			FormerKind:       schema.ChangefeedProperties,
+			SchemaVersion:    1,
+			DefinitionSha256: "97bc12f14bcb467fb6ef25f27d8c79fb24361c9c0d91a6898ef72ee2fe3e9d11",
 		},
 	}
 }

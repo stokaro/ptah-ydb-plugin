@@ -72,11 +72,14 @@ func buildDropModel() *protocol.ValueModel {
 // failed`), measured on 25.1.4.7 and 26.2.1.14. A replication lives in its
 // replicas' database, and the stream names the replica it writes: one of
 // another database is one no plan of this database drops, so the removal
-// waits until it goes, as the host's embedded engine refused it. A replica in
-// this database belongs to a replication the planner of replications reads
-// on both sides, and it refuses the drop where the plan keeps the
-// replication; a plan that drops both drops the replication first, with
-// CASCADE, which releases the stream.
+// waits until it goes, as the host's embedded engine refused it. So is one
+// whose replica path lies below this database's root where the read says why
+// the replication lives elsewhere all the same: in a database nested in this
+// one, or one of the same name on another server (see the read's
+// foreign_replication). Any other replica in this database belongs to a
+// replication the planner of replications reads on both sides, and it
+// refuses the drop where the plan keeps the replication; a plan that drops
+// both drops the replication first, with CASCADE, which releases the stream.
 func changefeedDropRefusal(request *protocol.PlanFeaturesRequest, owner *protocol.Reference, table *protocol.PlanningTable) (string, error) {
 	for _, record := range table.GetCurrent().GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() != schema.ChangefeedProperties || record.GetValue() == nil || !forThisEngine(record.GetTargets()) {
@@ -96,13 +99,18 @@ func changefeedDropRefusal(request *protocol.PlanFeaturesRequest, owner *protoco
 					"takes with it; drop the changefeed by hand first", tableLabel(owner), stream.GetDescription().GetName(), err), nil
 			}
 			replica := changefeeds.ReplicaPath(stream.GetDescription().GetAttributes())
-			if replica == "" || inDatabase(replica, request.GetDatabasePath()) {
+			foreign := stream.GetForeignReplication()
+			if replica == "" || (inDatabase(replica, request.GetDatabasePath()) && foreign == "") {
 				continue
+			}
+			where := "lives in another database"
+			if foreign != "" {
+				where += " (" + foreign + ")"
 			}
 			return fmt.Sprintf("table %q: changefeed %q is a replication-managed stream that depends on this table; "+
 				"its replication's controller must release it before the table is dropped, and the replication, "+
-				"which writes %s, lives in another database; drop it there first, or keep the table",
-				tableLabel(owner), stream.GetDescription().GetName(), replica), nil
+				"which writes %s, %s; drop it there first, or keep the table",
+				tableLabel(owner), stream.GetDescription().GetName(), replica, where), nil
 		}
 	}
 	return "", nil
