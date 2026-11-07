@@ -8,6 +8,7 @@ import (
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -65,6 +66,9 @@ func ImplementationNames(index *native.TableIndexDescription) ([]string, error) 
 }
 
 func validateIndex(index *native.TableIndexDescription) error {
+	if err := unreadIndexKind(index); err != nil {
+		return err
+	}
 	if err := Known(index); err != nil {
 		return err
 	}
@@ -85,6 +89,36 @@ func validateIndex(index *native.TableIndexDescription) error {
 	}
 	_, err := ImplementationNames(index)
 	return err
+}
+
+// unreadIndexKinds names, by its field number in YDB's index description, each
+// kind of index the description carries in a field this provider's model does
+// not hold, as the host's reader named it.
+var unreadIndexKinds = map[protowire.Number]string{
+	12: "bloom_filter index",
+	13: "bloom_ngram_filter index",
+	14: "global JSON index",
+	15: "min_max index",
+}
+
+// unreadIndexKind refuses an index whose description carries a field the
+// provider's model does not hold, naming the index and its kind, where the
+// field is one of an index kind: the refusal says which index the provider
+// does not read rather than which message it could not decode.
+func unreadIndexKind(index *native.TableIndexDescription) error {
+	unknown := index.ProtoReflect().GetUnknown()
+	if len(unknown) == 0 {
+		return nil
+	}
+	number, _, length := protowire.ConsumeTag(unknown)
+	if length < 0 {
+		return nil
+	}
+	kind, known := unreadIndexKinds[number]
+	if !known {
+		kind = "index of a kind this provider does not know"
+	}
+	return fmt.Errorf("index %q is a %s, which this provider does not read", index.GetName(), kind)
 }
 
 func componentName(name string) bool {

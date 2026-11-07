@@ -9,12 +9,41 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
+
+// unrepresentableNode says why the description of a coordination node holds
+// what the provider does not model, or "" for one it does: a field the pinned
+// protocol buffers do not hold, or a consistency or counters mode they do not
+// name. Read as a node it can represent, the node would be planned away, so
+// the read records it as unrepresentable, as the host's embedded engine did,
+// in its words.
+func unrepresentableNode(node *Ydb_Coordination.DescribeNodeResult) string {
+	config := node.GetConfig()
+	for _, message := range []protoreflect.Message{node.ProtoReflect(), config.ProtoReflect()} {
+		if !message.IsValid() || len(message.GetUnknown()) == 0 {
+			continue
+		}
+		number, _, _ := protowire.ConsumeTag(message.GetUnknown())
+		return fmt.Sprintf("its description carries field %d, which Ptah does not read", number)
+	}
+	if _, known := Ydb_Coordination.ConsistencyMode_name[int32(config.GetReadConsistencyMode())]; !known {
+		return fmt.Sprintf("its read_consistency_mode is %d, which Ptah does not know", config.GetReadConsistencyMode())
+	}
+	if _, known := Ydb_Coordination.ConsistencyMode_name[int32(config.GetAttachConsistencyMode())]; !known {
+		return fmt.Sprintf("its attach_consistency_mode is %d, which Ptah does not know", config.GetAttachConsistencyMode())
+	}
+	if _, known := Ydb_Coordination.RateLimiterCountersMode_name[int32(config.GetRateLimiterCountersMode())]; !known {
+		return fmt.Sprintf("its rate_limiter_counters_mode is %d, which Ptah does not know", config.GetRateLimiterCountersMode())
+	}
+	return ""
+}
 
 func objectIdentity(self *Ydb_Scheme.Entry, absolute string, kind Ydb_Scheme.Entry_Type) error {
 	if self.GetName() != path.Base(absolute) || self.GetType() != kind {
@@ -34,9 +63,16 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 		if err != nil {
 			return "", nil, fmt.Errorf("describe YDB coordination node: transport failed")
 		}
-		var node Ydb_Coordination.DescribeNodeResult
-		if err := nativeapi.Operation(response.GetOperation(), &node); err != nil {
+		// The description is checked for what the provider does not model
+		// once it is read (see unrepresentableNode), so that a node holding
+		// it is recorded rather than refusing the read; the capture checks
+		// the rest.
+		if err := nativeapi.Status(response.GetOperation()); err != nil {
 			return "", nil, err
+		}
+		var node Ydb_Coordination.DescribeNodeResult
+		if err := response.GetOperation().GetResult().UnmarshalTo(&node); err != nil {
+			return "", nil, fmt.Errorf("invalid YDB operation response")
 		}
 		if err := objectIdentity(node.Self, absolute, kind); err != nil {
 			return "", nil, err

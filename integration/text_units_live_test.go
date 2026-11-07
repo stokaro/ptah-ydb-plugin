@@ -390,7 +390,11 @@ func (f *coordinationText) execute(c *qt.C, transaction string, units ...*protoc
 // TestCoordinationTextUnitsSubprocess creates, changes and drops a
 // coordination node through the statements the TEXT form writes, which the
 // provider runs through the coordination service, and reads each result
-// back from the server.
+// back from the server. A statement the provider refuses (a second creation,
+// one given bound arguments, one inside a transaction) leaves the node as it
+// was. This ports the host's TestYDBCoordinationNodes_ConnectionRefuses; the
+// refusals of the lock node and of a grace period below the self-check
+// period are unit tests of internal/nativeapi.
 func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
@@ -400,7 +404,7 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 		defer stop()
 		_, _ = nodes.DropNode(cleanup, &Ydb_Coordination.DropNodeRequest{Path: path.Join(database, directory, "node")})
 	})
-	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature, provider.TypedArgumentsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -420,6 +424,19 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
 	c.Assert(result.Message, qt.Equals, "create YDB coordination node "+path.Join(database, directory, "node")+": the node already exists")
+	c.Assert(f.held(c).GetReadConsistencyMode(), qt.Equals, Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT)
+
+	// A coordination node statement takes no bound arguments, so the
+	// statement is refused before the service sees it and the node keeps
+	// its mode.
+	bound, err := client.RunStatement(c.Context(), &protocol.RunStatementRequest{SessionId: session.Id, RequestId: "bound",
+		Sql: "ALTER COORDINATION NODE `" + directory + "/node` SET (read_consistency_mode = 'relaxed')", Access: protocol.RunStatementRequest_READ_WRITE, MaxRows: 1,
+		TypedArguments: []*protocol.StatementArgument{{Type: &protocol.ArgumentType{Scalar: protocol.ArgumentType_INT64},
+			Value: &protocol.DataValue{Value: &protocol.DataValue_Int64Value{Int64Value: 1}}}}})
+	c.Assert(err, qt.IsNil)
+	c.Assert(bound.Outcome, qt.Equals, protocol.StatementResult_REFUSED)
+	c.Assert(bound.Refusal, qt.Equals, "a comment or coordination statement runs without a transaction or bound arguments")
+	c.Assert(f.held(c).GetReadConsistencyMode(), qt.Equals, Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT)
 
 	// A change made outside the plan is kept where the statement names
 	// nothing of it.

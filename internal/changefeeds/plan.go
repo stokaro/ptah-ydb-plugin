@@ -69,9 +69,9 @@ func (c Change) Action() Action {
 // A non-empty reason means the move cannot be decided, as the host's
 // comparison leaves it undecided: a changefeed the read cannot represent, one
 // the declaration cannot state, or a stream an asynchronous replication
-// controller owns that the declaration changes. A replicated stream the
-// declaration leaves out is kept, because its controller, not the schema,
-// owns it.
+// controller owns that the declaration changes or states without the binding
+// the read found. A replicated stream the declaration leaves out is kept,
+// because its controller, not the schema, owns it.
 func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservations) ([]Change, string) {
 	wanted := make(map[string]*native.ChangefeedIntent)
 	wantedFeeds := make(map[string]Feed)
@@ -117,7 +117,11 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 		have, present := havingFeeds[name]
 		switch {
 		case present && have.Replicated:
-			if declared && !Equal(want, have) {
+			// A declaration keeps the stream only where it retains the
+			// binding the read found, as an observation converted to the
+			// desired side does. One that states the stream without it, or
+			// with another, claims a stream its controller owns.
+			if declared && (!Equal(want, have) || !sameBinding(wanted[name].GetAttributes(), having[name].GetDescription().GetAttributes())) {
 				return nil, fmt.Sprintf("changefeed %q is a replication-managed stream, and the retained replication-managed "+
 					"changefeed cannot be created, removed, or changed independently of its controller", name)
 			}

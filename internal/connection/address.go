@@ -57,13 +57,8 @@ func Parse(raw string) (Address, error) {
 	if err != nil {
 		return Address{}, authored.New("invalid YDB URL parameters")
 	}
-	for key, values := range q {
-		if len(values) != 1 {
-			return Address{}, authored.New("YDB URL parameters must appear once")
-		}
-		if !slices.Contains(acceptedParameters, key) {
-			return Address{}, authored.New("unsupported YDB URL parameter; supported parameters: " + strings.Join(acceptedParameters, ", "))
-		}
+	if err := knownParameters(q); err != nil {
+		return Address{}, err
 	}
 	database, err := databasePath(u.Path, q)
 	if err != nil {
@@ -88,6 +83,21 @@ func Parse(raw string) (Address, error) {
 	database = "/" + database
 	dsn := url.URL{Scheme: scheme, Host: net.JoinHostPort(u.Hostname(), port), Path: database, RawQuery: passed.Encode()}
 	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv, monitoring: monitoring, realm: realm, secure: scheme == "grpcs"}, nil
+}
+
+// knownParameters refuses a parameter given more than once and one the
+// provider does not know. A parameter the SDK reads and the provider refuses
+// is left to sdkParameters, whose refusal says why.
+func knownParameters(q url.Values) error {
+	for key, values := range q {
+		if len(values) != 1 {
+			return authored.New("YDB URL parameters must appear once")
+		}
+		if !slices.Contains(acceptedParameters, key) && !slices.Contains(refusedParameters, key) {
+			return authored.New("unsupported YDB URL parameter; supported parameters: " + strings.Join(acceptedParameters, ", "))
+		}
+	}
+	return nil
 }
 
 // databasePath returns the database the URL names, without its surrounding

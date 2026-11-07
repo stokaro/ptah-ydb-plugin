@@ -129,20 +129,23 @@ func TestHostVerifiesAHoldingCheck_HappyPath(t *testing.T) {
 	c.Assert(verified, qt.Contains, "Verdict: verified (1 verified, 0 failed, 0 errored of 1)")
 }
 
-// `db verify` reports an assertion that does not hold as failed and refuses a
-// write before it runs, as errored, which is the exit status a fault gets.
+// `db verify` reports an assertion that does not hold as failed, refuses a
+// write before it runs, as errored, and reports a read the server cannot run,
+// of a table that does not exist, as errored too, which is the exit status a
+// fault gets. The host's TestYDBConnection_VerifiesChecks is the last case.
 func TestHostVerifiesChecks_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(directory, "ptah_ydb_verify")
 	checks := writeFiles(c, c.TempDir(), map[string]string{"mixed.sql": `-- +ptah check name="holds" assert="SELECT 1 = 1"` + "\n" +
 		`-- +ptah check name="fails" assert="SELECT 1 = 2"` + "\n" +
-		"-- +ptah check name=\"write\" assert=\"UPSERT INTO `" + table + "` (`id`) VALUES (1)\"\n"})
+		"-- +ptah check name=\"write\" assert=\"UPSERT INTO `" + table + "` (`id`) VALUES (1)\"\n" +
+		"-- +ptah check name=\"missing\" assert=\"SELECT COUNT(*) = 0 FROM `" + path.Join(directory, "no_such_table") + "`\"\n"})
 
 	reported, err := hostCommand(c, "db", "verify", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--checks", filepath.Join(checks, "mixed.sql"))
 
 	c.Assert(err, qt.ErrorMatches, "exit status 2")
-	c.Assert(reported, qt.Contains, "Verdict: errored (1 verified, 1 failed, 1 errored of 3)")
+	c.Assert(reported, qt.Contains, "Verdict: errored (1 verified, 1 failed, 2 errored of 4)")
 	c.Assert(reported, qt.Contains, "reason: check assertion must be a read-only SELECT statement")
 	c.Assert(heldEntries(c, opened, path.Join(database, directory)), qt.HasLen, 0)
 }

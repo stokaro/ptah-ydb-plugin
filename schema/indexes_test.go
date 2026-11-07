@@ -157,3 +157,31 @@ func TestNativeSequenceTypeSurvivesWireAndOfflineNormalization(t *testing.T) {
 	c.Assert(proto.Equal(decoded.GetFromSequence(), nativeColumn.GetFromSequence()), qt.IsTrue)
 	c.Assert(decoded.Type, qt.IsNil)
 }
+
+// An index of a kind the provider does not read is refused by its name and its
+// kind, rather than as a description that does not decode: a kind YDB carries
+// in a field the provider's model does not hold. Ported from the host's
+// TestReader_UnsupportedIndexDiagnosticNamesTheKind.
+func TestValidateIndexesNamesAKindItDoesNotRead_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		field protowire.Number
+		kind  string
+	}{
+		{name: "bloom", field: 12, kind: "bloom_filter index"},
+		{name: "ngram", field: 13, kind: "bloom_ngram_filter index"},
+		{name: "JSON", field: 14, kind: "global JSON index"},
+		{name: "min-max", field: 15, kind: "min_max index"},
+		{name: "unknown", field: 999, kind: "index of a kind this provider does not know"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			index := &native.TableIndexDescription{Name: "body_idx", IndexColumns: []string{"body"}, Status: native.TableIndexDescription_STATUS_READY}
+			index.ProtoReflect().SetUnknown(protowire.AppendBytes(protowire.AppendTag(nil, test.field, protowire.BytesType), nil))
+
+			err := schema.ValidateIndexes([]*native.TableIndexDescription{index})
+
+			c.Assert(err, qt.ErrorMatches, `index "body_idx" is a `+test.kind+`, which this provider does not read`)
+		})
+	}
+}

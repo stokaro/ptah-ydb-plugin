@@ -2,6 +2,7 @@ package backend_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -185,6 +186,54 @@ func TestSecretComparisonKeepsUnsupportedObservationsUndecided(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Changes, qt.HasLen, 0)
 	c.Assert(result.Undecided, qt.HasLen, 1)
+}
+
+// Ported from the host's TestYDBSecrets_NotRefusedWithoutTheKeyWhenNothingRuns:
+// a secret the database holds, compared on a target without the secrets
+// capability against a source that makes no claim on secrets, is kept: the
+// comparison plans no secret statement and leaves nothing undecided, so it
+// is not refused. A source that describes every secret and leaves this one
+// out is TestSecretComparisonKeepsUnsupportedObservationsUndecided.
+func TestSecretComparisonWithoutTheCapabilityKeepsAnUnclaimedSecret(t *testing.T) {
+	c := testcheck.New(t)
+	request := secretRequest(c, secretPresent)
+	request.Capabilities["secrets"] = false
+	request.Desired.Records = nil
+	request.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+	request.Desired.Coverage.Kinds[0].Sources[0].Regions = nil
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Changes, qt.HasLen, 0)
+	c.Assert(result.Undecided, qt.HasLen, 0)
+}
+
+// Ported from the "unread, without a claim" rows of the host's
+// TestSecretComparison_ComparesByPresenceAndEvidence and
+// TestSecretComparison_PlansNothingOnALineWithoutSecrets: a secret the read
+// could not establish, and that no declaration names, is nothing to a source
+// that makes no claim on secrets, with or without the capability.
+func TestSecretComparisonLeavesAnUnreadSecretToAnUnclaimingSource(t *testing.T) {
+	for _, capable := range []bool{true, false} {
+		t.Run(fmt.Sprintf("secrets=%t", capable), func(t *testing.T) {
+			c := testcheck.New(t)
+			request := secretRequest(c, secretAbsent)
+			request.Capabilities["secrets"] = capable
+			request.Desired.Records = nil
+			request.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+			request.Desired.Coverage.Kinds[0].Sources[0].Regions = nil
+			request.Current.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.SecretProperties, Targets: []string{"ydb"},
+				Subject:   &protocol.ComparisonIdentity{Kind: schema.SecretProperties, Database: testcomparison.Part("/local"), Catalog: testcomparison.Part(""), Schema: testcomparison.Part("app"), Parent: testcomparison.Part(""), Name: testcomparison.Part("pg.pw")},
+				Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_UNREPRESENTABLE)}}
+
+			result, err := backend.New().CompareModels(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 0)
+			c.Assert(result.Undecided, qt.HasLen, 0)
+		})
+	}
 }
 
 func TestSecretSourceRefusesInlineValuesAndPreservesReferences(t *testing.T) {

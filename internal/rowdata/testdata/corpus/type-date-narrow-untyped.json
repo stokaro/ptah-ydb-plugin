@@ -1,0 +1,28 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "since",
+      "declared_type": "DATE"
+    },
+    {
+      "name": "note"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2026-01-02"
+      },
+      {
+        "int64": "7"
+      }
+    ]
+  ],
+  "live": null
+}

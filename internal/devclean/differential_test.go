@@ -81,6 +81,22 @@ func readJSON(c *qt.C, file string, target any) {
 	c.Assert(json.Unmarshal(data, target), qt.IsNil)
 }
 
+// streamingQueryEntry is the scheme entry type YDB lists a streaming query
+// as, which the pinned YDB bindings do not name: 26, as the host measured on
+// 26.2.1.14. It is written here rather than read from devclean, so a corpus
+// case holds the cleanup to what the server lists.
+const streamingQueryEntry Ydb_Scheme.Entry_Type = 26
+
+// entryTypes reads a corpus entry type by its name: a name the pinned YDB
+// bindings give, or STREAMING_QUERY.
+var entryTypes = func() map[string]Ydb_Scheme.Entry_Type {
+	types := map[string]Ydb_Scheme.Entry_Type{"STREAMING_QUERY": streamingQueryEntry}
+	for name, value := range Ydb_Scheme.Entry_Type_value {
+		types[name] = Ydb_Scheme.Entry_Type(value)
+	}
+	return types
+}()
+
 // fakeTree is a scheme tree the cleanup lists and changes. root is what the
 // runner resolves a statement's names against.
 type fakeTree struct {
@@ -96,9 +112,9 @@ func newFakeTree(c *qt.C, input corpusCase, root string) *fakeTree {
 	for dir, entries := range input.Tree {
 		f.tree[dir] = make([]*Ydb_Scheme.Entry, 0)
 		for _, entry := range entries {
-			kind, known := Ydb_Scheme.Entry_Type_value[entry.Type]
-			c.Assert(known, qt.IsTrue)
-			f.tree[dir] = append(f.tree[dir], &Ydb_Scheme.Entry{Name: entry.Name, Type: Ydb_Scheme.Entry_Type(kind)})
+			kind, known := entryTypes[entry.Type]
+			c.Assert(known, qt.IsTrue, qt.Commentf("entry type %q", entry.Type))
+			f.tree[dir] = append(f.tree[dir], &Ydb_Scheme.Entry{Name: entry.Name, Type: kind})
 		}
 	}
 	return f

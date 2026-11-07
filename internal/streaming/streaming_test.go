@@ -88,6 +88,31 @@ func TestStepsAndCheckpointImpact(t *testing.T) {
 	}
 }
 
+// A creation writes the query's path with its name as one segment, a dot in
+// it included, and a creation the declaration permits to reset state writes
+// CREATE OR REPLACE, which replaces a query that appears at the path meanwhile.
+// Ported from the host's TestStreamingFeatureSchemaUsesSelectedOwnerOnEveryEntryPoint.
+func TestStatements_HappyPath(t *testing.T) {
+	stopped := &streaming.Spec{Text: "SELECT 1;", Run: new(false)}
+	for _, tc := range []struct {
+		name   string
+		change streaming.Change
+		want   []string
+	}{
+		{"a creation that may reset state", streaming.Change{Schema: "app", Name: "copy.with.dot", After: stopped, AllowStateReset: true},
+			[]string{"CREATE OR REPLACE STREAMING QUERY `app/copy.with.dot` WITH (RUN = FALSE, RESOURCE_POOL = `default`) AS DO BEGIN\nSELECT 1;\nEND DO;"}},
+		{"a creation", streaming.Change{Schema: "app", Name: "copy.with.dot", After: stopped},
+			[]string{"CREATE STREAMING QUERY `app/copy.with.dot` WITH (RUN = FALSE, RESOURCE_POOL = `default`) AS DO BEGIN\nSELECT 1;\nEND DO;"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			statements, err := streaming.Statements(tc.change)
+			c.Assert(err, qt.IsNil)
+			c.Assert(statements, qt.DeepEquals, tc.want)
+		})
+	}
+}
+
 func TestStatementsRefuseInvalidChanges(t *testing.T) {
 	query := &streaming.Spec{Text: "SELECT 1;"}
 	for _, tc := range []struct {

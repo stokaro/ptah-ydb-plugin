@@ -557,7 +557,13 @@ func leftOut(request *protocol.CompareModelsRequest, result *protocol.ComparedMo
 // object on this target, the desired source cannot describe the declared
 // object, or the read did not establish the current object or its absence.
 func unestablished(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object) bool {
-	if family.Unread != nil && item.current != nil {
+	// A current object the desired side makes no claim on is kept whatever
+	// the target can read of it (see settleOmitted): nothing runs for it, so
+	// the comparison is not left open. Without this, a target that lacks the
+	// family's capability but holds one of its objects leaves every source
+	// that does not describe the family undecided.
+	unclaimed := item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject))
+	if family.Unread != nil && item.current != nil && !unclaimed {
 		if reason := family.Unread(request.Capabilities); reason != "" {
 			undecided(result, family, item, "The current "+family.Noun+" or its absence was not established: "+reason)
 			return true
@@ -566,6 +572,11 @@ func unestablished(request *protocol.CompareModelsRequest, result *protocol.Comp
 	if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && unknown(claim) && item.desired != nil {
 		undecided(result, family, item, "The desired source cannot describe the complete "+family.Noun)
 		return true
+	}
+	// A subject neither side holds is nothing to decide for a source that
+	// makes no claim on it, however little the read knows of it.
+	if unclaimed && item.current == nil {
+		return false
 	}
 	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); (found && unknown(claim)) ||
 		(item.current == nil && unknown(knowledge(request.Current.Coverage, family.Kind, item.subject))) {

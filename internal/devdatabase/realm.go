@@ -45,11 +45,15 @@ const realmNameBytes = 8
 // address names, as the host's embedded engine does (internal/ydbrealm.Enter),
 // and returns the realm's address: the operator's, with the same scheme, host
 // and credentials, naming the realm. An address that names a realm already
-// gets a new one in its place. The release removes the realm with everything
-// in it.
+// gets a new one in its place; one whose realm is not a realm name is refused,
+// as any address that is not a YDB address is. The release removes the realm
+// with everything in it.
 func (p *Provisioner) enterRealm(ctx context.Context, raw string) (*protocol.DevDatabase, error) {
 	if p.realms == nil {
 		return refused(unsupported("this provider creates no dev realm"))
+	}
+	if _, err := connection.Parse(raw); err != nil {
+		return refused(unsupported("the dev realm address is not a YDB address: %s", err))
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil {

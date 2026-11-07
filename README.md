@@ -337,7 +337,8 @@ a dev database request with the operator's address instead of a spec, and the
 provider creates a realm of the run's own in the database the address names, as
 the host's embedded engine does: a name of 16 random hexadecimal digits, and an
 address that keeps the operator's scheme, host and credentials and names the
-realm in place of any it named. Releasing the lease removes the realm with
+realm in place of any it named; an address whose `dev_realm` is not a realm
+name is refused, as any address that is not a YDB address is. Releasing the lease removes the realm with
 everything in it, and then `ptah_dev` when no realm is left in it; an object
 there is no statement to drop for stops the removal before anything is dropped.
 The provider also removes the realms it holds when its process ends. A realm is
@@ -1290,8 +1291,18 @@ No changes planned, but 1 comparison limit remains unresolved.
 
 Name the directory with `--schemas` to create the object.
 
-Unknown native fields and enum values are refused before JSON conversion.
-Shared topic consumers and unextracted native object kinds refuse inspection.
+Unknown native fields and enum values are refused before JSON conversion,
+except where the host's embedded engine recorded the object and read the rest:
+a coordination node whose description holds a mode or a field the provider
+does not model is reported unrepresentable, and so is a resource pool or a
+classifier holding a setting outside what YDB keeps. A column store and a
+sequence, which the provider does not model, are left out and named in
+`unread_tables` where the host lists `schema.unread-tables`. A queue of the
+older persistent queue kind (`PERS_QUEUE_GROUP`) is reported uninspected, so a
+plan neither keeps nor drops it, and a system view outside a dot-directory is
+the server's and is left out. Any other kind of scheme entry refuses
+inspection, naming the object and its kind. Shared topic consumers refuse
+inspection.
 A table an async replication writes is left out of the tables, and the
 replication's items name it (see [Async replications and
 transfers](#async-replications-and-transfers)). Right after `CREATE ASYNC
@@ -2812,8 +2823,12 @@ drops the consumers it added in the order it added them. A changefeed
 the read cannot represent (an AWS region, attributes, a fraction of a second,
 an auto-partitioning strategy no changefeed declares, a consumer attribute
 other than YDB's own) leaves the table's changefeeds undecided, and so does a
-change to a stream an asynchronous replication controller owns; such a stream
-the declaration leaves out is kept.
+change to a stream an asynchronous replication controller owns, or a
+declaration of such a stream that does not retain the controller's binding, as
+a desired side converted from a read retains it; such a stream the declaration
+leaves out is kept. A binding is read only with every field, an absolute
+replica path, a canonical positive item number and no other key; any other is
+an attribute the read cannot represent.
 
 The table lifecycle service plans every changefeed change of a table as one
 step, outside a transaction: the host runs a step that drops an object after
@@ -4269,7 +4284,9 @@ requested key columns and then of the primary key columns the request leaves
 out, so the order is total, and resumes after the last row of a page through
 its token. YDB orders a null first, and the cursor steps past nulls and equal
 keys. A page holds at most the requested rows and 3 MiB. A missing table is a
-complete page that says so.
+complete page that says so. A Decimal value with more digits than its
+precision, which is how YDB stores infinity and NaN, fails the read rather than
+being returned as digits the column never held.
 
 A seed file runs as the queries YQL reads it into, in one serializable
 transaction with its ledger row, so the file and its row commit together or not

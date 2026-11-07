@@ -356,9 +356,15 @@ func normalizeObservation(kind string, owner *protocol.Reference, target proto.M
 }
 
 // normalizeObservedTable checks a row-table observation for a distinct
-// nonempty primary key, no transient identity and row storage, and sets the
-// store type to row, which an unspecified one means.
+// nonempty primary key, no transient identity, row storage and a TTL the
+// provider reads, and sets the store type to row, which an unspecified one
+// means. A TTL with no mode, or an epoch TTL with no unit, is one a
+// declaration cannot state either; the host's embedded engine refused it on
+// read.
 func normalizeObservedTable(table *native.DescribeTableResult) error {
+	if err := validateTableTTL(table.GetTtlSettings()); err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	if len(table.GetPrimaryKey()) == 0 {
 		return fmt.Errorf("observed YDB table properties require a primary key")
