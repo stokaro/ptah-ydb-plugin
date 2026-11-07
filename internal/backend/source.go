@@ -190,12 +190,16 @@ func (k *sourceKinds) values(ctx context.Context, document *protocol.SourceDocum
 }
 
 // sourceError is the status of a failed decoding: the context's when the
-// context has ended, and InvalidArgument otherwise.
+// context has ended, and InvalidArgument otherwise, with the reason a host
+// prints where err holds one, without the value a declaration wrote (see
+// authored.Declared). Without it a refused setting of an index, a family or
+// a table reached the host as `provider decode source failed
+// (InvalidArgument)`.
 func sourceError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return status.FromContextError(ctx.Err()).Err()
 	}
-	return authored.Status(codes.InvalidArgument, err)
+	return authored.Status(codes.InvalidArgument, authored.Declared(err))
 }
 
 // limitedClaim leaves outside a document's claim what its ptah:not-described
