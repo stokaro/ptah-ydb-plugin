@@ -3,7 +3,10 @@
 package integration_test
 
 import (
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -122,24 +125,72 @@ func TestHostChangesTheCommentsOfIndexesInPlace_HappyPath(t *testing.T) {
 	})
 }
 
-// Ported from the host's TestYDBComments_IntrospectedModelsPlanNothing, for
-// the table and its indexes: `ptah introspect` writes the commented table as
-// Go models, the comments of the table, its columns, its indexes and the
-// UNIQUE constraint's unique index reach the annotations, and the models,
-// applied over the directory they came from, plan nothing.
+// Ported from the half of the host's TestYDBComments_ChangesInPlace that
+// lints what the plan writes. The host linted the statements its plans wrote
+// as two migration files; here `schema diff` prints the statements of each
+// plan, the first creating the commented table and the second changing every
+// kind of comment, dropping a commented column and a commented index. The
+// second removes the comments those leave on the table, so `migrations lint`
+// reports no comment left behind (YD150). `schema diff` reads only SQL, HCL,
+// YAML and DBML, so the models are YQL here.
+func TestHostCommentChangesPassTheLeftCommentRule_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	replacer := strings.NewReplacer("{dir}", directory)
+	first := replacer.Replace("CREATE TABLE `{dir}/users` (id Int64 NOT NULL, email Utf8, label Utf8, legacy Utf8, PRIMARY KEY (id), " +
+		"INDEX users_email_key GLOBAL UNIQUE ON (email), INDEX users_by_label GLOBAL ON (label), INDEX users_by_legacy GLOBAL ON (legacy));\n" +
+		"COMMENT ON TABLE `{dir}/users` IS 'People who sign in'; COMMENT ON COLUMN `{dir}/users`.email IS 'Login'; " +
+		"COMMENT ON COLUMN `{dir}/users`.label IS 'Shown name'; COMMENT ON COLUMN `{dir}/users`.legacy IS 'Going away'; " +
+		"COMMENT ON INDEX users_email_key ON `{dir}/users` IS 'One login each'; COMMENT ON INDEX users_by_label ON `{dir}/users` IS 'Lookup by name'; " +
+		"COMMENT ON INDEX users_by_legacy ON `{dir}/users` IS 'Going away too';\n")
+	second := replacer.Replace("CREATE TABLE `{dir}/users` (id Int64 NOT NULL, email Utf8, label Utf8, phone Utf8, PRIMARY KEY (id), " +
+		"INDEX users_email_key GLOBAL UNIQUE ON (email), INDEX users_by_label GLOBAL ON (label), INDEX users_by_phone GLOBAL ON (phone));\n" +
+		"COMMENT ON TABLE `{dir}/users` IS 'Customers'; COMMENT ON COLUMN `{dir}/users`.label IS 'Display name'; " +
+		"COMMENT ON COLUMN `{dir}/users`.phone IS 'Mobile'; COMMENT ON INDEX users_email_key ON `{dir}/users` IS 'One login per person'; " +
+		"COMMENT ON INDEX users_by_label ON `{dir}/users` IS 'Lookup by name'; COMMENT ON INDEX users_by_phone ON `{dir}/users` IS 'By phone';\n")
+	sources := writeFiles(c, c.TempDir(), map[string]string{"first.sql": first, "second.sql": second})
+	migrations := c.TempDir()
+	diff := func(name, version string) string {
+		c.Helper()
+		statements, err := hostCommand(c, "schema", "diff", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", filepath.Join(sources, name+".sql"), "--schemas", directory)
+		c.Assert(err, qt.IsNil, qt.Commentf("schema diff %s:\n%s", name, statements))
+		c.Assert(os.WriteFile(filepath.Join(migrations, version+"_"+name+".up.sql"), []byte(statements), 0o600), qt.IsNil)
+		return statements
+	}
+
+	diff("first", "0000000001")
+	applyRuns(c, directory, "sql", first)
+	planned := diff("second", "0000000002")
+	lint, err := hostCommand(c, "migrations", "lint", "--dialect", "ydb", "--dir", migrations, "--fail-on", "none")
+
+	c.Assert(err, qt.IsNil, qt.Commentf("migrations lint:\n%s", lint))
+	c.Assert(lint, qt.Not(qt.Contains), "YD150", qt.Commentf("%s\n%s", planned, lint))
+	c.Assert(planned, qt.Contains, "COMMENT ON COLUMN `"+directory+"/users`.`legacy` IS NULL", qt.Commentf("%s", planned))
+	c.Assert(planned, qt.Contains, "COMMENT ON INDEX `users_by_legacy` ON `"+directory+"/users` IS NULL", qt.Commentf("%s", planned))
+}
+
+// Ported from the host's TestYDBComments_IntrospectedModelsPlanNothing:
+// `ptah introspect` writes the commented table and the commented view over it
+// as Go models, the comments of the table, its columns, its indexes, the
+// UNIQUE constraint's unique index and the view reach the annotations, and the
+// models, applied over the directory they came from, plan nothing.
 func TestHostIntrospectedCommentsPlanNothing_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
-	applyUntilSynced(c, directory, "go", commentedModels(directory))
+	view := "\n//ptah:schema:view name=\"active_users\" schema=\"" + directory + "\" body=\"SELECT id FROM `" + directory + "/users`\" comment=\"Users who signed in\"\n" +
+		"type ActiveUsers struct{}\n"
+	applyUntilSynced(c, directory, "go", commentedModels(directory)+view)
 
 	models := introspectDirectory(c, directory)
 
-	for _, comment := range []string{"People who sign in", "Key", "Login", "Shown name", "Going away", "Lookup by name", "Going away too", "One login each"} {
+	for _, comment := range []string{"People who sign in", "Key", "Login", "Shown name", "Going away", "Lookup by name", "Going away too", "One login each", "Users who signed in"} {
 		c.Assert(models, qt.Contains, `comment="`+comment+`"`, qt.Commentf("%s", models))
 	}
 	output, err := hostApplySelected(c, directory, "go", models)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", models, output))
 	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s\n%s", models, output))
 	c.Assert(heldAttributes(c, opened, path.Join(database, directory, "users")), qt.DeepEquals, commentedUsersAttributes)
+	c.Assert(storedAttributes(c, opened, path.Join(database, directory, "active_users")), qt.DeepEquals, map[string]string{"ptah.comment": "Users who signed in"})
 }

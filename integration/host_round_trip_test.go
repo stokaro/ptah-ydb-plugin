@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"os"
 	"path"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
 
@@ -125,8 +127,8 @@ func describeBuilt(c *qt.C, opened *connection.Connection, absolute string) buil
 // applies through the host and the next two runs plan nothing. The server
 // holds the Serial key on a sequence, the composite key in its order, each
 // index of its kind with its covered columns, and the escaped names. The
-// host's test reads the defaults through its reader; the provider's reading
-// of them is what the empty replans measure.
+// provider's read reports each default in the spelling the server stores and
+// the date and time types the line built, as the host's reader did.
 func TestHostAppliesTheRoundTripSchema_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -140,7 +142,8 @@ func TestHostAppliesTheRoundTripSchema_HappyPath(t *testing.T) {
 	})
 	selectors := directory + "," + directory + "/archive"
 
-	applyUntilSynced(c, selectors, "yaml", roundTripSchema(directory, targetCapabilities(c)))
+	capabilities := targetCapabilities(c)
+	applyUntilSynced(c, selectors, "yaml", roundTripSchema(directory, capabilities))
 
 	accounts := describeBuilt(c, opened, path.Join(database, directory, "accounts"))
 	c.Assert(accounts.Key, qt.DeepEquals, []string{"id"})
@@ -157,4 +160,58 @@ func TestHostAppliesTheRoundTripSchema_HappyPath(t *testing.T) {
 	c.Assert(describeBuilt(c, opened, path.Join(database, directory, "archive", "events")).Key, qt.DeepEquals, []string{"id"})
 	tick := describeBuilt(c, opened, path.Join(database, directory, "tick`name.with.dot"))
 	c.Assert(tick.Columns["weird-col"], qt.Equals, "Optional<Utf8>")
+	read := inspectedColumns(c, directory)
+	dateTime := roundTripDateTimes[capabilities["wide_date_time_types"]]
+	c.Assert(read["accounts.status"], qt.Equals, "Utf8 DEFAULT 'active'u")
+	c.Assert(read["accounts.created_at"], qt.Equals, dateTime.createdAt)
+	c.Assert(read["accounts.lifetime"], qt.Equals, dateTime.lifetime)
+	c.Assert(read["accounts.birthday"], qt.Equals, dateTime.birthday)
+	c.Assert(read["accounts.balance"], qt.Equals, roundTripBalance[capabilities["parameterized_decimal"]])
+	c.Assert(read["accounts.token"], qt.Equals, "Uuid DEFAULT Uuid('550e8400-e29b-41d4-a716-446655440000')")
+	c.Assert(read["orders.amount"], qt.Equals, "Decimal(22,9) DEFAULT Decimal('1.5', 22, 9)")
+}
+
+// roundTripDateTimes is how the provider's read reports the round trip's
+// TIMESTAMP, INTERVAL and DATE columns, keyed by whether the line has wide
+// date and time types: the host's renderer writes the 64-bit types where the
+// line has them, and the server reports the type it built in the default it
+// stores, as the host's reader reported them.
+var roundTripDateTimes = map[bool]struct{ createdAt, lifetime, birthday string }{
+	true: {"Timestamp64 DEFAULT Timestamp64('2026-01-02T03:04:05Z')", "Interval64 DEFAULT Interval64('P1DT2H')",
+		"Date32 DEFAULT Date32('2000-02-29')"},
+	false: {"Timestamp DEFAULT Timestamp('2026-01-02T03:04:05Z')", "Interval DEFAULT Interval('P1DT2H')",
+		"Date DEFAULT Date('2000-02-29')"},
+}
+
+// roundTripBalance is the read of the DECIMAL(10,2) column, keyed by whether
+// the line has parameterized decimals. A line without them has Decimal(22,9)
+// alone, the source leaves the column out there, and the read has none.
+var roundTripBalance = map[bool]string{
+	true:  "Decimal(10,2) DEFAULT Decimal('12.5', 10, 2)",
+	false: "",
+}
+
+// inspectedColumns reads directory through the provider's Inspect and returns
+// each column of each table as table.column: its data type and, after
+// DEFAULT, the default expression the read reports.
+func inspectedColumns(c *qt.C, directory string) map[string]string {
+	c.Helper()
+	client := startProviderFor(c)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
+	c.Assert(err, qt.IsNil)
+	read := make(map[string]string)
+	for _, table := range snapshot.GetTables() {
+		for _, column := range table.GetColumns() {
+			observed := column.GetObserved()
+			text := observed.GetDataType()
+			for _, expression := range slices.DeleteFunc([]*string{observed.DefaultExpression}, func(value *string) bool { return value == nil }) {
+				text += " DEFAULT " + *expression
+			}
+			read[table.GetIdentity().GetName()+"."+column.GetName()] = text
+		}
+	}
+	return read
 }

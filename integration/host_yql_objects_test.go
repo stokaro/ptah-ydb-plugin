@@ -12,31 +12,32 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
-// Ported from the host's TestYDBDesiredYQL_Comments, without the index
-// comment, whose change the pinned host's provider path does not carry yet
-// (stokaro/ptah#5256): YQL comments on a table, a column and a view are set,
-// changed to text with a semicolon and a newline in it, and removed, and each
-// run leaves nothing to plan. The host's test runs in a dev realm; here the
-// schema names the fixture directory. The objects are created first, without
-// comments, since the pinned host leaves the comments of a created table out.
+// Ported from the host's TestYDBDesiredYQL_Comments: YQL comments on a table,
+// a column, an inline global index and a view are created with them in one
+// run, changed to text with a semicolon and a newline in it, and removed, and
+// each run leaves nothing to plan. The host's test runs in a dev realm; here
+// the schema names the fixture directory.
 func TestHostAppliesYQLComments_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	viewsAtCleanup(c, opened, database, directory)
 	replacer := strings.NewReplacer("{dir}", directory)
-	declarations := replacer.Replace("CREATE TABLE `{dir}/items` (id Int64 NOT NULL, body Utf8, PRIMARY KEY (id)); " +
+	declarations := replacer.Replace("CREATE TABLE `{dir}/items` (id Int64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL ON (body)); " +
 		"CREATE VIEW `{dir}/summary` WITH (security_invoker = TRUE) AS SELECT id FROM `{dir}/items`;\n")
 	items, summary := path.Join(database, directory, "items"), path.Join(database, directory, "summary")
-	applyRuns(c, directory, "sql", declarations)
 
 	for _, step := range []struct {
 		name, comments string
 		table, view    map[string]string
 	}{
-		{name: "set", comments: "COMMENT ON TABLE `{dir}/items` IS 'table'; COMMENT ON COLUMN `{dir}/items`.body IS 'column'; COMMENT ON VIEW `{dir}/summary` IS 'view';",
-			table: map[string]string{"ptah.comment": "table", "ptah.comment.column.body": "column"}, view: map[string]string{"ptah.comment": "view"}},
-		{name: "changed", comments: "COMMENT ON TABLE `{dir}/items` IS 'changed; table'; COMMENT ON COLUMN `{dir}/items`.body IS 'line\\nnext'; COMMENT ON VIEW `{dir}/summary` IS 'changed view';",
-			table: map[string]string{"ptah.comment": "changed; table", "ptah.comment.column.body": "line\nnext"}, view: map[string]string{"ptah.comment": "changed view"}},
+		{name: "set", comments: "COMMENT ON TABLE `{dir}/items` IS 'table'; COMMENT ON COLUMN `{dir}/items`.body IS 'column'; " +
+			"COMMENT ON INDEX by_body ON `{dir}/items` IS 'index'; COMMENT ON VIEW `{dir}/summary` IS 'view';",
+			table: map[string]string{"ptah.comment": "table", "ptah.comment.column.body": "column", "ptah.comment.index.by_body": "index"},
+			view:  map[string]string{"ptah.comment": "view"}},
+		{name: "changed", comments: "COMMENT ON TABLE `{dir}/items` IS 'changed; table'; COMMENT ON COLUMN `{dir}/items`.body IS 'line\\nnext'; " +
+			"COMMENT ON INDEX by_body ON `{dir}/items` IS 'changed index'; COMMENT ON VIEW `{dir}/summary` IS 'changed view';",
+			table: map[string]string{"ptah.comment": "changed; table", "ptah.comment.column.body": "line\nnext", "ptah.comment.index.by_body": "changed index"},
+			view:  map[string]string{"ptah.comment": "changed view"}},
 		{name: "removed", table: make(map[string]string), view: make(map[string]string)},
 	} {
 		applyRuns(c, directory, "sql", declarations+replacer.Replace(step.comments))
