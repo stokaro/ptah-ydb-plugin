@@ -185,6 +185,13 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 			declarations: []testsource.GoDeclaration{declaration(2, "Item", "ptah:schema:changefeed", updates),
 				declaration(3, "Item", "ptah:schema:changefeed:consumer", map[string]string{"name": "c", "changefeed": "updates", "read_from": "yesterday"})},
 			wantErr: `invalid read_from "yesterday": .*`},
+		// YDB keeps a consumer's read_from in whole seconds, so a fraction
+		// would be dropped. Ported from the host's
+		// TestParseSource_Changefeed_FailurePath.
+		{name: "a consumer read_from with a fraction of a second",
+			declarations: []testsource.GoDeclaration{declaration(2, "Item", "ptah:schema:changefeed", updates),
+				declaration(3, "Item", "ptah:schema:changefeed:consumer", map[string]string{"name": "c", "changefeed": "updates", "read_from": "2026-01-01T00:00:00.5Z"})},
+			wantErr: `invalid read_from "2026-01-01T00:00:00.5Z": YDB keeps whole seconds, and drops the fraction of this one`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

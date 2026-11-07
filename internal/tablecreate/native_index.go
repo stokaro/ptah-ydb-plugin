@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -212,10 +213,12 @@ func implementationSettings(spec *native.IndexIntent) []*native.GlobalIndexSetti
 }
 
 // nativeIndexColumns describes the table an index is added to: the columns
-// the declaration states with their YDB types, and the table's key.
+// the declaration states with their YDB types, the dimension each column
+// declared VECTOR(n) names, and the table's key.
 type nativeIndexColumns struct {
-	types map[string]string
-	key   []string
+	types      map[string]string
+	dimensions map[string]uint64
+	key        []string
 }
 
 // nativeIndexRefusal returns why a vector or full-text index cannot be added
@@ -277,7 +280,10 @@ func nativeIndexColumnRefusal(subject string, keys, covered []string, table nati
 // vectorIndexRefusal returns why a vector index cannot be added, or the empty
 // string: the target must take vector indexes, and bit vectors where the index
 // stores them, its settings must be within YDB's limits, its last key column
-// must be a String vector and every other key column comparable.
+// must be a String vector of the dimension a VECTOR(n) declaration of it
+// names, and every other key column comparable. YDB compares neither
+// dimension and leaves a row of the wrong length out of the index without an
+// error, so the host's embedded engine held the two to agree.
 func vectorIndexRefusal(subject string, index *native.GlobalVectorKMeansTreeIndex, keys []string, table nativeIndexColumns, capabilities map[string]bool) string {
 	if !capabilities[VectorIndexesCapability] {
 		return fmt.Sprintf("%s declares vector settings, which requires target capability %s, unavailable on this ydb target "+
@@ -296,6 +302,10 @@ func vectorIndexRefusal(subject string, index *native.GlobalVectorKMeansTreeInde
 	if kind := table.types[vector]; kind != "String" {
 		return fmt.Sprintf("%s: its vector column %q is %s, and a YDB vector index reads a String column (`Embedding column '%s' expected type 'String'`)",
 			subject, vector, kind, vector)
+	}
+	if declared, dimension := table.dimensions[vector], index.GetVectorSettings().GetSettings().GetVectorDimension(); declared != 0 && declared != uint64(dimension) {
+		return fmt.Sprintf("%s: its vector column %q is declared with dimension %d and the index with vector_dimension %d; "+
+			"YDB checks neither, and leaves a vector of the wrong length out of the index", subject, vector, declared, dimension)
 	}
 	for _, name := range prefix {
 		if !keyComparable(table.types[name]) {
@@ -550,7 +560,7 @@ func nativeIndexOptions(spec *native.IndexIntent) []string {
 		options["tokenizer"] = strings.ToLower(analyzers.GetTokenizer().String())
 	}
 	if analyzers.Language != nil {
-		options["language"] = "'" + strings.ReplaceAll(analyzers.GetLanguage(), "'", "\\'") + "'"
+		options["language"] = ydbtype.StringLiteral(analyzers.GetLanguage())
 	}
 	for name, value := range map[string]*bool{"use_filter_lowercase": analyzers.UseFilterLowercase, "use_filter_stopwords": analyzers.UseFilterStopwords,
 		"use_filter_ngram": analyzers.UseFilterNgram, "use_filter_edge_ngram": analyzers.UseFilterEdgeNgram, "use_filter_length": analyzers.UseFilterLength,

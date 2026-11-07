@@ -7,6 +7,8 @@ import (
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // unmanagedObject is the knowledge a limit that names an object leaves of it.
@@ -25,9 +27,16 @@ func LimitKind(model string) (string, bool) {
 }
 
 // LimitName is how a header names owner, an object of model: the path of an
-// object a directory holds, and the name of one the database holds.
+// object a directory holds, and the name of one the database holds. A
+// coordination node at the root keeps a leading slash, as the host's embedded
+// engine wrote it: a node's limit without a slash reads a dot as the
+// separator of a directory and a name, so `locks.v1` would read back as the
+// node v1 in the directory locks.
 func LimitName(owner *protocol.Reference) string {
-	if owner.GetSchema() == "" {
+	switch {
+	case owner.GetSchema() == "" && owner.GetKind() == schema.CoordinationProperties:
+		return "/" + owner.GetName()
+	case owner.GetSchema() == "":
 		return owner.GetName()
 	}
 	return path.Join(owner.GetSchema(), owner.GetName())

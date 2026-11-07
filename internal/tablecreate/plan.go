@@ -243,9 +243,19 @@ func (p *planner) planTableDrop(i int, table *protocol.PlanningTable) (*protocol
 	if table.Current == nil || len(table.Current.GetColumns()) == 0 {
 		return refused(i, fmt.Sprintf("table %q: a removal checks the table it drops against the read of it, and the table was not read", tableLabel(owner))), nil
 	}
+	reason, err := replicationRefusal(owner, table)
+	if err != nil {
+		return nil, err
+	}
+	if reason != "" {
+		return refused(i, reason), nil
+	}
 	operation, err := CaptureDrop("pending", owner, table.Current)
 	if err != nil {
 		return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
+	}
+	if reason := undescribedChangefeeds(table); reason != "" {
+		return refused(i, fmt.Sprintf("dropping table %q: %s", tableLabel(owner), reason)), nil
 	}
 	p.drops = append(p.drops, removal{index: i, table: table, operation: operation})
 	return nil, nil
@@ -496,7 +506,11 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 		if refusal := p.overlapRefusal(item); refusal != nil {
 			return refusal, nil
 		}
-		step, err := creationStep(item)
+		owner, err := boundOwner(item.table.Subject)
+		if err != nil {
+			return nil, err
+		}
+		step, err := creationStep(item, cmp.Or(p.request.DatabasePath, owner.Database))
 		if err != nil {
 			return nil, err
 		}
@@ -563,12 +577,23 @@ func tablePath(subject *protocol.ComparisonIdentity) string {
 
 // creationStep is the lifecycle step of a creation: it creates the table, its
 // scheme path and, for a row table, every index the request builds with it.
-func creationStep(item *creation) (*protocol.PlanningStep, error) {
+// A column table whose TTL moves rows to external data sources reads them,
+// relative to root, so the creation follows a step of the plan that creates
+// such a source, as the host's embedded engine ordered it: YDB refuses a TTL
+// tier that names a data source the database does not hold.
+func creationStep(item *creation, root string) (*protocol.PlanningStep, error) {
 	facts := item.operation.OperationSemantics
 	slot := proto.CloneOf(item.table.Subject)
 	slot.Kind = "ydb.scheme-path"
 	effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_CREATE},
 		{Subject: slot, Action: protocol.PlanningEffect_CREATE}}
+	if isColumnCreation(item.operation) {
+		created, err := ColumnTable(item.operation.Value)
+		if err != nil {
+			return nil, err
+		}
+		effects = append(effects, sourceReads(root, created.GetTtl())...)
+	}
 	if !isColumnCreation(item.operation) {
 		created, err := Request(item.operation.Value)
 		if err != nil {

@@ -87,6 +87,21 @@ func TestColumnInventoryRefusesMissingStateAndUnsupportedAddition(t *testing.T) 
 	}
 }
 
+// YDB adds a NOT NULL column to a table that holds rows only with a default
+// to fill them, so an addition without one is refused, with the host's
+// embedded engine's reason. Ported from the host's
+// TestRender_RefusesWhatYDBCannotHold_FailurePath.
+func TestColumnInventoryRefusesANotNullColumnWithoutADefault(t *testing.T) {
+	c := testcheck.New(t)
+	request := inventoryRequest(c)
+	request.Tables[0].Desired.Columns[1].Nullable = false
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `Column "new" addition: YDB adds a NOT NULL column only with a default`)
+}
+
 func TestColumnInventoryRewritesTheRealAliasStep(t *testing.T) {
 	c := testcheck.New(t)
 	request := inventoryRequest(c)

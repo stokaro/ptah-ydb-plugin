@@ -55,6 +55,20 @@ func TestTTLPlan_HappyPath(t *testing.T) {
 		{"sets a TTL on a table without one",
 			ttlCase(ttlTable(hourly), plainTable, "ts"),
 			`{"setTtlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600}}}`, `{}`, protocol.PlanningEffect_CREATE},
+		// The column is declared in the host's portable spelling, which the
+		// creation maps to a YDB type; the TTL reads the column as that type.
+		{"sets a TTL on a column declared TIMESTAMP",
+			alterCase{desiredTable: ttlTable(hourly), heldTable: plainTable, declared: []string{"ts"}, types: map[string]string{"ts": "TIMESTAMP"}, held: []string{"ts"}},
+			`{"setTtlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600}}}`, `{}`, protocol.PlanningEffect_CREATE},
+		{"sets a TTL on a column declared TIMESTAMP(6)",
+			alterCase{desiredTable: ttlTable(hourly), heldTable: plainTable, declared: []string{"ts"}, types: map[string]string{"ts": "TIMESTAMP(6)"}, held: []string{"ts"}},
+			`{"setTtlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600}}}`, `{}`, protocol.PlanningEffect_CREATE},
+		{"sets an epoch TTL on a column declared BIGINT",
+			alterCase{desiredTable: ttlTable(hourlyEpoch), heldTable: plainTable, declared: []string{"stamp"}, types: map[string]string{"stamp": "BIGINT"}, held: []string{"stamp"}},
+			`{"setTtlSettings":{"valueSinceUnixEpoch":{"columnName":"stamp","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":3600}}}`, `{}`, protocol.PlanningEffect_CREATE},
+		{"sets an epoch TTL on a column declared int8",
+			alterCase{desiredTable: ttlTable(hourlyEpoch), heldTable: plainTable, declared: []string{"stamp"}, types: map[string]string{"stamp": "int8"}, held: []string{"stamp"}},
+			`{"setTtlSettings":{"valueSinceUnixEpoch":{"columnName":"stamp","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":3600}}}`, `{}`, protocol.PlanningEffect_CREATE},
 		{"changes the interval",
 			ttlCase(ttlTable(`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":7200}}`), ttlTable(hourly), "ts"),
 			`{"setTtlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":7200}}}`, hourly, protocol.PlanningEffect_ALTER},
@@ -87,6 +101,12 @@ func TestTTLPlan_HappyPath(t *testing.T) {
 		{"removes the TTL of a table a source asks the defaults for",
 			subjectCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_DEFAULTED),
 			`{"dropTtlSettings":{}}`, hourly, protocol.PlanningEffect_DROP},
+		// YDB compares column names exactly, so a TTL moved to a column that
+		// differs only in case is a change. Ported from the host's
+		// TestTTLCompareFacets_TheColumnIsComparedByTheTargetsRule.
+		{"moves the TTL to a column that differs only in case",
+			ttlCase(ttlTable(`{"dateTypeColumn":{"columnName":"TS","expireAfterSeconds":3600}}`), ttlTable(hourly), "ts", "TS"),
+			`{"setTtlSettings":{"dateTypeColumn":{"columnName":"TS","expireAfterSeconds":3600}}}`, hourly, protocol.PlanningEffect_ALTER},
 		{"reads the integer column of a key",
 			ttlCase(ttlTable(`{"valueSinceUnixEpoch":{"columnName":"id","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}`), plainTable),
 			`{"setTtlSettings":{"valueSinceUnixEpoch":{"columnName":"id","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}}`, `{}`, protocol.PlanningEffect_CREATE},
@@ -94,7 +114,7 @@ func TestTTLPlan_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			in := test.in
-			in.types = map[string]string{"id": "Uint64", "ts": "Timestamp", "day": "Date", "stamp": "Uint64"}
+			in.types = map[string]string{"id": "Uint64", "ts": "Timestamp", "TS": "Timestamp", "day": "Date", "stamp": "Uint64"}
 			request := alterRequest(c, in)
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)

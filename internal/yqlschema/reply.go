@@ -35,17 +35,23 @@ func HeaderKinds() []string {
 // ClaimedModels are the desired models whose coverage a YQL document read for
 // request claims: a row table's settings, a column's, a column table's
 // storage, a coordination node, a topic, an external data source, an external
-// table, an async replication and a transfer, and a table's changefeeds when
-// the host takes the facets of a reading (see [takesFacets]). Their source
-// formats include SQL. Without that feature the reading cannot say a
-// changefeed, so it claims nothing about the changefeeds of its tables and
-// leaves those a table holds unmanaged. A table's settings, a column's and a
-// column table's storage are claimed either way, as a YAML or Go source claims
-// them; without the feature a load that declares one is refused.
+// table, an async replication and a transfer, a table's changefeeds when the
+// host takes the facets of a reading (see [takesFacets]), and an index's
+// partitioning and read replicas when it also reads an index's own facets
+// (see [takesIndexFacets]). Their source formats include SQL. Without that
+// feature the reading cannot say a changefeed, so it claims nothing about the
+// changefeeds of its tables and leaves those a table holds unmanaged; an
+// index's settings are left so in the same way. A table's settings, a
+// column's and a column table's storage are claimed either way, as a YAML or
+// Go source claims them; without the feature a load that declares one is
+// refused.
 func ClaimedModels(request *protocol.ReadSQLSchemaRequest) []*protocol.ValueModel {
 	models := claimedModels()
 	if takesFacets(request) {
 		models = append(models, schema.NativeDesiredModel(schema.ChangefeedProperties))
+	}
+	if takesIndexFacets(request) {
+		models = append(models, schema.NativeDesiredModel(schema.IndexSettingsProperties))
 	}
 	return models
 }
@@ -55,6 +61,16 @@ func ClaimedModels(request *protocol.ReadSQLSchemaRequest) []*protocol.ValueMode
 // a column and a table's changefeeds need.
 func takesFacets(request *protocol.ReadSQLSchemaRequest) bool {
 	return slices.Contains(request.GetTargetFeatures(), provider.SQLFacetsFeature)
+}
+
+// takesIndexFacets reports whether the host that sent request takes the facet
+// of an index's partitioning and read replicas: it takes the facets of a
+// reading and reads an index's own facets, provider.ObservedIndexFacetsFeature.
+// Without the second the comparison could not see what an index holds, so a
+// declared setting would be dropped on every index the table already has, as
+// a YAML or Go source's would.
+func takesIndexFacets(request *protocol.ReadSQLSchemaRequest) bool {
+	return takesFacets(request) && slices.Contains(request.GetTargetFeatures(), provider.ObservedIndexFacetsFeature)
 }
 
 func claimedModels() []*protocol.ValueModel {
@@ -182,7 +198,7 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 // and changefeeds among them where the host does not take the facets of a
 // reading (see [takesFacets]).
 func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.SQLSchema, []*Refusal) {
-	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request)}
+	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request), indexFacets: takesIndexFacets(request)}
 	w.tables(reading)
 	for _, view := range reading.Views {
 		w.trace(protocol.SQLObjectTrace_VIEWS, len(w.reply.Views), view.document, view.span)
@@ -219,12 +235,14 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.S
 }
 
 // wiring is the reply wire writes: the request it answers, the refusals it
-// collects, and whether the host takes the facets of a reading.
+// collects, whether the host takes the facets of a reading, and whether it
+// takes an index's own (see [takesIndexFacets]).
 type wiring struct {
-	request *protocol.ReadSQLSchemaRequest
-	reply   *protocol.SQLSchema
-	gaps    []*Refusal
-	facets  bool
+	request     *protocol.ReadSQLSchemaRequest
+	reply       *protocol.SQLSchema
+	gaps        []*Refusal
+	facets      bool
+	indexFacets bool
 }
 
 // trace traces the object at index of a reply collection to the text of its
@@ -237,8 +255,8 @@ func (w *wiring) trace(collection protocol.SQLObjectTrace_Collection, index, doc
 }
 
 // tables writes the tables of the reading, and the facets of their settings
-// for a host that takes them. Settings a host without the facets has no home
-// for are refused.
+// and of their indexes' settings for a host that takes them. Settings a host
+// without the facets has no home for are refused.
 func (w *wiring) tables(reading *Reading) {
 	for _, table := range reading.Tables {
 		if settings := tableSettings(table.Facets); len(settings) != 0 && !w.facets {
@@ -246,7 +264,7 @@ func (w *wiring) tables(reading *Reading) {
 				"the host does not take the facets of a table in a SQL schema reading (%s)", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "),
 				provider.SQLFacetsFeature)))
 		}
-		declared, refused := declaredTable(reading, table)
+		declared, indexes, refused := w.declaredTable(reading, table)
 		w.gaps = append(w.gaps, refused...)
 		w.trace(protocol.SQLObjectTrace_TABLES, len(w.reply.Tables), table.document, table.span)
 		w.reply.Tables = append(w.reply.Tables, declared)
@@ -262,6 +280,10 @@ func (w *wiring) tables(reading *Reading) {
 		for _, envelope := range envelopes {
 			w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), table.document, table.span)
 			w.reply.Facets = append(w.reply.Facets, envelope)
+		}
+		for _, index := range indexes {
+			w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), index.document, index.text)
+			w.reply.Facets = append(w.reply.Facets, index.envelope)
 		}
 	}
 }
@@ -309,11 +331,21 @@ func (w *wiring) changefeeds(feeds []Object) {
 	}
 }
 
+// indexFacet is the facet of one index's settings, with the text of the
+// index's declaration a trace points at.
+type indexFacet struct {
+	envelope *protocol.Envelope
+	document int
+	text     span
+}
+
 // declaredTable writes a table of the reading as the reply declares it, with
-// its key parts, columns and indexes, and returns the refusals of the index
-// settings a SQL schema reading has no home for.
-func declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []*Refusal) {
+// its key parts, columns and indexes, and returns the facets of its indexes'
+// settings where the host takes them (see [wiring.indexSettingsFacet]) and the
+// refusals of the index settings a SQL schema reading has no home for.
+func (w *wiring) declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []indexFacet, []*Refusal) {
 	var gaps []*Refusal
+	var facets []indexFacet
 	declared := &protocol.DeclaredTable{Name: table.Name, Schema: table.Schema, Comment: table.Comment, PrimaryKey: slices.Clone(table.PrimaryKey)}
 	for _, part := range table.PrimaryKeyParts {
 		declared.PrimaryKeyParts = append(declared.PrimaryKeyParts, &protocol.DeclaredKeyPart{Column: part.Name, Prefix: part.Prefix, Descending: part.Desc})
@@ -329,15 +361,51 @@ func declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []*R
 		if index.TableName != table.Qualified() {
 			continue
 		}
-		if settings := indexSettings(index); len(settings) != 0 {
-			gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for: "+
-				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes",
-				quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
+		envelope, refusal := w.indexSettingsFacet(table, index)
+		switch {
+		case refusal != nil:
+			gaps = append(gaps, refusal)
+		case envelope != nil:
+			facets = append(facets, indexFacet{envelope: envelope, document: index.document, text: index.span})
 		}
 		declared.Indexes = append(declared.Indexes, &protocol.DeclaredIndex{Name: index.Name, Fields: slices.Clone(index.Fields), Unique: index.Unique, Comment: index.Comment,
 			Type: index.Type, IncludeColumns: slices.Clone(index.IncludeColumns), StorageParameters: index.StorageParams, TableName: index.TableName})
 	}
-	return declared, gaps
+	return declared, facets, gaps
+}
+
+// indexSettingsFacet is the facet of the partitioning and the read replicas
+// index declares, owned by the index as a YAML or Go source's index entry owns
+// it, or nil where it declares none. The facet needs a host that takes it (see
+// [takesIndexFacets]), and a global sync, async or unique index: a vector
+// index's settings, its partitioning among them, have no home in a SQL schema
+// reading, since its index set is no SQL model. What has no home is refused.
+func (w *wiring) indexSettingsFacet(table Table, index Index) (*protocol.Envelope, *Refusal) {
+	settings := indexSettings(index)
+	if len(settings) == 0 {
+		return nil, nil
+	}
+	named := fmt.Sprintf("index %s of table %s", quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)))
+	declares := fmt.Sprintf("%s declares %s, which a SQL schema reading has no home for: ", named, strings.Join(settings, ", "))
+	if kind, _ := ydbdecl.IndexKindOf(index.Type); index.Vector != nil || kind == ydbdecl.IndexVector {
+		return nil, gap(index.document, index.span, declares+"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes")
+	}
+	if !w.indexFacets {
+		return nil, gap(index.document, index.span, declares+fmt.Sprintf("the host does not take the facets of an index in a SQL schema reading (%s and %s)",
+			provider.SQLFacetsFeature, provider.ObservedIndexFacetsFeature))
+	}
+	invalid := func(err error) *Refusal {
+		return &Refusal{Document: index.document, Start: index.span.start, End: index.span.end, Code: Invalid, Message: fmt.Sprintf("%s: %v", named, err)}
+	}
+	intent, err := indexSettingsIntent(*index.Partitioning)
+	if err != nil {
+		return nil, invalid(err)
+	}
+	envelope, err := schema.CaptureIndexSettingsIntent(&protocol.Reference{Engine: "ydb", Kind: "index", Schema: table.Schema, Path: []string{table.Name}, Name: index.Name}, intent)
+	if err != nil {
+		return nil, invalid(err)
+	}
+	return envelope, nil
 }
 
 // documentDeclarations writes what one document of the load declares, in its

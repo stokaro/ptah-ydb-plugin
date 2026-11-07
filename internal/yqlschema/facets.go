@@ -76,11 +76,7 @@ func tableFacets(table Table) ([]*protocol.Envelope, error) {
 func rowTableIntent(facets ydbdecl.TableFacets) (*native.RowTableIntent, error) {
 	intent := &native.RowTableIntent{}
 	if declared := facets.Partitioning; declared != nil {
-		partitioning := &Ydb_Table.PartitioningSettings{PartitioningBySize: featureStatus(declared.BySize), PartitionSizeMb: declared.PartitionSizeMB,
-			PartitioningByLoad: featureStatus(declared.ByLoad), MinPartitionsCount: declared.MinPartitions, MaxPartitionsCount: declared.MaxPartitions}
-		if !proto.Equal(partitioning, &Ydb_Table.PartitioningSettings{}) {
-			intent.PartitioningSettings = partitioning
-		}
+		intent.PartitioningSettings = partitioningSettings(declared.BySize, declared.PartitionSizeMB, declared.ByLoad, declared.MinPartitions, declared.MaxPartitions)
 		intent.KeyBloomFilter = featureStatus(declared.KeyBloomFilter)
 		if declared.ReadReplicas != "" {
 			replicas, err := readReplicas(declared.ReadReplicas)
@@ -105,6 +101,34 @@ func rowTableIntent(facets ydbdecl.TableFacets) (*native.RowTableIntent, error) 
 		intent.TtlSettings = ttl
 	}
 	return intent, nil
+}
+
+// indexSettingsIntent is a global index's partitioning and read replicas as
+// the index's facet holds them, with what a table's partitioning reads them
+// with. A setting the declaration leaves out stays out, so the index keeps
+// what it holds of it, as a YAML or Go source that leaves it out does.
+func indexSettingsIntent(declared ydbdecl.IndexPartitioning) (*native.IndexSettingsIntent, error) {
+	intent := &native.IndexSettingsIntent{
+		PartitioningSettings: partitioningSettings(declared.BySize, declared.PartitionSizeMB, declared.ByLoad, declared.MinPartitions, declared.MaxPartitions)}
+	if declared.ReadReplicas != "" {
+		replicas, err := readReplicas(declared.ReadReplicas)
+		if err != nil {
+			return nil, err
+		}
+		intent.ReadReplicasSettings = replicas
+	}
+	return intent, nil
+}
+
+// partitioningSettings is the automatic partitioning a table or an index
+// declares, as YDB describes it, or nil where it declares none of it.
+func partitioningSettings(bySize *bool, sizeMB uint64, byLoad *bool, minimum, maximum uint64) *Ydb_Table.PartitioningSettings {
+	partitioning := &Ydb_Table.PartitioningSettings{PartitioningBySize: featureStatus(bySize), PartitionSizeMb: sizeMB,
+		PartitioningByLoad: featureStatus(byLoad), MinPartitionsCount: minimum, MaxPartitionsCount: maximum}
+	if proto.Equal(partitioning, &Ydb_Table.PartitioningSettings{}) {
+		return nil
+	}
+	return partitioning
 }
 
 // featureStatus writes a declared switch as YDB's status: ENABLED, DISABLED,

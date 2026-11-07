@@ -139,6 +139,11 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 		{name: "a column default", storage: `{}`, modify: withFacet(facet(c, schema.ColumnProperties, "count",
 			`{"literal":{"type":{"typeId":"UINT64"},"value":{"uint64Value":"7"}}}`)),
 			wantErr: `column tables do not support defaults or Serial columns`},
+		// A column table takes local indexes only, which its storage
+		// declares. Ported from the host's TestRender_ColumnTableRejectsGlobalIndex.
+		{name: "a global index", storage: `{}`, modify: func(table *protocol.DeclaredTable) {
+			table.Indexes = []*protocol.DeclaredIndex{{Name: "global", Fields: []string{"body"}}}
+		}, wantErr: `YDB table creation does not support ptah.provider.experimental.DeclaredTable.indexes`},
 		{name: "no key", storage: `{}`, modify: func(table *protocol.DeclaredTable) {
 			table.PrimaryKey, table.Columns[0].Primary, table.Columns[1].Primary = nil, false, false
 		}, wantErr: `YDB table creation requires an ordered primary key`},
@@ -253,6 +258,30 @@ func TestColumnTablePlan_TieredTTLNeedsTheCapability(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics[0].Message, qt.Matches, `column table "app/records" declares a TTL tier that moves rows to an external data source, `+
 		`which requires target capability tiered_ttl, unavailable on this ydb target .*`)
+}
+
+// The creation of a column table whose TTL moves rows to a data source reads
+// that source, an absolute path read relative to the database, so it follows
+// a step of the plan that creates the source; a tier that deletes rows, and a
+// source outside the database, which no step of the plan writes, read
+// nothing. Ported from the host's
+// TestCommonEffects_AColumnTableReadsTheSourcesItsTTLMovesRowsTo.
+func TestColumnTablePlan_CreateReadsTheSourcesItsTTLMovesRowsTo(t *testing.T) {
+	for _, test := range []struct{ name, ttl, reads string }{
+		{"a tier that moves rows", tiered, "ext"},
+		{"a tier that deletes rows", deleteDaily, ""},
+		{"a source outside the database", `{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","externalStorage":"/other/ext"},{"applyAfterSeconds":"604800","delete":{}}]}}`, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			plan, err := backend.New().PlanFeatures(t.Context(), columnCreationRequest(c, `{"ttl":`+test.ttl+`}`,
+				map[string]bool{"transactional_ddl": false, tablecreate.TieredTTLCapability: true}))
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(plan.Contributions[0].Steps, qt.HasLen, 1)
+			c.Assert(sourceReads(plan.Contributions[0].Steps[0]), qt.Equals, test.reads)
+		})
+	}
 }
 
 // columnAlterRequest plans the ALTER of app.records with the given facets on

@@ -45,22 +45,23 @@ func dropTablesAtCleanup(c *qt.C, opened *connection.Connection, absolutes ...st
 }
 
 // The host's TestYDBDesiredYQL_AppliesAndSettles. A YQL table with literal
-// defaults, a covering index and KEY_BLOOM_FILTER = ENABLED is created, and
-// the next run finds nothing to change: the defaults, the index and the table
-// setting survive the read back. The setting reaches the host as the
-// row-table facet of the table, which needs a host that lists
-// schema.sql-facets. The built-in input also gives the index
-// AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2, which this provider refuses in
-// every source (TestHostRefusesASQLSchema_FailurePath).
+// defaults, a covering index with AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2
+// and KEY_BLOOM_FILTER = ENABLED is created, and the next run finds nothing to
+// change: the defaults, the index, its setting and the table setting survive
+// the read back. The table setting reaches the host as the row-table facet of
+// the table, which needs a host that lists schema.sql-facets, and the index
+// setting as the index's settings facet, which needs one that also lists
+// schema.observed-index-facets.
 func TestHostAppliesAYQLTableWithSettings_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.SQLFacetsFeature)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
 	opened, directory, database := lockFixture(c)
 	absolute := path.Join(database, directory, "items")
 	dropTablesAtCleanup(c, opened, absolute)
 
 	applyYQLUntilSynced(c, directory, "CREATE TABLE `{dir}/items` (id Int64 NOT NULL, body Utf8 DEFAULT 'active'u, n Int64 DEFAULT 42l, PRIMARY KEY (id), "+
-		"INDEX by_body GLOBAL SYNC ON (body) COVER (n)) WITH (KEY_BLOOM_FILTER = ENABLED);",
+		"INDEX by_body GLOBAL SYNC ON (body) COVER (n) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2)) WITH (KEY_BLOOM_FILTER = ENABLED);",
 		`(?s).*row-table-create-operation.*Schema apply completed successfully.*`, "creation")
 
 	c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, storedTable{Families: []string{"default compression=off"},
@@ -75,6 +76,7 @@ func TestHostAppliesAYQLTableWithSettings_HappyPath(t *testing.T) {
 	}, table.WithIdempotent())
 	c.Assert(err, qt.IsNil)
 	c.Assert(indexes, qt.DeepEquals, []string{"by_body on body cover n"})
+	c.Assert(heldSettings(c, opened, absolute)["by_body"], qt.Matches, `min=2 .*`)
 }
 
 // The host's TestYDBDesiredYQL_TTLAndColumnFamilies. A YQL table declares a

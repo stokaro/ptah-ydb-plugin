@@ -128,11 +128,16 @@ func TestChangefeedPlan_HappyPath(t *testing.T) {
 func TestChangefeedPlan_LeavesThemAlone(t *testing.T) {
 	uninspected := feedCase("", heldFeed)
 	uninspected.changefeedKnowledge = protocol.ModelKnowledge_UNINSPECTED
+	disabled := feedCase("", `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_DISABLED"},"topic":{"partitioningSettings":{}}}]}`)
+	disabled.changefeedKnowledge = protocol.ModelKnowledge_UNINSPECTED
 	for _, test := range []struct {
 		name string
 		in   alterCase
 	}{
 		{"a source that could not describe changefeeds", uninspected},
+		// Ported from the host's
+		// TestComparison_PreservesDisabledStreamAndItsCoverageForCapture.
+		{"a disabled changefeed a source that could not describe changefeeds leaves out", disabled},
 		{"a source that states nothing about them", feedCase("", heldFeed)},
 		{"the declared changefeeds", feedCase(declaredFeed, heldFeed)},
 		{"a changefeed the read cannot represent", feedCase(declaredFeed, heldRegion)},
@@ -155,6 +160,8 @@ func TestChangefeedPlan_FailurePath(t *testing.T) {
 	withoutChangefeeds.capabilities = make(map[string]bool)
 	oldLine := feedCase(sids, noFeeds)
 	oldLine.capabilities = map[string]bool{changefeeds.CapabilityChangefeeds: true}
+	topicWithoutChangefeeds := feedCase(declaredLong, heldFeed)
+	topicWithoutChangefeeds.capabilities = make(map[string]bool)
 	notCaptured := feedCase(declaredFeed, "")
 	clash := feedCase(`{"changefeeds":[{"name":"by_label","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{}}}]}`, noFeeds)
 	clash.declared, clash.held = []string{"label"}, []string{"label"}
@@ -168,6 +175,9 @@ func TestChangefeedPlan_FailurePath(t *testing.T) {
 		wantErr string
 	}{
 		{"a target without changefeeds", withoutChangefeeds, "Uint64",
+			`changefeed "f" of table "app/records", which requires target capability changefeeds, unavailable on this ydb target`},
+		// Ported from the host's TestRender_Changefeed_FailurePath.
+		{"a topic change on a target without changefeeds", topicWithoutChangefeeds, "Uint64",
 			`changefeed "f" of table "app/records", which requires target capability changefeeds, unavailable on this ydb target`},
 		{"USER_SIDS on a line without it", oldLine, "Uint64",
 			`changefeed "f" of table "app/records" takes USER_SIDS, which requires target capability changefeed_user_sids, unavailable on this ydb target`},
@@ -246,6 +256,20 @@ func TestChangefeedPlan_NewTable(t *testing.T) {
 	for _, parent := range plan.Parents {
 		c.Assert(parent.Receipt.Steps, qt.HasLen, 2)
 	}
+}
+
+// A new table's changefeed is refused on a target without changefeeds, in the
+// words of an addition. Ported from the host's TestRender_Changefeed_FailurePath.
+func TestChangefeedPlan_NewTableWithoutChangefeeds(t *testing.T) {
+	c := testcheck.New(t)
+	request := creationPlan(c)
+	table := request.Tables[0].Desired
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.ChangefeedProperties, "", declaredFeed))
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `changefeed "f" of table "app/records", which requires target capability changefeeds, unavailable on this ydb target`)
 }
 
 // A column table takes no changefeed.

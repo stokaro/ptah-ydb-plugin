@@ -126,6 +126,10 @@ func TestIndexKindDirectives_FailurePath(t *testing.T) {
 			"tokenizer": "standard", "ops": "gin_trgm_ops"})}, `table "items": index "ft": an operator class names the metric of a vector index, and a fulltext_plain index takes none`},
 		{"a class with no YDB metric", []testsource.GoDeclaration{indexDirective(2, map[string]string{"name": "v", "fields": "emb", "type": "vector_kmeans_tree", "ops": "vector_hamming_ops"})},
 			`table "items": index "v": operator class "vector_hamming_ops" has no YDB counterpart: .*`},
+		// Ported from the host's TestRender_VectorIndex_FailurePath: pgvector's
+		// half-precision class has no YDB counterpart.
+		{"a half-precision class", []testsource.GoDeclaration{indexDirective(2, map[string]string{"name": "v", "fields": "emb", "type": "vector_kmeans_tree", "ops": "halfvec_cosine_ops"})},
+			`table "items": index "v": operator class "halfvec_cosine_ops" has no YDB counterpart: .*`},
 		{"a class against the settings", []testsource.GoDeclaration{indexDirective(2, map[string]string{"name": "v", "fields": "emb", "type": "vector_kmeans_tree",
 			"ops": "vector_ip_ops", "distance": "cosine"})}, `table "items": index "v": operator class "vector_ip_ops" names similarity=inner_product, and the index's settings name distance=cosine`},
 		{"a full-text index without a tokenizer", []testsource.GoDeclaration{indexDirective(2, map[string]string{"name": "ft", "fields": "body", "type": "fulltext_plain",

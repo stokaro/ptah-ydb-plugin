@@ -67,8 +67,11 @@ func gaps(reading *yqlschema.Reading) []string {
 			found = append(found, "table "+table.Qualified())
 		}
 	}
+	// A global sync, async or unique index's partitioning and read replicas
+	// are a facet of the index; a vector index's settings have no home.
 	for _, index := range reading.Indexes {
-		if len(yqlschema.IndexFacetPayloads(index)) != 0 {
+		kind, _ := ydbdecl.IndexKindOf(index.Type)
+		if len(yqlschema.IndexFacetPayloads(index)) != 0 && (index.Vector != nil || kind == ydbdecl.IndexVector) {
 			found = append(found, "index "+index.Name)
 		}
 	}
@@ -260,12 +263,12 @@ func wireOrder(m meaning) meaning {
 // hostMapping is the meaning of the model the host maps a complete reply to,
 // as internal/providerhost maps a SQL schema reading: each table at its
 // qualified name with its columns, its indexes and the settings its facets
-// hold, each view at its qualified name, each grant at the field of the host's
+// and its indexes' facets hold, each view at its qualified name, each grant at the field of the host's
 // model its target's kind names, and each coordination node with the settings
 // its envelope holds.
 func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 	c.Helper()
-	result := meaning{TableFacets: hostTableFacets(c, reply), IndexFacets: make(map[string]map[string]any)}
+	result := meaning{TableFacets: hostTableFacets(c, reply), IndexFacets: hostIndexFacets(c, reply)}
 	for _, table := range reply.GetTables() {
 		qualified := canonical(table.GetSchema(), table.GetName())
 		object := map[string]any{"Name": table.GetName(), "Schema": table.GetSchema(), "Comment": table.GetComment(), "PrimaryKey": table.GetPrimaryKey()}
@@ -546,6 +549,11 @@ var claimedHostKinds = map[string][]string{
 	schema.ResourcePoolProperties:           {"ptah.run/ydb/resource-pool"},
 	schema.ResourcePoolClassifierProperties: {"ptah.run/ydb/resource-pool-classifier"},
 	schema.ChangefeedProperties:             {"ptah.run/ydb/changefeed"},
+	// The host claims every async replication and transfer of a complete
+	// load, as its TestReadYQLReplication, TestReadYQLTransfer and
+	// TestYQLSupportedFamilyCoverageSurvivesFileLoading assert.
+	schema.ReplicationProperties: {"ptah.run/ydb/async-replication"},
+	schema.TransferProperties:    {"ptah.run/ydb/transfer"},
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
@@ -586,7 +594,8 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
 	}
 	for _, subject := range coverage.Subjects {
-		if !slices.Contains([]string{"ptah.run/ydb/secret", "ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier"}, subject.Kind) {
+		if !slices.Contains([]string{"ptah.run/ydb/secret", "ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier",
+			"ptah.run/ydb/async-replication", "ptah.run/ydb/transfer"}, subject.Kind) {
 			continue
 		}
 		var knowledge struct {

@@ -431,6 +431,9 @@ func TestIdentifierValue_HappyPath(t *testing.T) {
 		{name: "a doubled backtick", input: "`tick``name`", want: "tick`name"},
 		{name: "an escaped backslash", input: "`back\\\\slash`", want: "back\\slash"},
 		{name: "an empty backticked name", input: "``", want: ""},
+		// Ported from the host's TestReadName_HappyPath.
+		{name: "a hex escape", input: "`i\\x64`", want: "id"},
+		{name: "a dot and a slash are the name's", input: "`app/a.b`", want: "app/a.b"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

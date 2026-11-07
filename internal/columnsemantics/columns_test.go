@@ -29,6 +29,27 @@ func TestCapturedColumnAspects(t *testing.T) {
 		{"quoted string and cast", &protocol.DeclaredColumn{Type: "Utf8", DefaultSet: true, DefaultValue: "' a''b '::text"}, &protocol.ObservedColumn{DataType: "Utf8", DefaultExpression: new("' a\\'b 'u")}, protocol.ColumnAspect_COLUMN_DEFAULT, diff(protocol.ColumnAspect_COLUMN_DEFAULT, protocol.ColumnDifference_SAME, "' a\\'b 'u", "' a\\'b 'u")},
 		{"NULL default", &protocol.DeclaredColumn{Type: "Int64", DefaultSet: true, DefaultValue: "NULL"}, &protocol.ObservedColumn{DataType: "Int64"}, protocol.ColumnAspect_COLUMN_DEFAULT, diff(protocol.ColumnAspect_COLUMN_DEFAULT, protocol.ColumnDifference_SAME, "", "")},
 		{"expression", &protocol.DeclaredColumn{Type: "Timestamp", DefaultExpression: "CurrentUtcTimestamp()"}, &protocol.ObservedColumn{DataType: "Timestamp", DefaultExpression: new("CurrentUtcTimestamp()")}, protocol.ColumnAspect_COLUMN_DEFAULT, diff(protocol.ColumnAspect_COLUMN_DEFAULT, protocol.ColumnDifference_SAME, "CurrentUtcTimestamp()", "CurrentUtcTimestamp()")},
+		// The rows below are ported from the host's
+		// TestColumnsWithDialect_YDBTypes_HappyPath and _FailurePath: a
+		// declaration and a catalog type compare by the YDB type each makes.
+		{"a varchar length YDB does not keep", typed("VARCHAR(255)"), held("Utf8"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "Utf8", "Utf8")},
+		{"a date built on 25.1", typed("DATE"), held("Date"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "Date", "Date")},
+		{"jsonb", typed("JSONB"), held("JsonDocument"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "JsonDocument", "JsonDocument")},
+		{"a decimal", typed("DECIMAL(10,2)"), held("Decimal(10,2)"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "Decimal(10,2)", "Decimal(10,2)")},
+		{"a native spelling in another case", typed("uint64"), held("Uint64"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "Uint64", "Uint64")},
+		{"two declarations of one type", typed("VARCHAR(255)"), held("TEXT"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "Utf8", "Utf8")},
+		{"a declared instant on both sides", typed("TIMESTAMP"), held("DATETIME"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "Timestamp64", "Timestamp64")},
+		// A vector is bytes in a String column, which reads back as a plain
+		// String; its dimension is the vector index's to keep.
+		{"a vector built as bytes", typed("vector(1536)"), held("String"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "String", "String")},
+		{"a vector without a dimension", typed("VECTOR"), held("String"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "String", "String")},
+		{"two vector declarations of different dimensions", typed("vector(4)"), held("vector(3)"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_SAME, "String", "String")},
+		{"a decimal precision", typed("DECIMAL(12,2)"), held("Decimal(10,2)"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_CHANGED, "Decimal(10,2)", "Decimal(12,2)")},
+		{"the narrow type where the wide one is declared", typed("Timestamp64"), held("Timestamp"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_CHANGED, "Timestamp", "Timestamp64")},
+		{"bytes where text is declared", typed("TEXT"), held("String"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_CHANGED, "String", "Utf8")},
+		{"a declared 64-bit integer against YDB's 8-bit one", typed("INT8"), held("Int8"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_CHANGED, "Int8", "Int64")},
+		{"two declarations of different types", typed("BIGINT"), held("INTEGER"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_CHANGED, "Int32", "Int64")},
+		{"a vector where text was built", typed("vector(3)"), held("Utf8"), protocol.ColumnAspect_COLUMN_TYPE, diff(protocol.ColumnAspect_COLUMN_TYPE, protocol.ColumnDifference_CHANGED, "Utf8", "String")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -123,6 +144,15 @@ func TestColumnSemanticsCancellationHasNoPrefix(t *testing.T) {
 	defaults, err := columnsemantics.ReadDefaults(ctx, &protocol.ReadColumnDefaultsRequest{Columns: []*protocol.ObservedColumnDefaultInput{{Column: request.Tables[0].Current.Columns[0]}}})
 	c.Assert(err, qt.ErrorIs, context.Canceled)
 	c.Assert(defaults, qt.IsNil)
+}
+
+// typed declares a nullable column of the given type, and held reads one
+// back with the given catalog type.
+func typed(kind string) *protocol.DeclaredColumn {
+	return &protocol.DeclaredColumn{Type: kind, Nullable: true}
+}
+func held(kind string) *protocol.ObservedColumn {
+	return &protocol.ObservedColumn{DataType: kind, ColumnType: kind, IsNullable: "YES"}
 }
 
 func requestFor(desired *protocol.DeclaredColumn, current *protocol.ObservedColumn, aspect protocol.ColumnAspect) *protocol.CompareColumnsRequest {

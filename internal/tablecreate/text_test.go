@@ -241,6 +241,12 @@ func TestAlterationStatement_HappyPath(t *testing.T) {
 			want:    "ALTER TABLE `app/jobs` SET (TTL = Interval(\"P1D\") ON `ts`);",
 		},
 		{
+			// Ported from the host's TestTTLHandler_RendersEachTransition.
+			name:    "a TTL set on an integer column",
+			request: `{"setTtlSettings":{"valueSinceUnixEpoch":{"columnName":"e","columnUnit":"UNIT_SECONDS","expireAfterSeconds":3600}}}`,
+			want:    "ALTER TABLE `app/jobs` SET (TTL = Interval(\"PT1H\") ON `e` AS SECONDS);",
+		},
+		{
 			name:    "a TTL dropped",
 			request: `{"dropTtlSettings":{}}`,
 			want:    "ALTER TABLE `app/jobs` RESET (TTL);",

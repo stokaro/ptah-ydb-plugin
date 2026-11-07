@@ -16,6 +16,17 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
+// nullDefaultRefusal says why a column cannot take the NULL default it
+// declares, or returns nil. A NULL default is no default on a nullable column.
+// On a NOT NULL column it contradicts the column, and the host's embedded
+// engine refused the declaration rather than drop either half.
+func nullDefaultRefusal(column *protocol.DeclaredColumn) error {
+	if column.Nullable {
+		return nil
+	}
+	return fmt.Errorf("the column is NOT NULL and its default is NULL")
+}
+
 // NativeDefault compiles a common literal into the typed value native creation
 // stores. An explicit NULL default is absent. Expressions are refused because
 // YDB default declarations accept values, not expressions evaluated for each row.
@@ -28,7 +39,7 @@ func NativeDefault(column *protocol.DeclaredColumn, spelling string, caps map[st
 	}
 	value, isNull := declaredValue(column.DefaultValue)
 	if isNull {
-		return nil, nil
+		return nil, nullDefaultRefusal(column)
 	}
 	switch spelling {
 	case ydbtype.Int16, ydbtype.Uint16:

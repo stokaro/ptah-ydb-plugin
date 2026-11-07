@@ -62,6 +62,13 @@ func bind(database string, value *protocol.Envelope) (directory, absolute string
 // ApplyCopy copies the rows of the source into the owner, a table the plan
 // created that must hold none yet. The copy is one data query, which commits
 // whole or not at all; a row that does not convert fails it.
+//
+// The owner first takes the access control entries the source holds, as the
+// host's embedded engine gave a rebuilt table the grants of the table it
+// replaced: the new table is created with its directory's permissions alone,
+// and the old one is dropped with its own, so nothing else gives them back.
+// The renames keep them. A grant or a revoke the plan makes on the table runs
+// after the rebuild and applies to the new table.
 func (t *TableStatements) ApplyCopy(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (dispatched bool, err error) {
 	copied, err := tablecreate.DecodeCopy(value)
 	if err != nil {
@@ -93,11 +100,18 @@ func (t *TableStatements) ApplyCopy(ctx context.Context, database string, value 
 	if !empty {
 		return false, fmt.Errorf("YDB table %s holds rows already, and a rebuild copies into an empty one", absolute)
 	}
+	grants, err := t.heldGrants(ctx, source)
+	if err != nil {
+		return false, err
+	}
 	if err := beforeWrite(ctx); err != nil {
 		return false, err
 	}
 	if err := ctx.Err(); err != nil {
 		return false, err
+	}
+	if err := t.grant(ctx, absolute, grants); err != nil {
+		return true, err
 	}
 	statement, err := tablecreate.CopyStatement(absolute, value.GetOwner().GetSchema(), copied)
 	if err != nil {
@@ -107,6 +121,36 @@ func (t *TableStatements) ApplyCopy(ctx context.Context, database string, value 
 		return true, &QueryFailure{Text: statement, Err: err}
 	}
 	return true, nil
+}
+
+// heldGrants are the access control entries the table at absolute holds
+// itself, without the ones it takes from its directory.
+func (t *TableStatements) heldGrants(ctx context.Context, absolute string) ([]*Ydb_Scheme.Permissions, error) {
+	response, err := t.Scheme.DescribePath(ctx, &Ydb_Scheme.DescribePathRequest{Path: absolute})
+	if err != nil {
+		return nil, fmt.Errorf("describe the access of YDB table %s: transport failed", absolute)
+	}
+	var described Ydb_Scheme.DescribePathResult
+	if err := Operation(response.GetOperation(), &described); err != nil {
+		return nil, err
+	}
+	return described.GetSelf().GetPermissions(), nil
+}
+
+// grant gives the table at absolute the access control entries grants.
+func (t *TableStatements) grant(ctx context.Context, absolute string, grants []*Ydb_Scheme.Permissions) error {
+	if len(grants) == 0 {
+		return nil
+	}
+	actions := make([]*Ydb_Scheme.PermissionsAction, 0, len(grants))
+	for _, entry := range grants {
+		actions = append(actions, &Ydb_Scheme.PermissionsAction{Action: &Ydb_Scheme.PermissionsAction_Grant{Grant: proto.CloneOf(entry)}})
+	}
+	response, err := t.Scheme.ModifyPermissions(ctx, &Ydb_Scheme.ModifyPermissionsRequest{Path: absolute, Actions: actions})
+	if err != nil {
+		return fmt.Errorf("give YDB table %s the access of the table it replaces: transport failed", absolute)
+	}
+	return Status(response.GetOperation())
 }
 
 // QueryFailure is the failure of the one query an operation sent after

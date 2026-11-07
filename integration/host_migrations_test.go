@@ -123,6 +123,47 @@ func TestHostMigrationsUpGivesUpAtTheLockTimeout_FailurePath(t *testing.T) {
 	}
 }
 
+// The host refuses a run YDB cannot carry out before it applies anything,
+// from what the provider's session states: a lock timeout typed beside a
+// statement timeout, which the refusal names alone; a lock timeout from the
+// project config, in the config key's words; and --tx-mode all, since YDB
+// commits each schema change as it runs. Ported from the host's
+// TestRequestDecide_FailurePath,
+// TestRuntimePolicies_ReachEveryTargetTheirCapabilityClaims and
+// TestTxModeAllDocumentation_ListsEveryTargetThatCommitsAsItRuns.
+func TestHostRefusesARunYDBCannotCarryOut_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	config := filepath.Join(writeFiles(c, filepath.Join(c.TempDir(), "project"), map[string]string{"ptah.yaml": "migration:\n  lock_timeout: 2s\n"}), "ptah.yaml")
+	for _, test := range []struct {
+		name  string
+		flags []string
+		want  string
+	}{
+		{"a lock timeout beside a statement timeout", []string{"--lock-timeout", "5s", "--statement-timeout", "30s"},
+			`error: --lock-timeout sets a timeout for every migration, and dialect "ydb" has no lock wait Ptah can bound around a migration ` +
+				`(target capability migration_lock_timeout). Remove --lock-timeout to run without one`},
+		{"a lock timeout from the project config", []string{"--config", config},
+			`error: migration.lock_timeout sets a timeout for every migration, and dialect "ydb" has no lock wait Ptah can bound around a migration ` +
+				`(target capability migration_lock_timeout). Remove migration.lock_timeout to run without one`},
+		{"one transaction for the run", []string{"--tx-mode", "all"},
+			`error: error running migrations: tx-mode all is not supported for dialect "ydb": this target commits schema changes as they run, ` +
+				`so a failed migration cannot be rolled back as a unit`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			f := newMigrationsFixture(c)
+			migrations, _ := usersMigrations(c, f)
+
+			refused, err := hostCommand(c, append(append([]string{"migrations", "up"}, test.flags...), f.target(migrations)...)...)
+
+			c.Assert(err, qt.IsNotNil)
+			c.Assert(refused, qt.Contains, test.want)
+			c.Assert(refused, qt.Not(qt.Contains), "--statement-timeout sets")
+			c.Assert(f.names(c), qt.Not(qt.Contains), "users")
+		})
+	}
+}
+
 // `migrations up` waits for the migration lock another session holds until
 // the holder releases, and not before. Two runs started together over the same
 // directory then apply it once, which the INSERT in the first migration would

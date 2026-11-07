@@ -319,7 +319,7 @@ func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabili
 	// The vector and full-text indexes follow the rules of their own, with
 	// the column types and the key they read.
 	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: nativeIndexesManaged(a.table, a.desired, a.observed, a.features), desired: result.wanted, held: result.held,
-		columns: declaredKeyTypes(a.table.Desired, a.intent), capabilities: capabilities})
+		columns: declaredKeyTypes(a.table.Desired, a.intent, capabilities), capabilities: capabilities})
 	if reason != "" {
 		return alterationIndexes{}, reason, nil
 	}

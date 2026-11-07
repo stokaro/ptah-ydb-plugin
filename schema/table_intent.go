@@ -301,7 +301,26 @@ func tableObservation(intent *native.RowTableIntent) *native.DescribeTableResult
 	}
 	result.Attributes = maps.Clone(intent.Attributes)
 	result.Self = accessObservation(intent.Access)
+	// YDB keeps no record of a starting layout, only the minimum partition
+	// count it sets from one where the declaration states no minimum of its
+	// own, so the table a creation leaves reads that minimum.
+	if started := startingPartitions(intent); started != 0 && intent.GetPartitioningSettings().GetMinPartitionsCount() == 0 {
+		if result.PartitioningSettings == nil {
+			result.PartitioningSettings = &Ydb_Table.PartitioningSettings{}
+		}
+		result.PartitioningSettings.MinPartitionsCount = started
+	}
 	return result
+}
+
+// startingPartitions is how many partitions the starting layout a declaration
+// states creates the table with, 0 for none: the uniform count, or one more
+// than the split points.
+func startingPartitions(intent *native.RowTableIntent) uint64 {
+	if points := len(intent.GetPartitionAtKeys()); points != 0 {
+		return uint64(points) + 1
+	}
+	return intent.GetUniformPartitions()
 }
 
 // declaredStorage is the storage settings a read reports, as a declaration

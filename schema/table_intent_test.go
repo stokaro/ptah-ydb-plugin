@@ -176,6 +176,36 @@ func TestDesiredTableAcceptsSettingsWithoutAKey(t *testing.T) {
 	c.Assert(string(result.Payload), qt.Equals, `{"keyBloomFilter":"ENABLED"}`)
 }
 
+// A declared starting layout leaves the table with the minimum partition
+// count YDB sets from it, unless the declaration states a minimum of its own,
+// so the observation predicted from the declaration holds that minimum. The
+// host compares a document with itself through this prediction. Ported from
+// the host's TestCompare_YDBTablePartitioning_SameDocument.
+func TestTableConversionPredictsTheMinimumALayoutSets(t *testing.T) {
+	for _, test := range []struct {
+		name, payload string
+		want          uint64
+	}{
+		{"a uniform layout", `{"primaryKey":["id"],"uniformPartitions":"4"}`, 4},
+		{"a uniform layout beside a stated minimum", `{"primaryKey":["id"],"uniformPartitions":"4","partitioningSettings":{"minPartitionsCount":"2"}}`, 2},
+		{"no layout", `{"primaryKey":["id"]}`, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			definition := schema.TableDesiredModel()
+			declared := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion,
+				Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: []byte(test.payload)}
+
+			observed, err := schema.ConvertTable(declared, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+
+			c.Assert(err, qt.IsNil)
+			var table native.DescribeTableResult
+			c.Assert(protojson.Unmarshal(observed.Payload, &table), qt.IsNil)
+			c.Assert(table.GetPartitioningSettings().GetMinPartitionsCount(), qt.Equals, test.want)
+		})
+	}
+}
+
 // Without a key there is no observation to predict, so the conversion says so.
 func TestDesiredTableWithoutAKeyIsNotAnObservation(t *testing.T) {
 	c := testcheck.New(t)

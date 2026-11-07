@@ -51,7 +51,9 @@ import (
 // embedded engine does: the ones the declaration states, or the ones the old
 // table held where the declaration does not state them. Each stream starts
 // again, and its consumers lose their positions. A changefeed an asynchronous
-// replication controls, or one the read cannot represent, is refused.
+// replication controls, or one the read cannot represent, is refused, and so is
+// a table whose read does not describe its changefeeds (see
+// undescribedChangefeeds).
 
 // rebuildPrefix and replacedPrefix name the scratch tables of a rebuild, as
 // the host's embedded engine names them.
@@ -593,6 +595,16 @@ func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable
 	if err != nil {
 		return rebuiltChangefeeds{}, "", err
 	}
+	if reason := undescribedChangefeeds(table); reason != "" {
+		return rebuiltChangefeeds{}, reason, nil
+	}
+	// As the alteration refuses it: without the table's own read, a changefeed
+	// the table holds would look absent, and the rename would fail after the
+	// new table is created and filled.
+	if declared.changefeeds != nil && observed.changefeeds == nil {
+		return rebuiltChangefeeds{}, "the table's current changefeeds were not captured, and YDB moves no table that carries one " +
+			"(`Cannot move table with cdc streams`)", nil
+	}
 	_, held, err := changefeedSets(nil, observed.changefeeds)
 	if err != nil {
 		return rebuiltChangefeeds{}, "", err
@@ -956,14 +968,20 @@ func keepHeldFamilies(request *Ydb_Table.CreateTableRequest, held *native.Descri
 		if family.GetCacheMode() == native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
 			family.CacheMode = held.GetCacheMode()
 		}
+		if family.GetKeepInMemory() == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+			family.KeepInMemory = held.GetKeepInMemory()
+		}
 		request.ColumnFamilies[i] = schema.RequestFamily(family)
 	}
+	// A family the old table keeps in memory is kept there by the native call
+	// that creates the new table; a migration file, which YQL has no family
+	// setting for, refuses it when it is written (see familySettings).
 	for _, family := range held.GetColumnFamilies() {
 		if families[familyKey(family.GetName())] {
 			continue
 		}
 		request.ColumnFamilies = append(request.ColumnFamilies, schema.RequestFamily(&native.ColumnFamily{Name: familyKey(family.GetName()),
-			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode()}))
+			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode(), KeepInMemory: family.GetKeepInMemory()}))
 		families[familyKey(family.GetName())] = true
 	}
 	return families

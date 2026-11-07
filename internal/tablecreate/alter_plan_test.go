@@ -279,6 +279,15 @@ func TestAlterPlan_NoChange(t *testing.T) {
 		{name: "a column in the declared family stays",
 			desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, desiredColumns: map[string]string{"payload": `{"family":"archive"}`}, declared: []string{"payload"},
 			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"payload": `{"family":"archive"}`}, held: []string{"payload"}},
+		// Families compare by name, and a default family that states nothing
+		// keeps what a table profile gave it. Ported from the host's
+		// TestColumnFamiliesCompareFacets_HoldingWhatIsDeclaredIsNoChange.
+		{name: "families declared in another order",
+			desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"warm"},{"name":"cold","data":{"media":"hdd"}}]}`,
+			heldTable:    `{"primaryKey":["id"],"columnFamilies":[{"name":"cold","data":{"media":"hdd"}},{"name":"default"},{"name":"warm"}]}`},
+		{name: "a default family stating nothing against one a table profile set",
+			desiredTable: plainTable,
+			heldTable:    `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_LZ4","keepInMemory":"ENABLED"}]}`},
 		{name: "a dropped column is never moved",
 			desiredTable: plainTable, declared: nil, columnKnowledge: protocol.ModelKnowledge_COMPLETE,
 			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"gone": `{"family":"archive"}`}, held: []string{"gone"}},

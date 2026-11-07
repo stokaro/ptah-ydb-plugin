@@ -143,6 +143,71 @@ func TestCompilePrimaryKeySources(t *testing.T) {
 		})
 	}
 }
+
+// A declaration YDB cannot hold is refused before any statement, with the
+// reason the host's embedded engine gave. Ported from the host's
+// TestRender_RefusesWhatYDBCannotHold_FailurePath and, for the
+// half-precision vector, TestRender_VectorIndex_FailurePath.
+func TestCompileRefusesWhatYDBCannotHold_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		// columns follow the key column id Uint64.
+		columns []*protocol.DeclaredColumn
+		want    string
+	}{
+		{"a type YDB has none of", []*protocol.DeclaredColumn{{Name: "at", Type: "TIME", Nullable: true}},
+			`TIME has no YDB counterpart: YDB has no time-of-day type`},
+		{"a collation", []*protocol.DeclaredColumn{{Name: "n", Type: "TEXT", Nullable: true, Collation: "C"}},
+			`YDB table creation does not support ptah.provider.experimental.DeclaredColumn.collation`},
+		{"a NULL default on a NOT NULL column", []*protocol.DeclaredColumn{{Name: "n", Type: "TEXT", DefaultSet: true, DefaultValue: "NULL"}},
+			`the column is NOT NULL and its default is NULL`},
+		{"a half-precision vector", []*protocol.DeclaredColumn{{Name: "emb", Type: "halfvec(3)", Nullable: true}},
+			`halfvec\(3\) has no YDB counterpart: YDB has no half-precision vector; .*`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"},
+				Columns: append([]*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}, test.columns...)}
+			result, err := tablecreate.Compile(owner(), table, nil)
+			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// A key over a type YDB cannot order, and a TTL over a column YDB reads no TTL
+// from, are refused before the table is created: YDB refuses either only once
+// the call runs (`wrong key type Double`). Ported from the host's
+// TestRender_RefusesWhatYDBCannotHold_FailurePath and
+// TestTTLPlanFeatures_RefusesARebuiltTableTheTargetCannotHold.
+func TestCompileRefusesWhatYDBRefusesOnlyOnceItRuns_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	ttl := facet(c, schema.TableProperties, "", `{"primaryKey":["id"],"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"n","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}}`)
+	for _, test := range []struct {
+		name    string
+		key     string
+		records []*protocol.ComparisonRecord
+		want    string
+	}{
+		{"a key over a type YDB cannot order", "DOUBLE PRECISION", nil,
+			"the primary key of table \"app/records\": column \"id\" is Double, which YDB refuses in a key \\(`wrong key type Double`\\)"},
+		{"a key over a JSON document", "JsonDocument", nil,
+			`the primary key of table "app/records": column "id" is JsonDocument, .*`},
+		{"a TTL over a signed integer", "Uint64", []*protocol.ComparisonRecord{ttl},
+			`the TTL column "n" is Int64, and YDB reads a TTL from a Date, .*`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"},
+				Columns:  []*protocol.DeclaredColumn{{Name: "id", Type: test.key, Primary: true}, {Name: "n", Type: "Int64", Nullable: true}},
+				Features: &protocol.CapturedFeatures{Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Records: test.records}}}
+			result, err := tablecreate.Compile(owner(), table, nil)
+			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
 func TestCompileRefusesUnimplementedOrForgedState(t *testing.T) {
 	c := testcheck.New(t)
 	missingColumn := facet(c, schema.ColumnProperties, "missing", `{}`)

@@ -87,6 +87,7 @@ func grantTargetRefusal(target *protocol.Reference) error {
 // the given normalized kind: a database grant names neither, and any other
 // target names an exact path, with a directory relative to the database that
 // does not qualify an absolute name, and a resource pool by its name alone.
+// No target names the cluster root.
 func grantNameRefusal(kind, name, directory string) error {
 	if kind == "database" {
 		if name != "" || directory != "" {
@@ -96,6 +97,12 @@ func grantNameRefusal(kind, name, directory string) error {
 	}
 	if !accessName(name) || !validGrantPath(name) || (directory != "" && !validGrantPath(directory)) {
 		return unsupported("a YDB grant requires an exact object path")
+	}
+	// `/` is an exact path: the cluster root, above every database. Without
+	// this refusal a directory grant named `/` renders GRANT ... ON `/`.
+	if name == "/" {
+		return unsupported("a YDB grant target names the cluster root, which is no object of the database; " +
+			"the database root is the database itself, which a database grant names")
 	}
 	if strings.HasPrefix(directory, "/") || (strings.HasPrefix(name, "/") && directory != "") {
 		return unsupported("a grant target directory is relative to its database and cannot qualify an absolute path")
