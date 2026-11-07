@@ -12,6 +12,8 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -690,4 +692,63 @@ func TestFailedRefusesADropOthersDependOn_FailurePath(t *testing.T) {
 	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_UNKNOWN)
 	c.Assert(result.GetDiagnostic().GetReason(), qt.Equals,
 		"the unit's outcome is unknown: YDB answered SCHEME_ERROR, issue 2019, which does not show whether the unit applied")
+}
+
+// A call the gRPC layer refused before YDB took it ran nothing, so its unit
+// is NOT_APPLIED, or PARTIAL after an applied prefix, with a reason that names
+// which refusal it was: a request larger than the driver sends, which the
+// driver refuses before it leaves (measured on 25.1.4.7 and 26.2.1.14 with a
+// statement of 70 MiB), and a call the server's gRPC layer denied. The
+// host's embedded engine read both as an outcome it knew. Ported from the
+// YDB rows of the host's TestUnknown_OutcomeKnown.
+func TestFailedReadsACallTheGRPCLayerRefused_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, reason string
+		err          error
+		applied      uint32
+		want         protocol.Execution_Outcome
+	}{
+		{name: "a request too large to send", err: fmt.Errorf("execute: %w", grpcstatus.Error(codes.ResourceExhausted, "trying to send message larger than max (73400430 vs. 64000000)")),
+			reason: "the unit never left: it is larger than the YDB driver sends in one request (gRPC ResourceExhausted)", want: protocol.Execution_NOT_APPLIED},
+		{name: "a call the gRPC layer denied", err: grpcstatus.Error(codes.PermissionDenied, "access denied"),
+			reason: "YDB's gRPC layer denied the call before YDB ran it (gRPC PermissionDenied)", want: protocol.Execution_NOT_APPLIED},
+		{name: "after an applied prefix", err: grpcstatus.Error(codes.PermissionDenied, "access denied"), applied: 2,
+			reason: "YDB's gRPC layer denied the call before YDB ran it (gRPC PermissionDenied)", want: protocol.Execution_PARTIAL},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result := ydbfailure.Failed(ydbfailure.Read(test.err), ydbfailure.Unit{Text: "CREATE TABLE t (id Uint64, PRIMARY KEY (id))"}, test.applied)
+
+			c.Assert(result.GetOutcome(), qt.Equals, test.want)
+			c.Assert(result.GetAppliedCount(), qt.Equals, test.applied)
+			c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.call-refused")
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Equals, test.reason)
+			c.Assert(provider.ValidateDiagnostic(result.GetDiagnostic()), qt.IsNil)
+		})
+	}
+}
+
+// A transport failure that may come after YDB ran the unit leaves its outcome
+// unknown: a response larger than the driver takes, which YDB sends after it
+// ran the unit (the host's embedded engine read it as an outcome it knew,
+// which it was not), a server out of resources, and a connection lost.
+func TestFailedReadsACallTheGRPCLayerRefused_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{name: "a response too large to receive", err: grpcstatus.Error(codes.ResourceExhausted, "grpc: received message larger than max (73400430 vs. 64000000)")},
+		{name: "a server out of resources", err: grpcstatus.Error(codes.ResourceExhausted, "resource exhausted")},
+		{name: "a connection lost", err: grpcstatus.Error(codes.Unavailable, "connection reset by peer")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result := ydbfailure.Failed(ydbfailure.Read(test.err), ydbfailure.Unit{Text: "CREATE TABLE t (id Uint64, PRIMARY KEY (id))"}, 0)
+
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_UNKNOWN)
+			c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.execution-unconfirmed")
+		})
+	}
 }

@@ -30,6 +30,8 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
@@ -74,6 +76,30 @@ type Answer struct {
 	// provider's own sentence, naming a table and a column and no value, so
 	// a reason may carry it. It is "" for any other answer.
 	Check string
+	// Unrun is the reason a call that carries no YDB status ran nothing,
+	// or "": the gRPC layer refused it before YDB took it (see
+	// [unrunCall]).
+	Unrun string
+}
+
+// unrunCall is the reason the gRPC call that failed with code and message
+// ran nothing, or "" where nothing shows that. A request larger than the
+// driver sends is refused before it leaves (`trying to send message larger
+// than max`, the SDK's limit of 64000000 bytes, measured on 25.1.4.7 and
+// 26.2.1.14), and a call the server's gRPC layer denies (PermissionDenied)
+// is refused before YDB runs it. A response larger than the driver takes
+// (`received message larger than max`) comes after YDB ran the unit, and
+// any other transport failure may come before or after, so each stays
+// unknown.
+func unrunCall(code codes.Code, message string) string {
+	switch {
+	case code == codes.ResourceExhausted && strings.Contains(message, "trying to send message larger than max"):
+		return "the unit never left: it is larger than the YDB driver sends in one request (gRPC ResourceExhausted)"
+	case code == codes.PermissionDenied:
+		return "YDB's gRPC layer denied the call before YDB ran it (gRPC PermissionDenied)"
+	default:
+		return ""
+	}
 }
 
 // repeatedAborts are the issue codes of an ABORTED answer that YDB gives for
@@ -98,11 +124,15 @@ type operation interface {
 	Issues() []*Ydb_Issue.IssueMessage
 }
 
-// Read returns what YDB answered with err, or the zero Answer for an error
-// that is not an operation status YDB returned.
+// Read returns what YDB answered with err. An error that is not an
+// operation status YDB returned reads as the zero Answer, with the reason a
+// gRPC status it carries shows that the call ran nothing (see [unrunCall]).
 func Read(err error) Answer {
 	answered, ok := errors.AsType[operation](err)
 	if !ok {
+		if transport, isStatus := status.FromError(err); isStatus && err != nil {
+			return Answer{Unrun: unrunCall(transport.Code(), transport.Message())}
+		}
 		return Answer{}
 	}
 	answer := Answer{Status: Ydb.StatusIds_StatusCode(answered.Code())}
@@ -506,6 +536,7 @@ const (
 	unknownMessage  = "The dispatched unit's outcome is unknown; no automatic retry was attempted"
 	rejectedMessage = "YDB rejected the unit"
 	abortedMessage  = "YDB aborted the transaction for a conflict"
+	unrunMessage    = "The unit was refused before YDB ran it"
 )
 
 // Failed is the reply to an Execute whose first applied units were applied and
@@ -515,10 +546,19 @@ const (
 // answer is [Answer.Rejected], and a call whose answer is a status in which
 // YDB refuses it. One that YDB aborted for a conflict in a caller
 // transaction, as the request's first unit, also sets transaction_aborted
-// when the host negotiated it. Anything else is UNKNOWN. Each reply's
-// diagnostic gives its reason: [Answer.RefusedReason], [Answer.AbortedReason]
-// or [Answer.UnknownReason].
+// when the host negotiated it. A call the gRPC layer refused before YDB ran
+// it is NOT_APPLIED, or PARTIAL, too, with [Answer.Unrun] as its reason.
+// Anything else is UNKNOWN. Each other reply's diagnostic gives its reason:
+// [Answer.RefusedReason], [Answer.AbortedReason] or [Answer.UnknownReason].
 func Failed(answer Answer, unit Unit, applied uint32) *protocol.Execution {
+	if answer.Unrun != "" {
+		result := &protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, AppliedCount: applied, DiagnosticCode: "ydb.call-refused", Message: unrunMessage,
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.Unrun}}
+		if applied > 0 {
+			result.Outcome = protocol.Execution_PARTIAL
+		}
+		return result
+	}
 	rejected := unit.Text != "" && answer.Rejected(unit.Text, unit.Transaction) || unit.Call && slices.Contains(refusals, answer.Status)
 	if !rejected {
 		return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: unknownMessage,

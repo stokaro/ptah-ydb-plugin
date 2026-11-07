@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -209,6 +210,39 @@ func TestNativeExecutionKnowsWhatYDBRefusedBeforeRunningIt(t *testing.T) {
 	c.Assert(topicOverTable.DiagnosticCode, qt.Equals, "ydb.execution-unconfirmed")
 	assertRowCount(c, opened, table, 0)
 	c.Assert(heldEntries(c, opened, path.Join(database, directory)), qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{"compiled": Ydb_Scheme.Entry_TABLE})
+}
+
+// A unit larger than the YDB driver sends in one request never leaves, so
+// it applied nothing and its outcome is known: NOT_APPLIED, with a reason
+// that says so (`trying to send message larger than max (... vs.
+// 64000000)`, measured on 25.1.4.7 and 26.2.1.14). The host's
+// embedded engine read it as an outcome it knew; the provider read it as
+// UNKNOWN. Ported from the host's TestUnknown_OutcomeKnown.
+func TestNativeExecutionKnowsAUnitTooLargeToSendRanNothing(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	table := path.Join(database, directory, "large")
+	// A host that lists large messages sends the provider up to 64 MiB, and
+	// one that lists error reasons shows the reason of an execution.
+	client := startProviderFor(c, provider.LargeMessagesFeature, provider.ErrorReasonsFeature)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	_, err = opened.DB.ExecContext(c.Context(), "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))")
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() {
+		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+table+"`")
+		c.Check(err, qt.IsNil)
+	})
+
+	// The unit fits the 64 MiB a provider takes from the host and not the
+	// 64000000 bytes the driver sends.
+	large := executeSQL(c, client, session.Id, "", "UPSERT INTO `"+table+"` (id, v) VALUES (1ul, '"+strings.Repeat("x", 64_200_000)+"'u)")
+
+	c.Assert(large.Outcome, qt.Equals, protocol.Execution_NOT_APPLIED)
+	c.Assert(large.DiagnosticCode, qt.Equals, "ydb.call-refused")
+	c.Assert(large.Diagnostic.GetReason(), qt.Equals, "the unit never left: it is larger than the YDB driver sends in one request (gRPC ResourceExhausted)")
+	assertRowCount(c, opened, table, 0)
 }
 
 func TestNativeTransactionRefusesDDLAndControlEscape(t *testing.T) {
