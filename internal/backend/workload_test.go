@@ -109,6 +109,11 @@ func TestWorkloadComparison_HappyPath(t *testing.T) {
 		{name: "the same classifier", kind: schema.ResourcePoolClassifierProperties, declared: map[string]proto.Message{"etl": routing("batch", 10)}, read: map[string]proto.Message{"etl": routing("batch", 10)}},
 		{name: "a classifier moved", kind: schema.ResourcePoolClassifierProperties, declared: map[string]proto.Message{"etl": routing("batch", 20)}, read: map[string]proto.Message{"etl": routing("batch", 10)},
 			changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
+		// Ported from the host's TestClassifierComparisonCapturesRoutingAndRankOperands:
+		// a pool name is case-sensitive, so routing to Pool rather than pool
+		// is a change.
+		{name: "a pool name differing in case", kind: schema.ResourcePoolClassifierProperties, declared: map[string]proto.Message{"etl": routing("Pool", 10)},
+			read: map[string]proto.Message{"etl": routing("pool", 10)}, changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
