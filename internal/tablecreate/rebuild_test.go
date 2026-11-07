@@ -377,6 +377,30 @@ func TestRebuildPlanKeepsTheFamiliesTheTableHolds(t *testing.T) {
 		"    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'off'),\n    FAMILY `default` (COMPRESSION = 'lz4'),\n    FAMILY `extra` (COMPRESSION = 'lz4')\n) WITH (KEY_BLOOM_FILTER = DISABLED);")
 }
 
+// A rebuild keeps a family the table keeps in memory: the native call that
+// creates the new table states keep_in_memory, and a migration file, which
+// YQL has no family setting for, refuses the rebuild with the reason, as the
+// host's embedded engine refused it. Ported from the host's
+// TestColumnFamiliesPlanFeatures_RefusesARebuiltTableTheTargetCannotHold.
+func TestRebuildPlanKeepsAFamilyKeptInMemory(t *testing.T) {
+	check := testcheck.New(t)
+	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	held := alterRequest(check, alterCase{heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_LZ4","keepInMemory":"ENABLED"}]}`})
+	request.Tables[0].Current.Features = held.Tables[0].Current.Features
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Diagnostics, qt.HasLen, 0)
+	check.Assert(string(plan.Contributions[0].Steps[0].Operation.Value.Value.Payload), qt.Contains, `"keepInMemory":"ENABLED"`)
+
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+	rendering.Form = protocol.RenderRequest_TEXT
+	rendered, err := backend.New().Render(check.Context(), rendering)
+
+	check.Assert(err, qt.IsNil)
+	check.Assert(rendered.Units, qt.HasLen, 0)
+	check.Assert(rendered.Refusal.GetMessage(), qt.Matches, `.*column family "default" keeps its columns in memory, and YQL has no family setting for it.*`)
+}
+
 // A rebuild creates the new table with what the declaration states, so a
 // declared TTL over a column YDB reads no TTL from refuses the rebuild before
 // any statement, as the host's embedded engine refused it. Ported from the

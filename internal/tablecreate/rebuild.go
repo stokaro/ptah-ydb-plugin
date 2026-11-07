@@ -956,14 +956,20 @@ func keepHeldFamilies(request *Ydb_Table.CreateTableRequest, held *native.Descri
 		if family.GetCacheMode() == native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
 			family.CacheMode = held.GetCacheMode()
 		}
+		if family.GetKeepInMemory() == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+			family.KeepInMemory = held.GetKeepInMemory()
+		}
 		request.ColumnFamilies[i] = schema.RequestFamily(family)
 	}
+	// A family the old table keeps in memory is kept there by the native call
+	// that creates the new table; a migration file, which YQL has no family
+	// setting for, refuses it when it is written (see familySettings).
 	for _, family := range held.GetColumnFamilies() {
 		if families[familyKey(family.GetName())] {
 			continue
 		}
 		request.ColumnFamilies = append(request.ColumnFamilies, schema.RequestFamily(&native.ColumnFamily{Name: familyKey(family.GetName()),
-			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode()}))
+			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode(), KeepInMemory: family.GetKeepInMemory()}))
 		families[familyKey(family.GetName())] = true
 	}
 	return families
