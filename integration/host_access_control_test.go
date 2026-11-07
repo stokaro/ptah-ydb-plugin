@@ -287,13 +287,10 @@ func TestHostConvergesYQLPrincipals_HappyPath(t *testing.T) {
 // Ported from the host's TestYDBDesiredYQL_Privileges: YQL permissions on a
 // table, a directory and the database converge. The grant option is a
 // permission of its own in YDB, ydb.access.grant, and REVOKE GRANT OPTION FOR
-// takes it together with the permission it names. Each source plans a change
-// and converges, and the last, which declares no grant, leaves the
-// principals with none.
-//
-// The table is applied first: the host refuses a common grant on a table the
-// same plan creates through a provider, which its embedded engine plans in one
-// run.
+// takes it together with the permission it names. The first source creates
+// the table and grants on it in one plan. Each source plans a change and
+// converges, and the last, which declares no grant, leaves the principals
+// with none.
 func TestHostConvergesYQLPrivileges_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -311,9 +308,6 @@ func TestHostConvergesYQLPrivileges_HappyPath(t *testing.T) {
 	first := prefix + fmt.Sprintf(" GRANT SELECT ROW ON %s TO %s WITH GRANT OPTION; GRANT LIST ON `%s` TO %s; GRANT CONNECT ON `%s` TO %s;",
 		table, names.group, path.Join(database, directory), names.group, database, names.user)
 	second := first + fmt.Sprintf(" REVOKE GRANT OPTION FOR SELECT ROW ON %s FROM %s; GRANT UPDATE ROW ON %s TO %s;", table, names.group, table, names.group)
-	output, err := hostApplySource(c, directory, "sql", created)
-	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-
 	for _, source := range []string{first, second, prefix} {
 		planned := hostPlanned(c, directory, "sql", source)
 		output, err := hostApplySource(c, directory, "sql", source)
