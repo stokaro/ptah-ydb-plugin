@@ -21,6 +21,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	ydbtopics "github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -40,51 +41,116 @@ func CompareReplications(ctx context.Context, request *protocol.CompareModelsReq
 }
 
 // CompareTransfers evaluates complete transfer operands and coverage, as
-// [CompareReplications] does for replications.
+// [CompareReplications] does for replications, after it refuses a transfer
+// whose table or topic the schema does not declare (see
+// [undeclaredDependencies]).
 func CompareTransfers(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
-	if err := undeclaredTargets(request); err != nil {
+	if err := undeclaredDependencies(request); err != nil {
 		return nil, err
 	}
 	return objectcompare.Compare(ctx, request, TransferFamily())
 }
 
-// undeclaredTargets refuses a declared transfer whose table the schema does
-// not declare, where the host lists every declared table among the declared
-// relations (models.declared-relations). YDB creates no transfer into a table
-// that is not there (`Path does not exist`, measured on 26.2.1.14), and a
-// plan that leaves the table out drops it or leaves it absent, so the
-// transfer would fail at apply or after it; the host's embedded engine
-// refused it in the same words. A host that lists only views leaves the
-// question open, and the transfer is compared as before.
-func undeclaredTargets(request *protocol.CompareModelsRequest) error {
-	if !slices.Contains(request.GetTargetFeatures(), provider.DeclaredRelationsFeature) {
+// TransferDeclaredKinds are the object models of another comparison whose
+// declared objects the transfer comparison reads (models.declared-objects):
+// the topics, which the topic comparison owns.
+func TransferDeclaredKinds() []string {
+	return []string{schema.TopicProperties}
+}
+
+// undeclaredDependencies refuses a declared transfer whose table or topic
+// would not be there once the plan has run, in the words of the host's
+// embedded engine, which refused both for each transfer in turn.
+//
+// The table has to be declared, where the host lists every declared table
+// among the declared relations (models.declared-relations): YDB creates no
+// transfer into a table that is not there (`Path does not exist`, measured on
+// 26.2.1.14), and a plan that leaves the table out drops it or leaves it
+// absent. A host that lists only views leaves the question open.
+//
+// A topic of the transfer's own database has to be declared as a topic, where
+// the host also sends the declared topics (models.declared-objects), or be a
+// changefeed of a declared table: YDB accepts a transfer of a missing topic
+// and then stops it (`Discovery error`), and a topic the schema leaves out is
+// one the plan drops or never creates. The comparison does not see a table's
+// changefeeds, a facet of the table another comparison owns, so it takes a
+// stream of a declared table for one of its changefeeds. A topic of another
+// database is not this plan's to keep.
+//
+// A target without transfers is left to the comparison, which refuses a
+// declared transfer by the capability first, as the embedded engine did.
+func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
+	features := request.GetTargetFeatures()
+	tables := slices.Contains(features, provider.DeclaredRelationsFeature)
+	declaredTopics := tables && slices.Contains(features, provider.DeclaredObjectsFeature)
+	if !tables || !request.GetCapabilities()[replication.CapabilityTransfers] {
 		return nil
 	}
 	for _, record := range request.GetDesired().GetRecords() {
 		if record.GetKind() != schema.TransferProperties || record.GetValue() == nil {
 			continue
 		}
-		spec, err := schema.DesiredTransfer(record.GetValue().GetValue())
+		value := record.GetValue().GetValue()
+		spec, err := schema.DesiredTransfer(value)
 		if err != nil {
 			return err
 		}
+		owner := value.GetOwner()
+		subject := "transfer " + ydbtopics.Display(owner.GetSchema(), owner.GetName())
 		target := strings.Trim(spec.Target, "/")
-		directory, name := path.Split(target)
-		directory = strings.TrimSuffix(directory, "/")
-		if slices.ContainsFunc(request.GetDeclaredRelations(), func(relation *protocol.ComparisonIdentity) bool {
-			return relation.GetKind() == "table" && relation.GetSchema().GetNormalized() == directory && relation.GetName().GetNormalized() == name
-		}) {
+		if !declaresTable(request, target) {
+			return authored.New(fmt.Sprintf("%s: it writes table %s, which the schema does not declare, and YDB creates no transfer into "+
+				"a table that is not there (`Path does not exist`); declare the table", subject, target))
+		}
+		if !declaredTopics {
 			continue
 		}
-		owner := record.GetValue().GetValue().GetOwner()
-		subject := owner.GetName()
-		if owner.GetSchema() != "" {
-			subject = owner.GetSchema() + "/" + subject
+		source, err := readTopic(value)
+		if err != nil {
+			return err
 		}
-		return authored.New(fmt.Sprintf("transfer %s: it writes table %s, which the schema does not declare, and YDB creates no transfer into "+
-			"a table that is not there (`Path does not exist`); declare the table", subject, target))
+		if source == nil || declaresTopic(request, source) || declaresTable(request, source.GetSchema().GetNormalized()) {
+			continue
+		}
+		return authored.New(fmt.Sprintf("%s: it reads topic %s, which the schema declares neither as a topic nor as a changefeed, so the "+
+			"plan leaves no such topic, and YDB accepts such a transfer and then stops it (`Discovery error`); declare the topic or the "+
+			"changefeed", subject, ydbtopics.Display(source.GetSchema().GetNormalized(), source.GetName().GetNormalized())))
 	}
 	return nil
+}
+
+// readTopic is the identity of the topic of this database the declared
+// transfer value reads, as the transfer requires it, or nil for a transfer of
+// another database's topic.
+func readTopic(value *protocol.Envelope) (*protocol.ComparisonIdentity, error) {
+	required, _, err := schema.RequiredObjects(value)
+	if err != nil {
+		return nil, err
+	}
+	for _, identity := range required {
+		if identity.GetKind() == schema.TopicProperties {
+			return identity, nil
+		}
+	}
+	return nil, nil
+}
+
+// declaresTopic reports whether the request's declared objects hold topic.
+func declaresTopic(request *protocol.CompareModelsRequest, topic *protocol.ComparisonIdentity) bool {
+	return slices.ContainsFunc(request.GetDeclaredObjects(), func(object *protocol.ComparisonIdentity) bool {
+		return object.GetKind() == schema.TopicProperties && object.GetSchema().GetNormalized() == topic.GetSchema().GetNormalized() &&
+			object.GetName().GetNormalized() == topic.GetName().GetNormalized()
+	})
+}
+
+// declaresTable reports whether the request's declared relations hold the
+// table at tablePath, relative to the database root.
+func declaresTable(request *protocol.CompareModelsRequest, tablePath string) bool {
+	directory, name := path.Split(tablePath)
+	directory = strings.TrimSuffix(directory, "/")
+	return name != "" && slices.ContainsFunc(request.GetDeclaredRelations(), func(relation *protocol.ComparisonIdentity) bool {
+		return relation.GetKind() == "table" && relation.GetSchema().GetNormalized() == directory && relation.GetName().GetNormalized() == name
+	})
 }
 
 // ReplicationFamily is the async replication's part of a comparison.

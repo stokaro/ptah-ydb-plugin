@@ -55,7 +55,10 @@ func buildOperationModel() *protocol.ValueModel {
 		"indexes": "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, " +
 			"and vector and full-text indexes, each with its definition and no settings of the tables that implement it, carried as the upstream arm " +
 			"(fields 7, 8 and 9 of Ydb.Table.TableIndex) the pinned bindings keep as an unknown field; all in name order, built with the table",
-		"omission":  "omitted creation settings request server defaults; explicit settings are confirmed after creation",
+		"omission": "omitted creation settings request server defaults; explicit settings are confirmed after creation",
+		"type_modifiers": "an optional typeModifiers member beside the request's fields: each created column whose declared type YDB keeps only in part, " +
+			"once, with property \"type modifier\" and the declared type and what YDB does not keep of it as its detail; a render reports each as an " +
+			"omission, and execution ignores them",
 		"execution": "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
 		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence " +
 			"when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root " +
@@ -76,20 +79,31 @@ func buildOperationModel() *protocol.ValueModel {
 		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: OperationKind + "/json-v1"}
 }
 
-// Capture compiles a declaration after its caller established the CREATE lifecycle.
+// Capture compiles a declaration after its caller established the CREATE
+// lifecycle. The creation carries the part of each column's declared type the
+// YDB type does not keep, which a render reports (see [CreationOmissions]).
 func Capture(id string, owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*protocol.NormalizedValue, error) {
 	request, err := Compile(owner, table, caps)
 	if err != nil {
 		return nil, err
 	}
-	return CaptureRequest(id, owner, request)
+	return captureCreation(id, owner, request, typeModifiers(table, caps))
 }
 
 // CaptureRequest builds the creation of a compiled native request at owner,
 // which a rebuild names with the scratch table's name.
 func CaptureRequest(id string, owner *protocol.Reference, request *Ydb_Table.CreateTableRequest) (*protocol.NormalizedValue, error) {
+	return captureCreation(id, owner, request, nil)
+}
+
+// captureCreation is [CaptureRequest] for a creation that carries the type
+// modifiers omissions.
+func captureCreation(id string, owner *protocol.Reference, request *Ydb_Table.CreateTableRequest, omissions []Omission) (*protocol.NormalizedValue, error) {
 	payload, err := marshalRequest(request)
 	if err != nil {
+		return nil, err
+	}
+	if payload, err = withTypeModifiers(payload, omissions); err != nil {
 		return nil, err
 	}
 	definition := Model()
@@ -108,12 +122,22 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	if err := validateOwner(value.Owner); err != nil {
 		return nil, err
 	}
-	request, err := decodeRequest(value.Payload)
+	fields, omissions, err := splitTypeModifiers(value.Payload)
 	if err != nil {
+		return nil, err
+	}
+	request, err := decodeRequest(fields)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkTypeModifiers(omissions, columnSet(request.GetColumns())); err != nil {
 		return nil, err
 	}
 	payload, err := marshalRequest(request)
 	if err != nil {
+		return nil, err
+	}
+	if payload, err = withTypeModifiers(payload, omissions); err != nil {
 		return nil, err
 	}
 	payload, err = modeljson.Canonical(payload)
@@ -135,7 +159,20 @@ func Request(value *protocol.Envelope) (*Ydb_Table.CreateTableRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decodeRequest(normalized.Value.Payload)
+	fields, _, err := splitTypeModifiers(normalized.Value.Payload)
+	if err != nil {
+		return nil, err
+	}
+	return decodeRequest(fields)
+}
+
+// columnSet is the set of the names of columns.
+func columnSet[C interface{ GetName() string }](columns []C) map[string]bool {
+	names := make(map[string]bool, len(columns))
+	for _, column := range columns {
+		names[column.GetName()] = true
+	}
+	return names
 }
 
 func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {

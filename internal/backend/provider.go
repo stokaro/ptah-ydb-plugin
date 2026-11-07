@@ -264,6 +264,25 @@ func providerFeatures() []string {
 		// YDB has no enum type, and an enum column is refused before any
 		// call, as the host's embedded engine refused it (EnumColumns).
 		provider.EnumColumnsFeature,
+		// The transfer comparison reads the topics the schema declares, so a
+		// transfer of a topic it does not declare is refused; see
+		// replicationcompare.CompareTransfers.
+		provider.DeclaredObjectsFeature,
+		// A render reports what its units go on without: the part of a
+		// created column's declared type YDB does not keep, and a Serial's
+		// start and increment an offline creation cannot set; see
+		// renderOmissions.
+		provider.RenderOmissionsFeature,
+		// A rebuild written into a migration file gives the new table the
+		// grants the read found on the old one; see tablecreate.regrants.
+		provider.TableGrantsFeature,
+		// A YQL reading returns the password a document gives a user; see
+		// yqlschema.Reply.
+		provider.SQLRolePasswordsFeature,
+		// A view query is compared in the form YDB stores it, keeping case,
+		// in place of the host's reading, which folds it; see
+		// CompareViewQueries.
+		provider.ViewQueryEquivalenceFeature,
 	}
 }
 
@@ -656,6 +675,10 @@ func buildDescription() *protocol.Description {
 						Placement:   protocol.ModelComparison_OBJECTS,
 						Kinds:       []string{schema.TransferProperties},
 						ChangeKinds: []string{schema.TransferChange},
+						// The topics the schema declares, so a transfer of a
+						// topic it does not declare is refused; see
+						// replicationcompare.CompareTransfers.
+						DeclaredKinds: replicationcompare.TransferDeclaredKinds(),
 					},
 					{
 						Id:          tablecompare.ServiceID,

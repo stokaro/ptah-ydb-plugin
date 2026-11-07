@@ -215,13 +215,54 @@ func TestRowTableStatementSerial_HappyPath(t *testing.T) {
 	}
 }
 
+// A creation in no named database writes a Serial without the ALTER SEQUENCE
+// that would give its sequence a start and an increment, since only the
+// sequence's absolute path names it, and the two settings are what the text
+// goes without; a Serial with YDB's own settings goes without nothing, and a
+// creation in a database goes without nothing either.
+func TestSequenceOmissions_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, database string
+		id             *protocol.DeclaredColumn
+		want           []tablecreate.Omission
+	}{
+		{name: "a start and an increment", id: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityStart: "100", IdentityIncrement: "5"},
+			want: []tablecreate.Omission{{Column: "id", Property: "identity start", Detail: "100"}, {Column: "id", Property: "identity increment", Detail: "5"}}},
+		{name: "an increment alone", id: &protocol.DeclaredColumn{Type: "BIGINT", AutoIncrement: true, IdentityIncrement: "3"},
+			want: []tablecreate.Omission{{Column: "id", Property: "identity increment", Detail: "3"}}},
+		{name: "YDB's own settings", id: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityStart: "1", IdentityIncrement: "1"}},
+		{name: "a database", database: "/local", id: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityStart: "100"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request, err := tablecreate.Compile(owner(), serialTable(test.id), serialCapabilities())
+			c.Assert(err, qt.IsNil)
+
+			omissions := tablecreate.SequenceOmissions(test.database, request)
+
+			c.Assert(omissions, qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// The text of a creation in no named database is its CREATE TABLE alone,
+// whatever the Serial's sequence states.
+func TestRowTableStatementSerialWithoutADatabase_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request, err := tablecreate.Compile(owner(), serialTable(&protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityStart: "7", IdentityIncrement: "2"}), serialCapabilities())
+	c.Assert(err, qt.IsNil)
+
+	got, err := tablecreate.RowTableStatementIn("", "app/records", request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(got, qt.Equals, "CREATE TABLE `app/records` (\n    `id` BigSerial NOT NULL,\n    `note` Utf8,\n    PRIMARY KEY (`id`)\n);")
+}
+
 // A sequence the ALTER SEQUENCE cannot name, or would break, has no TEXT form.
 func TestRowTableStatementSerial_FailurePath(t *testing.T) {
 	for _, test := range []struct {
 		name, database, sequence, column, want string
 	}{
-		{name: "no database", sequence: sequenceJSON(math.MaxInt64, "100", "5"), column: `{"typeId":"INT64"}`,
-			want: `the sequence of column "id" takes its start and increment from an ALTER SEQUENCE, which names the sequence by its absolute path, and the creation names no database`},
 		{name: "a 32-bit Serial with a start", database: "/local", sequence: sequenceJSON(math.MaxInt32, "100", "1"), column: `{"typeId":"INT32"}`,
 			want: `the sequence of column "id" gets a start or an increment, and the ALTER SEQUENCE that would give it one raises the maximum of a 16-bit or 32-bit Serial to the Int64 maximum`},
 		{name: "a sequence on a column YQL has no Serial for", database: "/local", sequence: sequenceJSON(math.MaxInt64, "1", "1"), column: `{"typeId":"UINT64"}`,

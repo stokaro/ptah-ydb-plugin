@@ -45,15 +45,19 @@ func TestSerialCreationNamesTheSequenceInItsDatabase_HappyPath(t *testing.T) {
 		"ALTER SEQUENCE `/local/app/records/_serial_column_id` START WITH 100 INCREMENT BY 5 RESTART WITH 100;"})
 }
 
-// A plan made against no read of a database cannot write a Serial's start
-// and increment as statements: the ALTER SEQUENCE names the sequence only by
-// its absolute path, which begins with the database's own. The TEXT form is
-// refused, rather than written with a path that names another sequence. The
-// native creation states the settings in the call that creates the table, and
-// execution binds the database there. Ported from the host's
-// TestGenerateMigrationAST_SerialSequence_FailurePath ("a plan made against
-// no read of a database").
-func TestSerialCreationNamesTheSequenceInItsDatabase_FailurePath(t *testing.T) {
+// A plan made against no read of a database, such as the one an offline
+// render makes, writes the table without a Serial's start and increment: the
+// ALTER SEQUENCE names the sequence only by its absolute path, which begins
+// with the database's own. The render reports both as omissions, as the host's
+// embedded engine's renderer did for an offline `schema render` (measured with
+// built-in 74de0b65b: the CREATE TABLE alone, and `identity increment=5` and
+// `identity start=100` from `schema validate --no-skipped`), rather than
+// refusing the whole render. The native creation states the settings in the
+// call that creates the table. The embedded engine's migration planner
+// refused such a plan (TestGenerateMigrationAST_SerialSequence_FailurePath); a
+// migration is planned against its database, so the TEXT form here serves an
+// offline render.
+func TestSerialCreationWithoutItsDatabase_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	request, plan := serialCreationIn(c, "")
 	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
@@ -62,9 +66,21 @@ func TestSerialCreationNamesTheSequenceInItsDatabase_FailurePath(t *testing.T) {
 	rendered, err := backend.New().Render(c.Context(), rendering)
 
 	c.Assert(err, qt.IsNil)
-	c.Assert(rendered.GetUnits(), qt.HasLen, 0)
-	c.Assert(rendered.GetRefusal().GetChangeId(), qt.Equals, plan.Contributions[0].Steps[0].Operation.Value.Id)
-	c.Assert(rendered.GetRefusal().GetReason(), qt.Equals, protocol.RenderRefusal_NO_TEXT_FORM)
-	c.Assert(rendered.GetRefusal().GetMessage(), qt.Matches, `.*the sequence of column "id" takes its start and increment from an ALTER SEQUENCE, `+
-		`which names the sequence by its absolute path, and the creation names no database`)
+	c.Assert(rendered.GetRefusal(), qt.IsNil)
+	c.Assert(rendered.GetUnits(), qt.HasLen, 1)
+	c.Assert(rendered.GetUnits()[0].GetSql(), qt.Equals, "CREATE TABLE `app/records` (\n    `id` BigSerial NOT NULL,\n    `note` Utf8,\n    PRIMARY KEY (`id`)\n);")
+	c.Assert(omissionTexts(rendered.GetOmissions()), qt.DeepEquals, []string{
+		"unsupported column app.records.id: identity increment=5",
+		"unsupported column app.records.id: identity start=100",
+	})
+}
+
+// omissionTexts writes each omission as its reason, kind, name, property and
+// detail.
+func omissionTexts(omissions []*protocol.RenderOmission) []string {
+	texts := make([]string, 0, len(omissions))
+	for _, omission := range omissions {
+		texts = append(texts, omission.GetReason()+" "+omission.GetKind()+" "+omission.GetName()+": "+omission.GetProperty()+"="+omission.GetDetail())
+	}
+	return texts
 }

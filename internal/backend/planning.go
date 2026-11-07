@@ -97,7 +97,9 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 // or, in the TEXT form a host asks for where it writes a migration file, the
 // YQL statement of each; see renderText. A view or a comment on the common
 // wire is YQL in either form: Ptah's COMMENT ON statement is what execution
-// reads. Both forms check the whole batch before writing a unit.
+// reads. Both forms check the whole batch before writing a unit. A complete
+// render reports what its units go on without to a host that lists
+// render.omissions; see renderOmissions.
 func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*protocol.RenderResult, error) {
 	if err := provider.ValidateRenderRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
@@ -122,11 +124,18 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		operations[i], statements[i] = operation, statement
 	}
-	result := &protocol.RenderResult{Complete: true}
+	omissions, err := renderOmissions(request, operations)
+	if err != nil {
+		return nil, authored.Status(codes.InvalidArgument, err)
+	}
+	result := &protocol.RenderResult{Complete: true, Omissions: omissions}
 	if request.GetForm() == protocol.RenderRequest_TEXT {
 		text, err := renderText(ctx, request.Changes, operations, statements)
 		if err != nil {
 			return nil, err
+		}
+		if text.GetComplete() {
+			text.Omissions = omissions
 		}
 		result = text
 	} else {

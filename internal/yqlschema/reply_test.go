@@ -75,11 +75,6 @@ func gaps(reading *yqlschema.Reading) []string {
 			found = append(found, "index "+index.Name)
 		}
 	}
-	for _, role := range reading.Roles {
-		if role.Password != "" {
-			found = append(found, "password "+role.Name)
-		}
-	}
 	// The host names a pool it reads from a provider as it names a table, so
 	// a pool whose name needs quoting would come back renamed.
 	for _, grant := range append(slices.Clone(reading.Grants), reading.RevokedGrants...) {
@@ -154,7 +149,9 @@ func TestReply_HappyPath(t *testing.T) {
 func TestReply_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return complete(c, r) })
-	c.Assert(len(rows) >= 20, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
+	// The users with a password reach a complete reply under
+	// source.sql-role-passwords, which the request lists.
+	c.Assert(len(rows) >= 8, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -301,7 +298,7 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 	}
 	for _, role := range reply.GetRoles() {
 		result.Roles = append(result.Roles, element(c, marshal(c, map[string]any{"Name": role.GetName(), "Login": role.GetLogin(), "Inherit": role.GetInherit(),
-			"Group": role.GetGroup(), "MemberOf": role.GetMemberOf()})))
+			"Group": role.GetGroup(), "MemberOf": role.GetMemberOf(), "Password": role.GetPassword()})))
 	}
 	for _, grant := range reply.GetGrants() {
 		object := map[string]any{"Role": grant.GetRole(), "Privileges": grant.GetPrivileges()}

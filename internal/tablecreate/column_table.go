@@ -55,6 +55,9 @@ func buildColumnOperationModel() *protocol.ValueModel {
 			"(...) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...), as the host's embedded engine writes it; the native " +
 			"CreateTable call writes another hash function (HASH_FUNCTION_MODULO_N), which the host does not read",
 		"execution": "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
+		"type_modifiers": "an optional typeModifiers member beside the creation's fields: each created column whose declared type YDB keeps only in " +
+			"part, once, with property \"type modifier\" and the declared type and what YDB does not keep of it as its detail; a render reports each " +
+			"as an omission, and execution ignores them",
 		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence " +
 			"when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root " +
 			"ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
@@ -377,6 +380,9 @@ func CaptureColumnTable(id string, owner *protocol.Reference, table *protocol.De
 	if err != nil {
 		return nil, err
 	}
+	if payload, err = withTypeModifiers(payload, typeModifiers(table, caps)); err != nil {
+		return nil, err
+	}
 	definition := ColumnModel()
 	return NormalizeColumnTable(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 		ProviderId: schema.ProviderID, Kind: ColumnOperationKind, Owner: proto.CloneOf(owner), SchemaVersion: 1, Encoding: definition.Encoding,
@@ -394,12 +400,22 @@ func NormalizeColumnTable(input *protocol.ValueInput) (*protocol.NormalizedValue
 	if err := validateOwner(value.Owner); err != nil {
 		return nil, err
 	}
-	creation, err := decodeColumnTable(value.Payload)
+	fields, omissions, err := splitTypeModifiers(value.Payload)
 	if err != nil {
+		return nil, err
+	}
+	creation, err := decodeColumnTable(fields)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkTypeModifiers(omissions, columnSet(creation.GetColumns())); err != nil {
 		return nil, err
 	}
 	payload, err := protojson.Marshal(creation)
 	if err != nil {
+		return nil, err
+	}
+	if payload, err = withTypeModifiers(payload, omissions); err != nil {
 		return nil, err
 	}
 	payload, err = modeljson.Canonical(payload)
@@ -421,7 +437,11 @@ func ColumnTable(value *protocol.Envelope) (*native.ColumnTableCreation, error) 
 	if err != nil {
 		return nil, err
 	}
-	return decodeColumnTable(normalized.Value.Payload)
+	fields, _, err := splitTypeModifiers(normalized.Value.Payload)
+	if err != nil {
+		return nil, err
+	}
+	return decodeColumnTable(fields)
 }
 
 func decodeColumnTable(payload []byte) (*native.ColumnTableCreation, error) {

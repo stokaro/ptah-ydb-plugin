@@ -480,6 +480,29 @@ func TestHostRefusesATransferIntoAnUndeclaredTable_FailurePath(t *testing.T) {
 	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.HasLen, 0)
 }
 
+// A schema that declares a transfer of a topic of its own database, which it
+// declares neither as a topic nor as a changefeed, is refused before anything
+// runs, in the words of the host's embedded engine: YDB accepts such a
+// transfer and then stops it (`Discovery error`). The host sends the declared
+// topics to the transfer comparison under models.declared-objects; a host
+// that predates it cannot say a topic is undeclared. Nothing is created.
+// Measured with built-in 74de0b65b on 26.2.1.14, the same refusal. Ported
+// from the undeclared-topic half of the host's
+// TestGenerateMigrationAST_Replications_FailurePath.
+func TestHostRefusesATransferOfAnUndeclaredTopic_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.DeclaredObjectsFeature)
+	h := newHostTransfer(c)
+
+	refused, err := h.apply(h.orderLog() + h.transfer(lambdaWriting("a:"), ""))
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", refused))
+	c.Assert(refused, qt.Contains, "transfer "+h.directory+"/ingest: it reads topic "+h.directory+"/events, which the schema declares neither as a "+
+		"topic nor as a changefeed, so the plan leaves no such topic, and YDB accepts such a transfer and then stops it (`Discovery error`); "+
+		"declare the topic or the changefeed")
+	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.HasLen, 0)
+}
+
 // Ported from the host's TestYDBTransfer_RefusedOn251: a transfer is refused
 // on a line without transfers, such as 25.1 with its default flags (`Topic
 // transfer creation is disabled`), before any statement runs. The host

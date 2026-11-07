@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.26.0, which speaks provider contract 25.28.
+The module pins `provider-sdk` v0.31.0, which speaks provider contract 25.33.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -738,6 +738,15 @@ Views and comments use these shared stages:
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
 | PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes; a comment on the table or a column also skips a step that changes only an index |
 
+Under `schema.view-query-equivalence` (contract 25.33, ADR 0108 in Ptah) the
+host asks the provider whether the query a declared view states and the query
+the held view keeps are one query, and compares no YDB view query by its own
+reading, which folds case. The provider reads both into the server's form and
+compares them as they stand, as the host's embedded engine did: YDB names keep
+case, so a query that changes only the case of a name, of a keyword or inside a
+string is another query, and the plan replaces the view; a comment, a line
+break or a terminator the server drops changes nothing.
+
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
 `> >`; `$x` is `$ x`; a number keeps its exponent and its suffix; a quoted
@@ -790,9 +799,11 @@ and the host's note gives the reason the host's embedded engine gave: `because
 the cluster made them or they own the database, or the read was of a dev realm,
 which shares its database's users and groups`.
 
-A user's password is set when the user is created, from a YAML or Go
+A user's password is set when the user is created, from a YAML, Go or YQL
 declaration, and is never read back: a declaration that names another password
-plans nothing, as the host's embedded engine plans it.
+plans nothing, as the host's embedded engine plans it. A YQL document's
+password reaches the host under `source.sql-role-passwords` (see [SQL schema
+reading](#sql-schema-reading)).
 
 The password never enters a plan. Under `schema.password-inputs` (contract
 25.22, ADR 0071) the host sends a declared password, or a password hash, as an
@@ -2626,8 +2637,22 @@ operation neither checks nor confirms a marked consumer, since the transfer's
 drop, which the plan may run first, takes the one YDB made. A transfer read
 outside the selected directories marks nothing.
 
-Not modeled yet: HCL blocks, and a transfer's check that its table and topic
-are declared.
+A declared transfer whose table or topic the plan would not leave is refused
+before anything is planned, in the host's embedded engine's words. The table
+has to be declared, where the host lists every declared table among a
+comparison's declared relations (`models.declared-relations`, contract 25.32):
+YDB creates no transfer into a missing table (`Path does not exist`). A topic of
+the transfer's own database has to be declared as a topic, where the host also
+sends the transfer comparison the declared topics (`models.declared-objects`,
+contract 25.33, ADR 0109 in Ptah), or be a changefeed of a declared table: YDB
+accepts a transfer of a missing topic and then stops it (`Discovery error`). The
+comparison does not see a table's changefeeds, a facet of the table that the
+row-table comparison owns, so it takes any stream of a declared table for one of
+its changefeeds, where the host's embedded engine also refused a changefeed the
+table does not declare. A target without transfers refuses the transfer by the
+capability first, as the embedded engine did.
+
+Not modeled yet: HCL blocks.
 
 `TestReplicationLifecycleSubprocess` creates a replication of the server's own
 table, finds nothing to change, refuses a connection change while it runs,
@@ -3111,7 +3136,11 @@ any capture order. A key, type or unsupported-field refusal is
 `UNSUPPORTED_FEATURE`, as in the host's bundled YDB validation; other refusals
 are `INVALID_SCHEMA`. A standalone enum, and a directory comment, character set or
 collation, are reported as unsupported and `OMITTED_DECLARATION` only when the
-request asks that nothing be skipped, which is also the host's behavior.
+request asks that nothing be skipped, which is also the host's behavior. So is
+what an offline render of a table's creation goes without (see [Offline schema
+rendering](#offline-schema-rendering)), in the host's bundled validation's
+words: `ydb: column "app.accounts.email": type modifier=VARCHAR(255): length 255
+would be skipped` and `identity start=100 would be skipped`.
 
 `internal/schemavalidation/testdata/corpus` holds declarations and what the host's
 bundled validation answered, recorded by `testdata/oracle` (the program header says
@@ -3258,7 +3287,10 @@ The TEXT form writes the column as its Serial type and, for a start or an
 increment other than 1, the `ALTER SEQUENCE` the host's embedded engine writes
 after the CREATE TABLE, with `RESTART WITH` the start where it is not 1:
 `START` alone leaves the next value at 1. The statement names the sequence by
-its absolute path, so the migration file carries the database path, and YDB
+its absolute path, so a creation that names no database, such as an offline
+render's, is written without it, and the render reports the start and the
+increment as omissions, as the host's embedded engine did (see [Offline schema
+rendering](#offline-schema-rendering)). The migration file carries the database path, and YDB
 records the restart, which it replays on every later `ALTER SEQUENCE`. A table
 created from such a file therefore keeps the settings it was created with (see
 below), where a table the native call creates can change them.
@@ -3423,9 +3455,17 @@ A native execution gives the new table the access control entries the old
 table holds before it copies the rows, as the host's embedded engine gave a
 rebuilt table back its grants: the new table is created with its directory's
 permissions alone, and the old one is dropped with its own. A grant or revoke
-the plan makes on the table runs after the rebuild, on the new table. The TEXT
-form has no statement for those entries, so a rebuild a migration file holds
-leaves the new table with its directory's permissions.
+the plan makes on the table runs after the rebuild, on the new table. A
+migration file runs later and reads no server, so under `planning.table-grants`
+(contract 25.33, ADR 0111 in Ptah), where the host sends the grants the read
+found on each held table, the TEXT form grants them on the new table after the
+old one is dropped, where the host's embedded engine wrote them, one `GRANT` to
+a line: every grant except a privilege the table holds by default and one the
+plan revokes. They follow the drop so the rebuild's statements stay the
+consecutive steps the migration lint reads as one rebuild. A read that did not
+describe the table's grants leaves the file without them, and a note above the
+rebuild says so; a host that does not send the grants leaves the new table
+with its directory's permissions.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
 
@@ -4115,12 +4155,23 @@ carry is refused by name, with no partial reading:
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;
-- a user's password: the reply's role carries none, so the host would create
-  the user without it; a YAML or Go declaration carries the password, which
-  the host sets when it creates the user;
+- a user's password, for a host that does not list
+  `source.sql-role-passwords`: the reply's role carries none, so the host would
+  create the user without it;
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
   would come back on a renamed pool.
+
+Under `source.sql-role-passwords` (contract 25.33, ADR 0112 in Ptah) the reply
+carries the password a document gives a user as the document writes it: a
+literal after `PASSWORD`, a YDB password hash after `HASH`, or the
+`$PTAH_SECRET_...` reference a migration file Ptah generated names it by. The
+host binds it as it binds a password a YAML or Go source declares, so the plan
+names the user's execution input and no value (see [Common
+objects](#common-objects)), and execution writes `HASH` for a hash, as the
+host's embedded engine did. Measured on 25.1.4.7 and 26.2.1.14: a user
+created from `PASSWORD 'x'` logs in with `x`, one created from `HASH` logs in
+with the password the hash stands for, and the next run plans nothing.
 
 Some of what a reading carries is not planned yet. Table creation refuses
 column defaults, and table comments on a host that does not list
@@ -4453,6 +4504,21 @@ stays as written. A value that names no database, such as a query a source
 declares for an offline render, cannot place such a path and is refused.
 Secret statements retain approved input references; rendering opens no session
 and reads no input value.
+
+Under `render.omissions` (contract 25.33, ADR 0110 in Ptah) a render reports
+what its statements go on without, as the host's embedded engine reported it,
+and the host carries the omissions into the result of a schema render and of a
+node render, where a caller that must not lose anything refuses the rendering.
+They are the part of a created column's declared type YDB does not keep, such
+as `VARCHAR(255): length 255` for a Utf8 column or `TIMESTAMP(3): precision 3
+(YDB keeps microseconds)`, in either form, and in the TEXT form of a creation
+that names no database, such as an offline render's, the start and the
+increment of a Serial's sequence: only an `ALTER SEQUENCE` naming the sequence
+by its absolute path sets them, so the table is written without them, where a
+plan against a database writes the statement (see [Serial columns](#serial-columns)).
+Each names its column `<directory>.<table>.<column>`, as the host did. The
+creation carries the declared type a column keeps only in part, since the
+operation holds the YDB type alone.
 
 ## Operator statements and object scopes
 
