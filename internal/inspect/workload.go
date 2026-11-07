@@ -71,6 +71,15 @@ func Workload(ctx context.Context, snapshot *protocol.Schema, database string, s
 		snapshot.NativeObjects = append(snapshot.NativeObjects, value)
 		observe(snapshot, []*protocol.Envelope{value})
 	}
+	// A pool the scheme lists and the system view does not describe is one
+	// the read found and cannot say the settings of, as the host's embedded
+	// engine recorded it: read as absent, a plan would create it again.
+	for _, name := range held.Listed {
+		if _, described := held.Pools[name]; !described {
+			unrepresentable(snapshot, &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Database: database, Name: name},
+				fmt.Sprintf("resource pool %q: the database lists it under %s, and its system view reports no settings for it", name, nativeapi.PoolDirectory))
+		}
+	}
 	for _, name := range slices.Sorted(maps.Keys(held.Classifiers)) {
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolClassifierProperties, Database: database, Name: name}
 		if err := workload.ValidateClassifier(name, held.Classifiers[name]); err != nil {

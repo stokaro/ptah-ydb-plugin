@@ -11,6 +11,8 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/stokaro/ptah/provider-sdk/runtime"
+	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -166,7 +168,13 @@ func (s *session) workload() (func(context.Context) (nativeapi.HeldWorkload, err
 		return nil, "The target does not keep resource pools, so its empty system views establish no absence; " + workload.FlagHint
 	}
 	return nativeapi.RoutedRead(func(ctx context.Context) (nativeapi.HeldWorkload, error) {
-		return nativeapi.ReadWorkload(ctx, s.connection.DB, s.database)
+		held, err := nativeapi.ReadWorkload(ctx, s.connection.DB, s.database)
+		if err != nil {
+			return held, err
+		}
+		list := nativeapi.SchemeLister(Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(s.connection.Driver)))
+		held.Listed, err = nativeapi.ListedPools(ctx, list, s.database)
+		return held, err
 	}), ""
 }
 
