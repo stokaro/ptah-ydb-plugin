@@ -21,6 +21,12 @@ func TestEqualUsesTokensAndDefaults(t *testing.T) {
 		{"changed literal", streaming.Spec{Text: "SELECT 'a';"}, streaming.Spec{Text: "SELECT 'b';"}, false},
 		{"changed operator", streaming.Spec{Text: "SELECT 1+2;"}, streaming.Spec{Text: "SELECT 1-2;"}, false},
 		{"comment markers inside literal", streaming.Spec{Text: "SELECT 'a--b';"}, streaming.Spec{Text: "SELECT 'a';"}, false},
+		// Ported from the host's TestSameBody_CommentsDoNotResetState: a
+		// comment inside a raw literal, a literal's suffix and the whitespace
+		// in a backticked identifier are part of the body.
+		{"comment inside a raw literal", streaming.Spec{Text: "SELECT @@-- a@@;"}, streaming.Spec{Text: "SELECT @@-- b@@;"}, false},
+		{"literal suffix", streaming.Spec{Text: "SELECT 'a'u;"}, streaming.Spec{Text: "SELECT 'a';"}, false},
+		{"whitespace in an identifier", streaming.Spec{Text: "SELECT `a b`;"}, streaming.Spec{Text: "SELECT `ab`;"}, false},
 		{"stopped", streaming.Spec{Text: "SELECT 1;"}, streaming.Spec{Text: "SELECT 1;", Run: new(false)}, false},
 		{"pool", streaming.Spec{Text: "SELECT 1;"}, streaming.Spec{Text: "SELECT 1;", ResourcePool: "batch"}, false},
 	} {
@@ -147,6 +153,36 @@ func TestValidateRefusesSchemaAndEscapedBlocks(t *testing.T) {
 	c.Assert(streaming.Validate(streaming.Spec{Text: "INSERT INTO stream_output SELECT * FROM stream_input;", Run: new(false)}), qt.IsNil)
 }
 
+// A resource pool that is not valid UTF-8 is refused. Ported from the host's
+// TestStreamingCodecRefusesLossyOrMisplacedOperands.
+func TestValidateRefusesAnInvalidPool(t *testing.T) {
+	c := testcheck.New(t)
+	err := streaming.Validate(streaming.Spec{Text: "INSERT INTO sink SELECT * FROM source;", ResourcePool: "\xff"})
+	c.Assert(err, qt.ErrorMatches, "streaming query text and resource pool must be valid UTF-8 without a NUL in the pool name")
+}
+
+// A creation is written with or without OR REPLACE, the path of a dotted
+// directory and name as one quoted path. Ported from the host's
+// TestCreate_Guards and TestStreamingHandlerRendersWithExplicitTargetFacts.
+func TestCreateStatements(t *testing.T) {
+	spec := streaming.Spec{Text: "SELECT 1;", Run: new(false), ResourcePool: "pool"}
+	for _, tc := range []struct {
+		name, got, want string
+	}{
+		{"create", streaming.Create("", "copy", streaming.Spec{Text: "SELECT 1;"}),
+			"CREATE STREAMING QUERY `copy` WITH (RUN = TRUE, RESOURCE_POOL = `default`) AS DO BEGIN\nSELECT 1;\nEND DO;"},
+		{"create or replace", streaming.CreateOrReplace("", "copy", streaming.Spec{Text: "SELECT 1;"}),
+			"CREATE OR REPLACE STREAMING QUERY `copy` WITH (RUN = TRUE, RESOURCE_POOL = `default`) AS DO BEGIN\nSELECT 1;\nEND DO;"},
+		{"create or replace under a dotted path", streaming.CreateOrReplace("jobs.daily", "copy.events", spec),
+			"CREATE OR REPLACE STREAMING QUERY `jobs.daily/copy.events` WITH (RUN = FALSE, RESOURCE_POOL = `pool`) AS DO BEGIN\nSELECT 1;\nEND DO;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(tc.got, qt.Equals, tc.want)
+		})
+	}
+}
+
 func TestValidateIdentity(t *testing.T) {
 	c := testcheck.New(t)
 	for _, tc := range []struct{ directory, name string }{{"../app", "q"}, {"/app", "q"}, {"app/../jobs", "q"}, {"app", "dir/q"}, {"app", ".."}, {"", " "}, {"", "\x00"}, {"", "\xff"}} {
@@ -180,6 +216,9 @@ func TestNamedPaths(t *testing.T) {
 		{"absolute prefix", "PRAGMA TablePathPrefix = '/local/app'; SELECT * FROM input;", []string{"/local/app/input"}},
 		{"relative prefix", "PRAGMA TablePathPrefix = 'app'; INSERT INTO output SELECT * FROM `/local/absolute`;", []string{"app/output", "/local/absolute"}},
 		{"prefix reset", "PRAGMA TablePathPrefix = 'app'; SELECT * FROM first; PRAGMA TablePathPrefix = ''; SELECT * FROM second;", []string{"app/first", "second"}},
+		// Ported from the host's TestNamedPaths.
+		{"escapes in a backticked name", "SELECT * FROM `a``b/c\\`d`;", []string{"a`b/c`d"}},
+		{"a name in a comment or a string", "/* FROM `x` */ SELECT 'FROM y' FROM `z`; -- INTO `w`", []string{"z"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)

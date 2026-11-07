@@ -1,6 +1,7 @@
 package schema_test
 
 import (
+	"math"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -102,6 +103,21 @@ func TestWorkloadModels_FailurePath(t *testing.T) {
 			wantErr: `resource pool classifier "c" requires a pool and a nonnegative rank`},
 		{name: "a classifier with a negative rank", owner: classifierOwner("c"), settings: &native.ResourcePoolClassifierSettings{ResourcePool: "p", Rank: -1},
 			wantErr: `resource pool classifier "c" requires a pool and a nonnegative rank`},
+		// Ported from the host's TestDefaultPoolSettingsInvalidValuesHaveUnknownEffects and
+		// TestPoolCodecsRefuseInvalidModelsAndUnknownEffects: a limit is a finite percentage.
+		{name: "an infinite limit on the pool default", owner: poolOwner("default"), settings: schema.PoolSettings(workload.PoolSpec{ResourceWeight: new(math.Inf(1))}),
+			wantErr: `resource pool "default": RESOURCE_WEIGHT takes a percentage from 0 to 100`},
+		{name: "an infinite limit", owner: poolOwner("p"), settings: schema.PoolSettings(workload.PoolSpec{QueryCPULimitPercentPerNode: new(math.Inf(1))}),
+			wantErr: `resource pool "p": QUERY_CPU_LIMIT_PERCENT_PER_NODE takes a percentage from 0 to 100`},
+		{name: "a limit that is not a number", owner: poolOwner("p"), settings: schema.PoolSettings(workload.PoolSpec{ResourceWeight: new(math.NaN())}),
+			wantErr: `resource pool "p": RESOURCE_WEIGHT takes a percentage from 0 to 100`},
+		// Ported from the host's TestWorkloadIdentityRefusesPathsAndForeignKinds.
+		{name: "an empty name", owner: poolOwner(""), settings: &native.ResourcePoolSettings{},
+			wantErr: "workload objects require exact database-scoped YDB identities"},
+		{name: "a name with a slash", owner: poolOwner("dir/pool"), settings: &native.ResourcePoolSettings{},
+			wantErr: "workload objects require exact database-scoped YDB identities"},
+		{name: "a name that is not ASCII", owner: poolOwner("пул"), settings: &native.ResourcePoolSettings{},
+			wantErr: "workload objects require exact database-scoped YDB identities"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -227,12 +243,110 @@ func TestWorkloadOperation_FailurePath(t *testing.T) {
 		{name: "a rank two classifiers take", value: payload(valid.Value, `{"pools":[],"classifiers":[{"name":"a","after":{"resourcePool":"p","rank":"1"}},{"name":"b","after":{"resourcePool":"p","rank":"1"}}]}`),
 			wantErr: `resource pool classifier "b": classifiers "a" and "b" cannot share rank 1`},
 		{name: "another owner", value: foreignOwner, wantErr: "workload operation requires the database's workload owner"},
+		// Ported from the host's TestDefaultPoolSettingsRefusesMalformedWire,
+		// TestWorkloadCodecsRejectIncompleteOrAmbiguousWire and TestPoolCodecsRefuseInvalidModelsAndUnknownEffects.
+		{name: "a setting in another case", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"Resource_Weight":2}}],"classifiers":[]}`),
+			wantErr: `invalid desired native YDB JSON`},
+		{name: "a setting twice", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"resourceWeight":2,"resourceWeight":3}}],"classifiers":[]}`),
+			wantErr: `invalid model JSON: invalid JSON: duplicate object key "resourceWeight"`},
+		{name: "a setting under both of its spellings", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"resource_weight":2,"resourceWeight":3}}],"classifiers":[]}`),
+			wantErr: `invalid desired native YDB JSON`},
+		{name: "a name twice", value: payload(valid.Value, `{"pools":[{"name":"batch","name":"other","after":{}}],"classifiers":[]}`),
+			wantErr: `invalid model JSON: invalid JSON: duplicate object key "name"`},
+		{name: "a name that is not UTF-8", value: payload(valid.Value, "{\"pools\":[{\"name\":\"\xff\",\"after\":{}}],\"classifiers\":[]}"),
+			wantErr: `invalid model JSON: JSON is not valid UTF-8`},
+		{name: "a null limit", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"resourceWeight":null}}],"classifiers":[]}`), wantErr: `null YDB model setting`},
+		{name: "a fractional count", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"concurrentQueryLimit":0.5}}],"classifiers":[]}`),
+			wantErr: `invalid desired native YDB JSON`},
+		{name: "a count past 32 bits", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"concurrentQueryLimit":2147483648}}],"classifiers":[]}`),
+			wantErr: `invalid desired native YDB JSON`},
+		{name: "a concurrency limit on the pool default", value: payload(valid.Value, `{"pools":[{"name":"default","before":{},"after":{"concurrentQueryLimit":0}}],"classifiers":[]}`),
+			wantErr: `resource pool "default": the pool default takes no concurrent_query_limit: .*`},
+		{name: "an infinite limit", value: payload(valid.Value, `{"pools":[{"name":"batch","after":{"resourceWeight":"Infinity"}}],"classifiers":[]}`),
+			wantErr: `resource pool "batch": RESOURCE_WEIGHT takes a percentage from 0 to 100`},
+		{name: "a limit held before that is not a number", value: payload(valid.Value, `{"pools":[{"name":"batch","before":{"resourceWeight":"NaN"},"after":{}}],"classifiers":[]}`),
+			wantErr: `resource pool "batch": RESOURCE_WEIGHT takes a percentage from 0 to 100`},
+		{name: "a null rank", value: payload(valid.Value, `{"pools":[],"classifiers":[{"name":"a","after":{"resourcePool":"p","rank":null}}]}`), wantErr: `null YDB model setting`},
+		{name: "a rank past 64 bits", value: payload(valid.Value, `{"pools":[],"classifiers":[{"name":"a","after":{"resourcePool":"p","rank":9223372036854775808}}]}`),
+			wantErr: `invalid desired native YDB JSON`},
+		{name: "a fractional rank", value: payload(valid.Value, `{"pools":[],"classifiers":[{"name":"a","after":{"resourcePool":"p","rank":1.5}}]}`),
+			wantErr: `invalid desired native YDB JSON`},
+		{name: "an empty pool name", value: payload(valid.Value, `{"pools":[],"classifiers":[{"name":"a","after":{"resourcePool":"","rank":"1"}}]}`),
+			wantErr: `resource pool classifier "a" requires a pool and a nonnegative rank`},
+		{name: "a null member", value: payload(valid.Value, `{"pools":[],"classifiers":[{"name":"a","after":{"resourcePool":"p","memberName":null}}]}`), wantErr: `null YDB model setting`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			normalized, err := schema.NormalizeWorkloadOperation(&protocol.ValueInput{Id: "x", Representation: protocol.ValueInput_OPERATION, Value: test.value})
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(normalized, qt.IsNil)
+		})
+	}
+}
+
+// A pool's name may hold a dot and a classifier's a backtick and a quote, and
+// two names that differ only in case name two pools, which one operation
+// creates side by side. Ported from the host's
+// TestWorkloadNamesAreDatabaseScopedAndCaseSensitive.
+func TestWorkloadNames_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	pool := declaredPool(c, "Pool.v1", workload.PoolSpec{})
+	c.Assert(pool.Owner.Name, qt.Equals, "Pool.v1")
+	classifier := declaredClassifier(c, "Team`'", workload.ClassifierSpec{ResourcePool: "Pool.v1"})
+	c.Assert(classifier.Owner.Name, qt.Equals, "Team`'")
+
+	operation, err := schema.CaptureWorkloadOperation("workload/000000", "", schema.WorkloadChanges{
+		Pools: []workload.PoolChange{{Name: "Pool", After: &workload.PoolSpec{}}, {Name: "pool", After: &workload.PoolSpec{}}}})
+
+	c.Assert(err, qt.IsNil)
+	decoded, err := schema.DecodeWorkloadOperation(operation.Value)
+	c.Assert(err, qt.IsNil)
+	c.Assert(decoded.Pools, qt.DeepEquals, []workload.PoolChange{{Name: "Pool", After: &workload.PoolSpec{}}, {Name: "pool", After: &workload.PoolSpec{}}})
+}
+
+// A pool's or a classifier's model refuses a payload that would decode to
+// another object than the one written, in either representation: no object,
+// a key in another case, a key it does not hold, one key twice or under both
+// of its spellings, a value past its type, a count past 32 bits, a queue with
+// nothing to wait for, and a classifier with no pool. A declaration refuses a
+// null too. Ported from the host's TestModelCodecsRefuseAmbiguousOrInvalidWire,
+// TestPoolCodecsRefuseInvalidLimits and
+// TestClassifierCodecsRequireExplicitCompleteRouting.
+func TestWorkloadModels_RefuseAForgedPayload(t *testing.T) {
+	desired, observed := protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED
+	for _, test := range []struct {
+		name           string
+		owner          *protocol.Reference
+		representation protocol.ValueInput_Representation
+		payload        string
+		wantErr        string
+	}{
+		{"a declared null", poolOwner("p"), desired, `null`, `desired native YDB value requires an object`},
+		{"an observed null", poolOwner("p"), observed, `null`, `invalid YDB observation JSON`},
+		{"a declared key in another case", poolOwner("p"), desired, `{"ResourceWeight":12}`, `invalid desired native YDB JSON`},
+		{"an observed key in another case", classifierOwner("c"), observed, `{"resourcePool":"p","rank":"0","Rank":"1"}`, `invalid YDB observation JSON`},
+		{"a declared extra key", classifierOwner("c"), desired, `{"resourcePool":"p","extra":true}`, `invalid desired native YDB JSON`},
+		{"an observed extra key", poolOwner("p"), observed, `{"extra":true}`, `invalid YDB observation JSON`},
+		{"a declared key twice", classifierOwner("c"), desired, `{"resourcePool":"p","rank":0,"rank":1}`, `invalid model JSON: invalid JSON: duplicate object key "rank"`},
+		{"an observed key twice", poolOwner("p"), observed, `{"resourceWeight":2,"resourceWeight":3}`, `invalid YDB observation JSON`},
+		{"an observed key under both of its spellings", poolOwner("p"), observed, `{"resource_weight":2,"resourceWeight":3}`, `invalid YDB observation JSON`},
+		{"a declared null limit", poolOwner("p"), desired, `{"concurrentQueryLimit":null}`, `null YDB model setting`},
+		{"an observed count past 32 bits", poolOwner("p"), observed, `{"concurrentQueryLimit":2147483648}`, `invalid YDB observation JSON`},
+		{"an observed limit past a double", poolOwner("p"), observed, `{"resourceWeight":1e400}`, `invalid YDB observation JSON`},
+		{"a declared zero queue", poolOwner("p"), desired, `{"queueSize":0}`, `resource pool "p": a queue needs .*`},
+		{"an observed zero queue", poolOwner("p"), observed, `{"queueSize":0}`, `resource pool "p": a queue needs .*`},
+		{"a declared classifier with no pool", classifierOwner("c"), desired, `{}`, `resource pool classifier "c" requires a pool and a nonnegative rank`},
+		{"an observed empty pool name", classifierOwner("c"), observed, `{"resourcePool":"","rank":"0"}`, `resource pool classifier "c" requires a pool and a nonnegative rank`},
+		{"a declared null rank", classifierOwner("c"), desired, `{"resourcePool":"p","rank":null}`, `null YDB model setting`},
+		{"an observed rank past 64 bits", classifierOwner("c"), observed, `{"resourcePool":"p","rank":"9223372036854775808"}`, `invalid YDB observation JSON`},
+		{"a declared fractional rank", classifierOwner("c"), desired, `{"resourcePool":"p","rank":1.5}`, `invalid desired native YDB JSON`},
+		{"a declared null member", classifierOwner("c"), desired, `{"resourcePool":"p","memberName":null}`, `null YDB model setting`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			value, err := normalizeIn(test.representation)(forgedValue(test.owner.Kind, test.representation, test.owner, test.payload))
+			c.Assert(err, qt.ErrorMatches, test.wantErr)
+			c.Assert(value, qt.IsNil)
 		})
 	}
 }

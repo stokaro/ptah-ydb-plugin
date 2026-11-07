@@ -156,6 +156,22 @@ func TestExpansion_Redact_HappyPath(t *testing.T) {
 	c.Assert(secretvalue.Expansion{Text: "SELECT 1"}.Redact("abc"), qt.Equals, "abc")
 }
 
+// A value holding quotes, a backslash and a line break stays hidden in each
+// form an error can quote it in: as the query carries it, and as a driver
+// error repeats the expanded query with %q. Ported from the host's
+// TestBindingConnector_RedactsEscapedSecretValues.
+func TestExpansion_RedactsEscapedValues(t *testing.T) {
+	c := testcheck.New(t)
+	env := environment(map[string]string{"PTAH_SECRET_PW": "pw-SENTINEL 'quoted' \\ slash\nline"})
+	expanded, err := secretvalue.Expand("ALTER SECRET `pw` WITH (value = $PTAH_SECRET_PW)", env)
+	c.Assert(err, qt.IsNil)
+	for _, text := range []string{expanded.Text, "server refused near " + strconv.Quote(expanded.Text)} {
+		redacted := expanded.Redact(text)
+		c.Assert(redacted, qt.Not(qt.Matches), "(?s).*SENTINEL.*")
+		c.Assert(redacted, qt.Contains, "[secret]")
+	}
+}
+
 func TestReferences_HappyPath(t *testing.T) {
 	tests := []struct {
 		name  string

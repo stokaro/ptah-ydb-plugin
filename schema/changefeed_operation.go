@@ -16,6 +16,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // ChangefeedOperation identifies the executable change of the changefeeds of
@@ -348,6 +349,13 @@ func (e *changefeedEffects) add(table string, change changefeeds.Change) error {
 	if change.After != nil {
 		if desired, err = changefeeds.FromIntent(change.After); err != nil {
 			return err
+		}
+		// A consumer YDB refuses fails the statement that adds it, so the
+		// operation refuses it before it runs, as a declaration's reader does.
+		for _, consumer := range desired.Consumers {
+			if _, err := ydbdecl.ParseConsumer(ydbdecl.ConsumerValues(consumer)); err != nil {
+				return fmt.Errorf("%s: consumer %q: %w", subject, consumer.Name, err)
+			}
 		}
 	}
 	if current.Replicated || desired.Replicated {

@@ -3,6 +3,7 @@ package schema_test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -106,6 +107,8 @@ func TestChangefeedOperation_FailurePath(t *testing.T) {
 	updates := Ydb_Table.ChangefeedMode_MODE_UPDATES
 	replicated := readFeed()
 	replicated.Description.Attributes = map[string]string{"__async_replication": `{"path":"/local/repl/records","id":"1","supports_topic_autopartitioning":false}`}
+	importantFor := declaredFeed(updates, "c")
+	importantFor.Topic.Consumers[0].Important, importantFor.Topic.Consumers[0].AvailabilityPeriod = true, durationpb.New(time.Hour)
 	for _, test := range []struct {
 		name    string
 		owner   *protocol.Reference
@@ -132,6 +135,9 @@ func TestChangefeedOperation_FailurePath(t *testing.T) {
 			`changefeed "f" of table "app/records": the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller`},
 		{"an owner that is no table", &protocol.Reference{Engine: "ydb", Kind: "column", Schema: "app", Path: []string{"records"}, Name: "id"},
 			[]changefeeds.Change{{Name: "f", After: declaredFeed(updates)}}, `changefeed operation requires a table owner`},
+		// Ported from the host's TestTopicConsumerCodec_FailurePath.
+		{"an important consumer with an availability period", tableOwner(), []changefeeds.Change{{Name: "f", After: importantFor}},
+			`changefeed "f" of table "app/records": consumer "c": invalid availability_period ".*": YDB keeps every unread record for an important consumer, .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

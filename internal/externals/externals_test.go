@@ -159,11 +159,17 @@ func TestSecretPaths_HappyPath(t *testing.T) {
 	c.Assert(got, qt.DeepEquals, []ydbdecl.Path{{Schema: "ext", Name: "aws"}, {Schema: "ext", Name: "pw"}})
 }
 
+// A secret path outside the database is refused, the database's own path
+// included (ported from the host's TestSecretPathReads_FailurePath).
 func TestSecretPaths_FailurePath(t *testing.T) {
-	c := testcheck.New(t)
-	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local") // #nosec G101 -- the option names a secret's path, not its value
-	c.Assert(err, qt.ErrorMatches, `option PASSWORD_SECRET_PATH names secret "/other/ext/pw", which is outside the database /local, so the data source cannot read it`)
-	c.Assert(got, qt.IsNil)
+	for _, path := range []string{"/other/ext/pw", "/local"} {
+		t.Run(path, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": path}, "/local")
+			c.Assert(err, qt.ErrorMatches, `option PASSWORD_SECRET_PATH names secret "`+path+`", which is outside the database /local, so the data source cannot read it`)
+			c.Assert(got, qt.IsNil)
+		})
+	}
 }
 
 func TestSecretPathsRejectsMalformedReferences(t *testing.T) {
@@ -192,8 +198,13 @@ func TestStatements(t *testing.T) {
 		{name: "an external table", got: externals.CreateTableStatement("ext/events", eventsTable(), externals.Create),
 			want: "CREATE EXTERNAL TABLE `ext/events` (\n    `id` Int64 NOT NULL,\n    `name` Utf8\n) WITH (\n    DATA_SOURCE = 'ext/s3',\n    LOCATION = 'events/',\n" +
 				"    FORMAT = 'json_each_row',\n    PARTITIONED_BY = '[\"id\"]'\n);"},
+		// Ported from the host's TestStatements and TestExternalHandlers_HappyPath.
+		{name: "an external table replaced", got: externals.CreateTableStatement("events",
+			ydbdecl.ExternalTable{DataSource: "s3", Location: "e/", Columns: []ydbdecl.ExternalColumn{{Name: "id", Type: "Int64"}}}, externals.Replace),
+			want: "CREATE OR REPLACE EXTERNAL TABLE `events` (\n    `id` Int64\n) WITH (\n    DATA_SOURCE = 's3',\n    LOCATION = 'e/'\n);"},
 		{name: "a data source dropped", got: externals.DropDataSourceStatement("ext/pg"), want: "DROP EXTERNAL DATA SOURCE `ext/pg`;"},
 		{name: "an external table dropped", got: externals.DropTableStatement("ext/events"), want: "DROP EXTERNAL TABLE `ext/events`;"},
+		{name: "an external table at the root with a dot dropped", got: externals.DropTableStatement("events.v1"), want: "DROP EXTERNAL TABLE `events.v1`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -316,6 +327,60 @@ func TestRelativePath(t *testing.T) {
 			c.Assert(externalpath.RelativePath(test.value, "/local"), qt.Equals, test.want)
 		})
 	}
+}
+
+// The data source an external table names reads relative to the database
+// root: a relative path as written, and an absolute one under the root
+// without it, once cleaned, however the root is written. Ported from the
+// host's TestRelative_HappyPath, whose Relative the host's ResolveSource read
+// a data source through.
+func TestSourcePath_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, root, written string
+		want                ydbdecl.Path
+	}{
+		{name: "relative", root: "/local", written: "ext/pg", want: ydbdecl.Path{Schema: "ext", Name: "pg"}},
+		{name: "relative without a root", written: "ext/pg", want: ydbdecl.Path{Schema: "ext", Name: "pg"}},
+		{name: "absolute under the root", root: "/local", written: "/local/ext/pg", want: ydbdecl.Path{Schema: "ext", Name: "pg"}},
+		{name: "a root written without slashes", root: "local", written: "/local/pg", want: ydbdecl.Path{Name: "pg"}},
+		{name: "an unclean absolute path", root: "/local", written: " /local//ext/./pg ", want: ydbdecl.Path{Schema: "ext", Name: "pg"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := externalpath.SourcePath(test.root, test.written)
+			c.Assert(err, qt.IsNil)
+			c.Assert(got, qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// An absolute data source path outside the database is refused, the
+// database's own path and a path that climbs out of it included, and so is
+// every absolute path where the database is not known. Ported from the
+// host's TestRelative_FailurePath.
+func TestSourcePath_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name, root, written string
+	}{
+		{name: "another database", root: "/local", written: "/other/ext/pg"},
+		{name: "a prefix of the name", root: "/local", written: "/localx/pg"},
+		{name: "the root itself", root: "/local", written: "/local"},
+		{name: "climbing out", root: "/local", written: "/local/../other/pg"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := externalpath.SourcePath(test.root, test.written)
+			c.Assert(err, qt.ErrorMatches, "external data source path is outside the database context")
+			c.Assert(got, qt.DeepEquals, ydbdecl.Path{})
+		})
+	}
+}
+
+func TestSourcePathNeedsTheDatabase_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	got, err := externalpath.SourcePath("", "/local/pg")
+	c.Assert(err, qt.ErrorIs, externalpath.ErrDatabaseContextRequired)
+	c.Assert(got, qt.DeepEquals, ydbdecl.Path{})
 }
 
 // A data source changed in a way the tables over it cannot stay through: a

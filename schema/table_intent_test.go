@@ -25,7 +25,7 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 			EffectivePermissions: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"ydb.generic.read"}}, {Subject: "writer", PermissionNames: []string{"ydb.generic.write"}}}},
 		TtlSettings:          &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{DateTypeColumn: &Ydb_Table.DateTypeColumnModeSettings{ColumnName: "expires", ExpireAfterSeconds: 86400}}},
 		StorageSettings:      &Ydb_Table.StorageSettings{TabletCommitLog0: &Ydb_Table.StoragePool{Media: "ssd"}, TabletCommitLog1: &Ydb_Table.StoragePool{Media: "ssd"}, External: &Ydb_Table.StoragePool{Media: "hdd"}},
-		ColumnFamilies:       []*native.ColumnFamily{{Name: "cold", Data: &Ydb_Table.StoragePool{Media: "hdd"}, Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4, CacheMode: native.ColumnFamily_CACHE_MODE_IN_MEMORY}, {Name: "default", Data: &Ydb_Table.StoragePool{Media: "ssd"}}},
+		ColumnFamilies:       []*native.ColumnFamily{{Name: "cold", Data: &Ydb_Table.StoragePool{Media: "hdd"}, Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4, KeepInMemory: Ydb.FeatureFlag_ENABLED, CacheMode: native.ColumnFamily_CACHE_MODE_IN_MEMORY}, {Name: "default", Data: &Ydb_Table.StoragePool{Media: "ssd"}}},
 		Attributes:           map[string]string{"comment": "Case-sensitive caption", "custom": ""},
 		PartitioningSettings: &Ydb_Table.PartitioningSettings{PartitionBy: []string{"tenant"}, PartitioningBySize: Ydb.FeatureFlag_ENABLED, PartitionSizeMb: 2048, PartitioningByLoad: Ydb.FeatureFlag_DISABLED, MinPartitionsCount: 2, MaxPartitionsCount: 16},
 		KeyBloomFilter:       Ydb.FeatureFlag_ENABLED, ReadReplicasSettings: &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_AnyAzReadReplicasCount{AnyAzReadReplicasCount: 2}},
@@ -46,6 +46,10 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 	c.Assert(intent.Access.RequiredEffectivePermissions, qt.HasLen, 2)
 	c.Assert(intent.Access.RequiredEffectivePermissions[0].Subject, qt.Equals, "reader")
 	c.Assert(intent.ColumnFamilies[0].Name, qt.Equals, "cold")
+	// A family the table keeps in memory is declared so: ported from the host's
+	// TestColumnFamiliesConvertFeatures_ProjectsEachRepresentation and
+	// TestColumnFamilies_KeepInMemoryTravelsWithTheRead.
+	c.Assert(intent.ColumnFamilies[0].KeepInMemory, qt.Equals, Ydb.FeatureFlag_ENABLED)
 	c.Assert(intent.ColumnFamilies[1].Name, qt.Equals, "default")
 	c.Assert(intent.Attributes, qt.DeepEquals, original.Attributes)
 	// The settings YDB gives every new table are left out, as the host's
@@ -137,6 +141,10 @@ func TestDesiredTableRefusesIncompleteOrAmbiguousSettings(t *testing.T) {
 		{"duplicate attribute", `{"primaryKey":["id"],"attributes":{"a":"one","a":"two"}}`},
 		{"unknown flag", `{"primaryKey":["id"],"keyBloomFilter":9999}`},
 		{"duplicate family", `{"primaryKey":["id"],"columnFamilies":[{"name":"cold"},{"name":"cold"}]}`},
+		// Ported from the host's TestColumnFamiliesCodecs_RefuseMalformedValues: a family
+		// lists no columns, which each column names itself, and YDB has no zstd.
+		{"a family listing columns", `{"primaryKey":["id"],"columnFamilies":[{"name":"cold","columns":[]}]}`},
+		{"a compression YDB lacks", `{"primaryKey":["id"],"columnFamilies":[{"name":"cold","compression":"COMPRESSION_ZSTD"}]}`},
 		{"missing TTL mode", `{"primaryKey":["id"],"ttlSettings":{}}`},
 		{"missing TTL column", `{"primaryKey":["id"],"ttlSettings":{"dateTypeColumn":{}}}`},
 		{"missing epoch unit", `{"primaryKey":["id"],"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"expiry"}}}`},

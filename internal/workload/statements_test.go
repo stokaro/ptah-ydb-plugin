@@ -157,6 +157,28 @@ func TestClassifierStatements(t *testing.T) {
 	}
 }
 
+// A dotted pool or classifier name stays one quoted name, and a setting of
+// zero is a setting: a limit of zero, a rank of zero, and a weight of zero
+// the pool `default` is set to. Ported from the host's
+// TestWorkloadFeatureSchemaUsesSelectedOwnerOnEveryEntryPoint.
+func TestStatementsKeepDottedNamesAndZeroSettings(t *testing.T) {
+	for _, test := range []struct {
+		name, got, want string
+	}{
+		{name: "a pool", got: workload.CreatePoolStatement("batch.jobs", workload.PoolSpec{ConcurrentQueryLimit: new(int32(0))}),
+			want: "CREATE RESOURCE POOL `batch.jobs` WITH (CONCURRENT_QUERY_LIMIT = 0);"},
+		{name: "a classifier", got: workload.CreateClassifierStatement("route.jobs", workload.ClassifierSpec{ResourcePool: "default", Rank: 0}),
+			want: "CREATE RESOURCE POOL CLASSIFIER `route.jobs` WITH (RESOURCE_POOL = 'default', RANK = 0);"},
+		{name: "the default pool's settings", got: workload.SetPoolStatement("default", workload.PoolSpec{ResourceWeight: new(0.0)}),
+			want: "ALTER RESOURCE POOL `default` SET (RESOURCE_WEIGHT = 0);"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(test.got, qt.Equals, test.want)
+		})
+	}
+}
+
 func TestPoolsEqual(t *testing.T) {
 	tests := []struct {
 		name           string

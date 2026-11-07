@@ -36,11 +36,47 @@ func TestIsKey(t *testing.T) {
 	}
 }
 
+// An object holds its comments while they take MaxObjectBytes or less, keys
+// and text together, and not one byte more. "ptah.comment" is 12 bytes and a
+// column key of a one-letter name 21, so the comments that fit exactly hold
+// 54 bytes of keys and 10186 bytes of text. The boundary is ported from the
+// host's TestComments_SizeRefusal.
 func TestSizeRefusal(t *testing.T) {
 	c := testcheck.New(t)
 	c.Assert(ydbcomment.Comments{Own: strings.Repeat("x", 4096), Columns: map[string]string{"a": strings.Repeat("y", 4096)}}.SizeRefusal("table t"), qt.Equals, "")
 	c.Assert(ydbcomment.Comments{Own: strings.Repeat("x", 4096), Columns: map[string]string{"a": strings.Repeat("y", 4096), "b": strings.Repeat("z", 2000)}}.SizeRefusal("table t"),
 		qt.Equals, "the comments of table t take 10246 bytes as YDB table attributes, keys and text together, and YDB keeps at most 10240 bytes of attributes on one object")
+	fits := ydbcomment.Comments{Own: strings.Repeat("t", 4096), Columns: map[string]string{"a": strings.Repeat("a", 4096), "b": strings.Repeat("b", 10240-54-8192)}}
+	over := ydbcomment.Comments{Own: fits.Own, Columns: map[string]string{"a": fits.Columns["a"], "b": fits.Columns["b"] + "b"}}
+	c.Assert(fits.SizeRefusal(`table "t"`), qt.Equals, "")
+	c.Assert(over.SizeRefusal(`table "t"`), qt.Equals, `the comments of table "t" take 10241 bytes as YDB `+
+		`table attributes, keys and text together, and YDB keeps at most 10240 bytes of attributes on one object`)
+}
+
+// Each object's comment has its own key: a table's and a view's is the one
+// own key, and a column's and an index's carry the name after a prefix of
+// their own, so the two can never name the same attribute. A statement sets
+// the key of its object. Ported from the host's TestKey and
+// TestStatement_Key.
+func TestKey(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		object ydbcomment.Object
+		of     string
+		want   string
+	}{
+		{"table", ydbcomment.Table, "", "ptah.comment"},
+		{"view", ydbcomment.View, "", "ptah.comment"},
+		{"column", ydbcomment.Column, "email", "ptah.comment.column.email"},
+		{"index", ydbcomment.Index, "users_email_idx", "ptah.comment.index.users_email_idx"},
+		{"index with a dot", ydbcomment.Index, "a.b", "ptah.comment.index.a.b"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(ydbcomment.Key(tc.object, tc.of), qt.Equals, tc.want)
+			c.Assert(ydbcomment.Statement{Object: tc.object, Path: "t", Name: tc.of}.Key(), qt.Equals, tc.want)
+		})
+	}
 }
 
 // Each statement Text writes reads back as itself.
@@ -54,6 +90,11 @@ func TestStatementText(t *testing.T) {
 		{"column", ydbcomment.Statement{Object: ydbcomment.Column, Path: "t", Name: "c", Comment: "tab\there"}, "COMMENT ON COLUMN `t`.`c` IS 'tab\\there';"},
 		{"index removal", ydbcomment.Statement{Object: ydbcomment.Index, Path: "t", Name: "by.c"}, "COMMENT ON INDEX `by.c` ON `t` IS NULL;"},
 		{"view", ydbcomment.Statement{Object: ydbcomment.View, Path: "v`w", Comment: "привет"}, "COMMENT ON VIEW `v\\`w` IS 'привет';"},
+		// Ported from the host's TestStatement_Text_HappyPath.
+		{"index", ydbcomment.Statement{Object: ydbcomment.Index, Path: "users", Name: "by_email", Comment: "Lookup"}, "COMMENT ON INDEX `by_email` ON `users` IS 'Lookup';"},
+		{"column removal", ydbcomment.Statement{Object: ydbcomment.Column, Path: "users", Name: "email"}, "COMMENT ON COLUMN `users`.`email` IS NULL;"},
+		{"a backslash and a newline", ydbcomment.Statement{Object: ydbcomment.Table, Path: "t", Comment: "it's a\\b\n"}, "COMMENT ON TABLE `t` IS 'it\\'s a\\\\b\\n';"},
+		{"a backtick in a column name", ydbcomment.Statement{Object: ydbcomment.Column, Path: "t", Name: "a`b", Comment: "x"}, "COMMENT ON COLUMN `t`.`a\\`b` IS 'x';"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)

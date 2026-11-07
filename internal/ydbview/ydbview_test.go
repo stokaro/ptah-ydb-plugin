@@ -77,6 +77,28 @@ func TestQueryText_Edges(t *testing.T) {
 	}
 }
 
+// The stored form keeps whatever tells two views apart: the case of a name
+// and of a keyword, the spaces inside a literal and a quoted name, the space
+// between an alias and its column, a literal's suffix, and the PRAGMA a view
+// was created under. Ported from the host's
+// TestQueryText_KeepsWhatTellsTwoViewsApart.
+func TestQueryText_KeepsWhatTellsTwoViewsApart(t *testing.T) {
+	for _, tc := range []struct{ name, one, other string }{
+		{"a column's case", "SELECT id FROM t", "SELECT ID FROM t"},
+		{"a keyword's case", "SELECT id FROM t", "select id from t"},
+		{"spaces inside a literal", `SELECT "a b" AS s`, `SELECT "a  b" AS s`},
+		{"an alias without AS", "SELECT x y FROM t", "SELECT xy FROM t"},
+		{"a literal's suffix", `SELECT "a"u AS s`, `SELECT "a" AS s`},
+		{"a quoted name", "SELECT `a b` FROM t", "SELECT `a  b` FROM t"},
+		{"the pragma a view was created under", "SELECT id FROM `sub/items`", "PRAGMA TablePathPrefix('/local/app');\nSELECT id FROM `sub/items`"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(ydbview.QueryText(tc.one), qt.Not(qt.Equals), ydbview.QueryText(tc.other))
+		})
+	}
+}
+
 func TestRealmQueryText(t *testing.T) {
 	for _, tc := range []struct{ name, body, root, want string }{
 		{"own realm", "PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\nSELECT id FROM t", "/local/ptah_dev/r1", "SELECT id FROM t"},
@@ -84,6 +106,13 @@ func TestRealmQueryText(t *testing.T) {
 			"PRAGMA TablePathPrefix(\"/local/ptah_dev/r2\");\nSELECT id FROM t"},
 		{"author's pragma", "PRAGMA TablePathPrefix('/local/app');\nSELECT id FROM t", "/local/app", "PRAGMA TablePathPrefix('/local/app');\nSELECT id FROM t"},
 		{"no pragma", "SELECT id FROM t", "/local/ptah_dev/r1", "SELECT id FROM t"},
+		// Ported from the host's TestRealmQueryText_RemovesOnlyTheConnectionPrefix.
+		{"a user pragma after the realm's", "PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\nPRAGMA OrderedColumns;\nSELECT id FROM t", "/local/ptah_dev/r1",
+			"PRAGMA OrderedColumns;\nSELECT id FROM t"},
+		{"a repeated prefix removed once", "PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\nPRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\nSELECT id FROM t", "/local/ptah_dev/r1",
+			"PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\nSELECT id FROM t"},
+		{"the prefix inside a literal", "SELECT 'PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\n'", "/local/ptah_dev/r1",
+			"SELECT 'PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\n'"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)

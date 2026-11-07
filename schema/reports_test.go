@@ -8,9 +8,12 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -91,6 +94,10 @@ func TestCountValue_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	node, err := schema.CaptureObject(objectOwner(schema.CoordinationProperties), &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{}})
 	c.Assert(err, qt.IsNil)
+	stopped := nativeFeed("updates")
+	stopped.Description.State = native.ChangefeedDescription_STATE_DISABLED
+	disabled, err := schema.CaptureChangefeeds(tableOwner(), &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{stopped}})
+	c.Assert(err, qt.IsNil)
 	for _, row := range []struct {
 		name     string
 		observed *protocol.Envelope
@@ -100,6 +107,27 @@ func TestCountValue_HappyPath(t *testing.T) {
 		{"a changefeed set of two feeds, each with two consumers", feeds, []string{"changefeeds=2", "changefeed_consumers=4"}},
 		{"a table without changefeeds", noFeeds, []string{"changefeeds=0", "changefeed_consumers=0"}},
 		{"a coordination node", node, []string{"coordination_nodes=1"}},
+		// Ported from the host's TestReportValues_CountsBothRepresentationsAndDisabledStreams:
+		// a disabled changefeed is still a changefeed of the table.
+		{"a disabled changefeed with two consumers", disabled, []string{"changefeeds=1", "changefeed_consumers=2"}},
+		// Ported from the host's TestExternalReport_CountsObjectsAndColumns.
+		{"an external data source", reportedObject(c, schema.ExternalSourceProperties, &Ydb_Table.DescribeExternalDataSourceResult{
+			SourceType: new("ObjectStorage"), Location: new(""), Properties: map[string]string{"AUTH_METHOD": "NONE"}}), []string{"external_data_sources=1"}},
+		{"an external table of two columns", reportedObject(c, schema.ExternalTableProperties, &native.DescribeExternalTableResult{
+			SourceType: new("ObjectStorage"), DataSourcePath: new("/local/app/s3"), Location: new("e/"),
+			Columns: []*native.ColumnMeta{{Name: "a", Type: primitive(Ydb.Type_INT64)}, {Name: "b", Type: optional(primitive(Ydb.Type_UTF8))}}}),
+			[]string{"external_tables=1", "external_columns=2"}},
+		// Ported from the host's TestReplicationReport_CountsEachObject.
+		{"an async replication", reportedObject(c, schema.ReplicationProperties, &native.AsyncReplicationSettings{
+			Connection: &native.ReplicationConnection{ConnectionString: "grpc://primary:2136/?database=/prod"},
+			Items:      []*native.ReplicationItem{{Source: "a", Target: "ra"}}, State: "running"}), []string{"async_replications=1"}},
+		{"a transfer", reportedObject(c, schema.TransferProperties, &native.TransferSettings{Source: "tp", Target: "t", Lambda: "($m) -> { return []; }", State: "running"}),
+			[]string{"transfers=1"}},
+		// Ported from the host's TestSecretReport_CountsEachSecretOnce.
+		{"a secret", reportedObject(c, schema.SecretProperties, &native.SecretPresence{}), []string{"secrets=1"}},
+		// Ported from the host's TestWorkloadReportsCountCapturedValuesInBothRepresentations.
+		{"a resource pool", readPool(c, "batch", workload.PoolSpec{}), []string{"resource_pools=1"}},
+		{"a resource pool classifier", readClassifier(c, "route", workload.ClassifierSpec{ResourcePool: "pool", Rank: 20}), []string{"resource_pool_classifiers=1"}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -112,6 +140,16 @@ func TestCountValue_HappyPath(t *testing.T) {
 			c.Assert(countText(counted), qt.DeepEquals, row.want)
 		})
 	}
+}
+
+// reportedObject is a standalone object of kind as inspection captures it
+// from /local, in the database context a read carries.
+func reportedObject(c *qt.C, kind string, described proto.Message) *protocol.Envelope {
+	c.Helper()
+	observed, err := schema.CaptureObject(objectOwner(kind), described)
+	c.Assert(err, qt.IsNil)
+	observed.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
+	return observed
 }
 
 // convertedDesired converts an observation to its declaration, as the host

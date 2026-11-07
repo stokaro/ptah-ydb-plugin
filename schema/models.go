@@ -436,6 +436,11 @@ func validateModelOwner(value *protocol.Envelope) error {
 	if (!part && len(owner.GetPath()) != 0) || (part && len(owner.GetPath()) != 1) {
 		return fmt.Errorf("invalid YDB observation owner path")
 	}
+	// A standalone object's statements write its directory and its name as
+	// one path, so a name that holds a slash would name another object.
+	if IsNativeObject(value.GetKind()) {
+		return ValidateNativeOwner(owner)
+	}
 	return nil
 }
 

@@ -179,6 +179,17 @@ func TestDecode_FailurePath(t *testing.T) {
 			want: "external data source s is declared twice"},
 		{name: "a name holding a slash", document: goDocument([]string{externalsource.DirectiveDataSource, "name", "ext/s", "source_type", "ObjectStorage", "auth_method", "NONE"}),
 			want: `invalid name: "ext/s" holds a slash; name the directory with schema`},
+		// Ported from the host's TestValidateIdentity_FailurePath and
+		// TestDeclareSource_FailurePath: an object needs a name that is one
+		// path segment, in a clean directory relative to the database root.
+		{name: "an empty name", document: yamlDocument(source(entry("name", text(" "))), nil),
+			want: `external data source "s": invalid name: an external object needs a name`},
+		{name: "a parent segment as the name", document: goDocument([]string{externalsource.DirectiveDataSource, "name", "..", "source_type", "ObjectStorage", "auth_method", "NONE"}),
+			want: `invalid name: "\.\." is not a path segment`},
+		{name: "a parent directory", document: goDocument([]string{externalsource.DirectiveTable, "name", "events", "schema", "../ext", "data_source", "s", "location", "x/", "columns", "id Int64"}),
+			want: `invalid schema: "\.\./ext" is not a directory path relative to the database root`},
+		{name: "an unclean directory", document: goDocument([]string{externalsource.DirectiveDataSource, "name", "s3", "schema", "ext//b", "source_type", "ObjectStorage", "auth_method", "NONE"}),
+			want: `invalid schema: "ext//b" is not a directory path relative to the database root`},
 		{name: "a reserved option", document: goDocument([]string{externalsource.DirectiveDataSource, "name", "s", "source_type", "ObjectStorage", "auth_method", "NONE", "options", "AUTH_METHOD=BASIC"}),
 			want: "invalid options: AUTH_METHOD is written with its own attribute, auth_method"},
 		{name: "no auth method", document: goDocument([]string{externalsource.DirectiveDataSource, "name", "s", "source_type", "ObjectStorage"}),

@@ -23,6 +23,9 @@ func TestLocate_HappyPath(t *testing.T) {
 		{name: "after definitions and comments", text: "-- c\n/* d */ DECLARE $a AS Int32; $b = 1; PRAGMA TablePathPrefix('/db/p'); MARK x",
 			opening: "MARK X", prefix: "/db/p"},
 		{name: "a later prefix wins", text: "PRAGMA TablePathPrefix('/a'); PRAGMA TablePathPrefix = \"/b\"; MARK x;", opening: "MARK X", prefix: "/b"},
+		// Ported from the host's TestLocate_HappyPath.
+		{name: "lower case", text: "mark x", opening: "MARK X"},
+		{name: "after the translation setting", text: "--!syntax_v1\nMARK x", opening: "MARK X"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -35,12 +38,27 @@ func TestLocate_HappyPath(t *testing.T) {
 	}
 }
 
+// Text holding no such statement is not recognized and reports no error, the
+// word inside a string or a comment, or after the first word, included. The
+// rows after the first are ported from the host's TestLocate_NotRecognized.
 func TestLocateLeavesOtherQueries(t *testing.T) {
-	c := testcheck.New(t)
-	located, found, err := servicequery.Locate("SELECT 'MARK'; -- MARK\n", opensWith("MARK"), "test service")
-	c.Assert(err, qt.IsNil)
-	c.Assert(found, qt.IsFalse)
-	c.Assert(located, qt.DeepEquals, servicequery.Located{})
+	for _, tc := range []struct {
+		name, text string
+	}{
+		{name: "in a string and a line comment", text: "SELECT 'MARK'; -- MARK\n"},
+		{name: "empty", text: ""},
+		{name: "another statement", text: "SELECT 1"},
+		{name: "in a block comment", text: "/* MARK x */ SELECT 1"},
+		{name: "not first", text: "SELECT MARK FROM t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			located, found, err := servicequery.Locate(tc.text, opensWith("MARK"), "test service")
+			c.Assert(err, qt.IsNil)
+			c.Assert(found, qt.IsFalse)
+			c.Assert(located, qt.DeepEquals, servicequery.Located{})
+		})
+	}
 }
 
 func TestLocate_FailurePath(t *testing.T) {
@@ -52,6 +70,9 @@ func TestLocate_FailurePath(t *testing.T) {
 		{name: "after a statement", text: "SELECT 1; MARK a;", want: "MARK A shares its query with SELECT 1, and Ptah runs it through YDB's test service, which takes it alone"},
 		{name: "a prefix that is not a plain string", text: "PRAGMA TablePathPrefix($p); MARK a;",
 			want: "MARK A follows a TablePathPrefix pragma whose path is not a plain string"},
+		// Ported from the host's TestLocate_FailurePath.
+		{name: "a prefix Ptah cannot read", text: "PRAGMA TablePathPrefix('/a', '/b'); MARK a",
+			want: `MARK A follows a TablePathPrefix pragma Ptah cannot read; write it as PRAGMA TablePathPrefix\("/database/path"\)`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)

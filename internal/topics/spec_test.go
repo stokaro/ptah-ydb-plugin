@@ -83,6 +83,24 @@ func TestFromObserved_FailurePath(t *testing.T) {
 	}
 }
 
+// Every codec number YDB writes reads as the name a declaration takes, lzop,
+// zstd and custom among them. Ported from the host's TestCodecName.
+func TestFromObservedNamesEveryCodec(t *testing.T) {
+	for _, test := range []struct {
+		number int32
+		name   string
+	}{{1, "raw"}, {2, "gzip"}, {3, "lzop"}, {4, "zstd"}, {10000, "custom"}} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			description := observed(c, plainTopic)
+			description.SupportedCodecs = &Ydb_Topic.SupportedCodecs{Codecs: []int32{test.number}}
+			spec, err := topics.FromObserved(description)
+			c.Assert(err, qt.IsNil)
+			c.Assert(spec.SupportedCodecs, qt.DeepEquals, []string{test.name})
+		})
+	}
+}
+
 // A declaration written as the provider's intent reads back as itself, and a
 // read topic kept as it is reads as the same topic.
 func TestIntent_HappyPath(t *testing.T) {

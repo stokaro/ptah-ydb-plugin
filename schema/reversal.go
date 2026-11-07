@@ -3,13 +3,16 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
@@ -204,6 +207,8 @@ func ReverseTableChange(id string, change *protocol.Envelope, access AccessWire)
 		convert, altered = restoredTable, alteredTable
 	case ColumnProperties:
 		convert, altered = ConvertColumn, alteredColumn
+	case ChangefeedProperties:
+		altered = alteredChangefeeds
 	}
 	left, restored, err := reversedOperands(before, after, convert, access)
 	if altered != nil {
@@ -211,11 +216,15 @@ func ReverseTableChange(id string, change *protocol.Envelope, access AccessWire)
 		// column's its family with its default and its storage settings,
 		// while the declaration states only some of them: what the forward
 		// change leaves is what the owner held with the declared settings in
-		// place of its own.
+		// place of its own. A changefeed's topic keeps what YDB derived for
+		// it when no statement replaces the changefeed.
 		left, restored, err = reversedOperands(before, nil, convert, access)
 		if err == nil {
 			left, err = altered(before, after)
 		}
+	}
+	if err == nil && before.Kind == ChangefeedProperties {
+		err = errors.Join(decidedChangefeeds(before, after), decidedChangefeeds(left, restored))
 	}
 	if err != nil {
 		return Reversed{}, err
@@ -229,6 +238,97 @@ func ReverseTableChange(id string, change *protocol.Envelope, access AccessWire)
 		return Reversed{}, err
 	}
 	return Reversed{Value: value, Kind: before.Kind, Before: before, After: after, Left: left, Restored: restored}, nil
+}
+
+// alteredChangefeeds is the changefeed set a table holding before reads back
+// with once the forward change gives it the changefeeds after declares. A
+// changefeed the change adds, or drops and adds again, reads as declared, its
+// topic's partitions left to the count YDB derives from the table, which no
+// declaration states. One the change keeps, its topic changed in place or not
+// at all, keeps the partitions its topic held: ALTER TOPIC does not change
+// them.
+func alteredChangefeeds(before, after *protocol.Envelope) (*protocol.Envelope, error) {
+	predicted, err := ConvertNative(after, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return nil, err
+	}
+	held, left, declared := &native.ChangefeedObservations{}, &native.ChangefeedObservations{}, &native.ChangefeedSetIntent{}
+	for _, operand := range []struct {
+		value  *protocol.Envelope
+		target proto.Message
+	}{{before, held}, {predicted, left}, {after, declared}} {
+		if err := protojson.Unmarshal(operand.value.GetPayload(), operand.target); err != nil {
+			return nil, err
+		}
+	}
+	for _, feed := range left.GetChangefeeds() {
+		name := feed.GetDescription().GetName()
+		current, found := heldChangefeed(held, name)
+		if !found {
+			continue
+		}
+		have, err := changefeeds.FromObserved(current)
+		if err != nil {
+			return nil, err
+		}
+		want, err := changefeeds.FromIntent(declaredChangefeed(declared, name))
+		if err != nil {
+			return nil, err
+		}
+		if changefeeds.Recreated(want, have) || feed.GetTopic() == nil {
+			continue
+		}
+		if feed.Topic.PartitioningSettings == nil {
+			feed.Topic.PartitioningSettings = &Ydb_Topic.PartitioningSettings{}
+		}
+		feed.Topic.PartitioningSettings.MinActivePartitions = current.GetTopic().GetPartitioningSettings().GetMinActivePartitions()
+	}
+	altered, err := convertedEnvelope(predicted, model(ChangefeedProperties), left, Normalize)
+	if err != nil {
+		return nil, err
+	}
+	altered.Context = proto.CloneOf(after.Context)
+	return altered, nil
+}
+
+// heldChangefeed returns the changefeed of set named name, and whether set
+// holds one.
+func heldChangefeed(set *native.ChangefeedObservations, name string) (*native.ObservedChangefeed, bool) {
+	for _, feed := range set.GetChangefeeds() {
+		if feed.GetDescription().GetName() == name {
+			return feed, true
+		}
+	}
+	return nil, false
+}
+
+// declaredChangefeed returns the changefeed of set named name, nil for none.
+func declaredChangefeed(set *native.ChangefeedSetIntent, name string) *native.ChangefeedIntent {
+	for _, feed := range set.GetChangefeeds() {
+		if feed.GetName() == name {
+			return feed
+		}
+	}
+	return nil
+}
+
+// decidedChangefeeds refuses a changefeed set change, from the set a table
+// holds to the one declared, whose steps cannot be decided: one that adds,
+// drops or changes a stream an asynchronous replication controller owns,
+// which the controller creates and removes, not the schema. A change of
+// either direction that cannot be decided has no reverse.
+func decidedChangefeeds(held, declared *protocol.Envelope) error {
+	having, wanted := &native.ChangefeedObservations{}, &native.ChangefeedSetIntent{}
+	if err := protojson.Unmarshal(held.GetPayload(), having); err != nil {
+		return err
+	}
+	if err := protojson.Unmarshal(declared.GetPayload(), wanted); err != nil {
+		return err
+	}
+	if _, undecided := changefeeds.Diff(wanted, having); undecided != "" {
+		return fmt.Errorf("the changefeed change has no reverse: %s", undecided)
+	}
+	return nil
 }
 
 // reverseIndexSettings returns the change that undoes change, a change of a
