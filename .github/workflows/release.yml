@@ -97,12 +97,46 @@ jobs:
     name: release
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 150
     permissions:
+      actions: read
       contents: write
     env:
       GOWORK: "off"
     steps:
+      # The live suites, the platform legs and the lint contract run in
+      # ci.yml, not here. A tag publishes only a commit whose push run of
+      # ci.yml passed, so those suites gate the release too; this step waits
+      # for that run while it is still going. A leg against Ptah's master
+      # may fail without failing the run, as ci.yml declares.
+      - name: Require the commit's CI run to pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run=""
+          for _ in $(seq 1 10); do
+            run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push \
+              --commit "$GITHUB_SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            [[ -n "$run" ]] && break
+            sleep 30
+          done
+          if [[ -z "$run" ]]; then
+            echo "::error::ci.yml has no push run for $GITHUB_SHA. Tag a commit on master."
+            exit 1
+          fi
+          until state=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status,conclusion \
+              --jq '.status + " " + .conclusion') && [[ "$state" == completed* ]]; do
+            sleep 60
+          done
+          if [[ "$state" != "completed success" ]]; then
+            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json jobs \
+              --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | "\(.conclusion) \(.name)"'
+            echo "::error::ci.yml run $run for $GITHUB_SHA ended ${state#completed }, not success."
+            exit 1
+          fi
+          echo "ci.yml run $run passed for $GITHUB_SHA."
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
