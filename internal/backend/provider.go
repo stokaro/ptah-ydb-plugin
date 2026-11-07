@@ -172,6 +172,10 @@ func providerFeatures() []string {
 		// An offline command plans with the facts of the newest line; see
 		// defaultCapabilities.
 		provider.DefaultCapabilitiesFeature,
+		// ptah db capabilities names the monitoring endpoint as the source of
+		// a capability the cluster's feature flags refine; see
+		// connectionCapabilitySource.
+		provider.ConnectionCapabilitySourceFeature,
 		provider.DevDatabaseFeature,
 		provider.LintFeature,
 		provider.TypeRowsFeature,
@@ -295,6 +299,12 @@ func providerFeatures() []string {
 func engineFeatures() []string {
 	return append(providerFeatures(), provider.DevRealmsFeature, provider.LintStatementFactsFeature)
 }
+
+// connectionCapabilitySource is where the connection reads the capabilities
+// that differ from a release line's: the cluster's feature flags, which the
+// provider reads at the monitoring endpoint a ydb:// URL names, and only then
+// (contract 25.35). ptah db capabilities prints it beneath them.
+const connectionCapabilitySource = "read from this cluster's feature flags at its monitoring endpoint, not from its release line"
 
 // negotiatedFeatures is the engine's feature list as the host holds it: the
 // two-way features the host did not list are left out, as the SDK leaves them
@@ -712,15 +722,16 @@ func buildDescription() *protocol.Description {
 					externalsource.GoDirectives(),
 					workloadsource.GoDirectives(),
 				),
-				LintRules:           migrationlint.Rules(),
-				QueryDialect:        queryDialect(),
-				DefaultCapabilities: defaultCapabilities(),
-				SqlSchema:           sqlSchemaDeclaration(),
-				Features:            engineFeatures(),
-				Embeddings:          &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes},
-				CommonObjects:       commonobject.Support(),
-				ScopeSelections:     scopeSelections(),
-				DatabaseKinds:       databaseKinds(),
+				LintRules:                  migrationlint.Rules(),
+				QueryDialect:               queryDialect(),
+				DefaultCapabilities:        defaultCapabilities(),
+				ConnectionCapabilitySource: connectionCapabilitySource,
+				SqlSchema:                  sqlSchemaDeclaration(),
+				Features:                   engineFeatures(),
+				Embeddings:                 &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes},
+				CommonObjects:              commonobject.Support(),
+				ScopeSelections:            scopeSelections(),
+				DatabaseKinds:              databaseKinds(),
 				HclSource: &protocol.HCLSourceDeclaration{
 					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLIndexBlock(), tablesource.HCLPlatformBlock()},
 					HeaderKinds: []string{"coordination_node"},
