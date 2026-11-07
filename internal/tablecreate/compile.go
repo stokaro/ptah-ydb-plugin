@@ -118,6 +118,9 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[
 	if err := validateReferences(result, names); err != nil {
 		return nil, nil, err
 	}
+	if err := validateColumnUses(TextPath(table.Schema, table.Name), result); err != nil {
+		return nil, nil, err
+	}
 	if result.Indexes, err = declaredIndexes(table, result.PrimaryKey, result.Columns); err != nil {
 		return nil, nil, err
 	}
@@ -308,6 +311,33 @@ func applyColumnSettings(subject string, column *protocol.DeclaredColumn, settin
 			return fmt.Errorf("YDB literal default type differs from the column type")
 		}
 		result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: proto.CloneOf(literal)}
+	}
+	return nil
+}
+
+// validateColumnUses refuses a creation YDB would refuse only once the call
+// runs, as the host's embedded engine refused it: a key over a type
+// YDB cannot order, and a TTL over a column YDB reads no TTL from. table
+// names the table in a refusal.
+func validateColumnUses(table string, request *Ydb_Table.CreateTableRequest) error {
+	types := make(map[string]string, len(request.GetColumns()))
+	for _, column := range request.GetColumns() {
+		if kind, _, err := schema.ColumnType(column.GetType()); err == nil {
+			types[column.GetName()] = kind
+		}
+	}
+	for _, key := range request.GetPrimaryKey() {
+		if kind, found := types[key]; found && !keyComparable(kind) {
+			return unsupported("the primary key of table %q: column %q is %s, which YDB refuses in a key (`wrong key type %s`)", table, key, kind, kind)
+		}
+	}
+	if ttl := request.GetTtlSettings(); ttl != nil {
+		column := ttlColumn(ttl)
+		if kind, found := types[column]; found {
+			if reason := TTLColumnRefusal(column, kind, ttl.GetValueSinceUnixEpoch() != nil); reason != "" {
+				return unsupported("the TTL %s", reason)
+			}
+		}
 	}
 	return nil
 }

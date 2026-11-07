@@ -48,6 +48,8 @@ func TestNativeDefaultRefusal(t *testing.T) {
 		{"missing small integer capability", "Int16", &protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "3"}},
 		{"missing document capability", "JsonDocument", &protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "{}"}},
 		{"serial literal", "BigSerial", &protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "3"}},
+		// Ported from the host's TestRender_RefusesWhatYDBCannotHold_FailurePath.
+		{"NULL on a NOT NULL column", "Utf8", &protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "NULL"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -58,8 +60,10 @@ func TestNativeDefaultRefusal(t *testing.T) {
 	}
 }
 
+// A column without a default, and a nullable one whose default is NULL, have
+// no native default.
 func TestNativeDefaultAbsence(t *testing.T) {
-	for _, column := range []*protocol.DeclaredColumn{{}, {DefaultSet: true, DefaultValue: "NULL"}} {
+	for _, column := range []*protocol.DeclaredColumn{{}, {DefaultSet: true, DefaultValue: "NULL", Nullable: true}} {
 		c := testcheck.New(t)
 		value, err := columnsemantics.NativeDefault(column, "Int64", nil)
 		c.Assert(err, qt.IsNil)

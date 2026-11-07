@@ -377,6 +377,22 @@ func TestRebuildPlanKeepsTheFamiliesTheTableHolds(t *testing.T) {
 		"    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'off'),\n    FAMILY `default` (COMPRESSION = 'lz4'),\n    FAMILY `extra` (COMPRESSION = 'lz4')\n) WITH (KEY_BLOOM_FILTER = DISABLED);")
 }
 
+// A rebuild creates the new table with what the declaration states, so a
+// declared TTL over a column YDB reads no TTL from refuses the rebuild before
+// any statement, as the host's embedded engine refused it. Ported from the
+// host's TestTTLPlanFeatures_RefusesARebuiltTableTheTargetCannotHold.
+func TestRebuildPlanRefusesATTLOverAColumnYDBReadsNone(t *testing.T) {
+	check := testcheck.New(t)
+	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	request.Tables[0].Desired.Features.Facets.Records = append(request.Tables[0].Desired.Features.Facets.Records,
+		facet(check, schema.TableProperties, "", `{"primaryKey":["id"],"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"n","columnUnit":"UNIT_SECONDS","expireAfterSeconds":86400}}}`))
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Contributions, qt.HasLen, 0)
+	check.Assert(plan.Diagnostics, qt.HasLen, 1)
+	check.Assert(plan.Diagnostics[0].Message, qt.Matches, `the TTL column "n" is Int64, and YDB reads a TTL from .*`)
+}
+
 // heldPayloadIndex is the index set of a table holding a synchronous index on
 // payload under name, with the settings fields given.
 func heldPayloadIndex(name, settings string) string {
