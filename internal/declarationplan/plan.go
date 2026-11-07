@@ -39,6 +39,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 	anchor := lateAnchor(request)
 	var late []*protocol.StepIdentity
 	ranks := make(map[int64]bool)
+	pools := declaredPools(request)
 	for position, index := range indices {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -66,7 +67,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 			}
 			effects = append(effects, &protocol.PlanningEffect{Subject: objectplan.Slot(object.Subject), Action: protocol.PlanningEffect_CREATE})
 		}
-		reads, refusal, err := kindReads(index, object, desired, ranks)
+		reads, refusal, err := kindReads(index, object, desired, ranks, pools)
 		if refusal != nil || err != nil {
 			return refusal, err
 		}
@@ -186,11 +187,12 @@ func withoutDatabase(identity *protocol.ComparisonIdentity) *protocol.Comparison
 // declaration at index, read the objects its kind depends on. A resource pool
 // classifier reads its pool, an external table its data source and a
 // streaming query every topic and table it reads or writes. A refusal of the
-// declaration, or an error, returns no effects.
-func kindReads(index int, object *protocol.ComparisonRecord, desired *protocol.Envelope, ranks map[int64]bool) ([]*protocol.PlanningEffect, *protocol.PlannedDeclarations, error) {
+// declaration, or an error, returns no effects. pools are the names of the
+// resource pools the request declares.
+func kindReads(index int, object *protocol.ComparisonRecord, desired *protocol.Envelope, ranks map[int64]bool, pools map[string]bool) ([]*protocol.PlanningEffect, *protocol.PlannedDeclarations, error) {
 	switch object.Kind {
 	case schema.ResourcePoolClassifierProperties:
-		return classifierReads(index, object, desired, ranks)
+		return classifierReads(index, object, desired, ranks, pools)
 	case schema.ExternalTableProperties:
 		reads, err := externalTableReads(object, desired)
 		return reads, nil, err
@@ -204,7 +206,15 @@ func kindReads(index int, object *protocol.ComparisonRecord, desired *protocol.E
 // none when it names no pool. ranks holds the ranks of the classifiers
 // planned so far; a second classifier of one rank is refused, and the
 // classifier's rank joins ranks otherwise.
-func classifierReads(index int, object *protocol.ComparisonRecord, desired *protocol.Envelope, ranks map[int64]bool) ([]*protocol.PlanningEffect, *protocol.PlannedDeclarations, error) {
+//
+// A classifier that names a pool neither pools nor the pool default holds is
+// refused, as the host's embedded engine at 74de0b65b refused it: YDB takes
+// it and runs the member's queries in the pool default without a word (the
+// engine measured the member's query succeed while the server logged `Failed
+// to fetch pool: ghost`), so a misspelled pool would route nothing. A
+// creation document declares the pools it routes to; unlike a migration, it
+// cannot rely on one the database already holds.
+func classifierReads(index int, object *protocol.ComparisonRecord, desired *protocol.Envelope, ranks map[int64]bool, pools map[string]bool) ([]*protocol.PlanningEffect, *protocol.PlannedDeclarations, error) {
 	spec, err := schema.WorkloadClassifier(desired)
 	if err != nil {
 		return nil, nil, err
@@ -215,6 +225,11 @@ func classifierReads(index int, object *protocol.ComparisonRecord, desired *prot
 	ranks[spec.Rank] = true
 	if spec.ResourcePool == "" {
 		return nil, nil, nil
+	}
+	if !pools[spec.ResourcePool] && spec.ResourcePool != workload.DefaultPool {
+		return nil, refused(index, object.Kind, fmt.Sprintf("resource pool classifier %q: it names resource pool %q, which is not declared; "+
+			"YDB runs the queries of a classifier whose pool does not exist in the pool %q without a word",
+			object.GetSubject().GetName().GetSource(), spec.ResourcePool, workload.DefaultPool)), nil
 	}
 	ref := proto.CloneOf(object.Subject)
 	ref.Kind = schema.ResourcePoolProperties
@@ -261,6 +276,17 @@ func streamingQueryReads(index int, object *protocol.ComparisonRecord, desired *
 		effects = append(effects, &protocol.PlanningEffect{Subject: read, Action: protocol.PlanningEffect_READ})
 	}
 	return effects, nil, nil
+}
+
+// declaredPools is the name of each resource pool request declares.
+func declaredPools(request *protocol.PlanDeclarationsRequest) map[string]bool {
+	pools := make(map[string]bool)
+	for _, object := range request.GetObjects() {
+		if object.GetKind() == schema.ResourcePoolProperties {
+			pools[object.GetSubject().GetName().GetSource()] = true
+		}
+	}
+	return pools
 }
 
 // keptDefaultPool is the strategy of the pool default where it names no

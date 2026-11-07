@@ -2674,8 +2674,13 @@ and `database_load_cpu_threshold`, the three `*_percent_per_node` limits and
 `resource_weight` as percentages from 0 to 100; a setting left out has no
 limit, and zero is a limit. A queue needs a query limit or a load threshold
 beside it, and the pool `default` takes neither of those. A classifier names
-its pool and its rank, and its member when it matches one user or group. Each
-rule refuses with the host's words.
+its pool and its rank, and its member when it matches one user or group.
+Planning declarations without a read of the database, as `schema render` does,
+refuses a classifier whose pool the declarations neither hold nor name
+`default`: YDB takes such a classifier and runs the member's queries in
+`default` without a word. A migration keeps a classifier routing to
+a pool the plan drops, which YDB takes too. Each rule refuses with the host's
+words.
 
 A source declares the pools and classifiers it manages, not every one of the
 database, so the comparison keeps one a source leaves out, as the host does;
