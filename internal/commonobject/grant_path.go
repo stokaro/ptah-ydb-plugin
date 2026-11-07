@@ -59,7 +59,8 @@ func grantPath(target *protocol.Reference, capabilities map[string]bool) (string
 	}
 	database := target.GetDatabase()
 	if !strings.HasPrefix(database, "/") || !validGrantPath(database) {
-		return "", unsupported("YDB takes this grant target only by its absolute database path; plan it against the database")
+		return "", unsupported("YDB takes this object only by its absolute path, which begins with the database's own path; " +
+			"plan it against the database, which names it by that path")
 	}
 	if relative == "" {
 		return database, nil

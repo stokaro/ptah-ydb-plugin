@@ -150,3 +150,16 @@ func IsPasswordHash(password string) bool {
 	}
 	return hash.Hash != nil && hash.Salt != nil && hash.Type != nil
 }
+
+// Describe names the object a grant is about, for a message a person reads:
+// the database, a directory, a table, or another scheme object by its kind.
+func Describe(kind, name string) string {
+	switch strings.ToLower(strings.Join(strings.Fields(kind), " ")) {
+	case "database":
+		return "the database"
+	case "schema":
+		return "directory " + name
+	default:
+		return strings.ToLower(strings.Join(strings.Fields(kind), " ")) + " " + name
+	}
+}
