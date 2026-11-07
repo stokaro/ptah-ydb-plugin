@@ -2840,7 +2840,10 @@ CHANGEFEED` for every removal, then `ALTER TABLE ... ADD CHANGEFEED` with an
 TOPIC` for a retention or a consumer that changes in place. YDB changes no
 option of a changefeed in place (`MODE alter is not supported`), so such a
 change drops the changefeed and adds it again, and a consumer whose codec list
-the declaration empties is dropped and added again. A new table's changefeeds
+the declaration empties is dropped and added again. A disabled changefeed the
+declaration states disabled, as one converted from a read does, keeps its state:
+its topic changes in place, since `ALTER TOPIC` disables nothing, and no step
+adds a disabled changefeed, since no statement disables one. A new table's changefeeds
 follow its creation. The planner refuses an option the session lacks with the
 host's capability key: `changefeed_user_sids` before 26.1,
 `changefeed_schema_changes` before 25.3, `changefeed_topic_auto_partitioning`

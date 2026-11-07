@@ -145,6 +145,11 @@ func planChangefeeds(in changefeedInput) ([]changefeeds.Change, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
+		// A topic change writes ALTER TOPIC alone and leaves the changefeed as
+		// the table holds it, a disabled one included, so it disables nothing.
+		if action == changefeeds.Topic {
+			feed.Disabled = false
+		}
 		if refusal := changefeeds.Check(label, feed, in.capabilities); refusal != nil {
 			return nil, refusal.Message(), nil
 		}
