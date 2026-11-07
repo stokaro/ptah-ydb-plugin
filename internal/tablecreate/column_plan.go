@@ -130,8 +130,18 @@ func nativeAddition(owner *protocol.Reference, column *protocol.PlanningColumn) 
 		if err != nil {
 			return false, err
 		}
-		if value.Owner.GetName() != column.Name || !slices.Equal(value.Owner.GetPath(), []string{owner.Name}) ||
-			value.Owner.GetDatabase() != owner.Database || value.Owner.GetSchema() != owner.Schema {
+		facetOwner := value.Owner
+		if owner.Database == "" {
+			// The host names an altered table without a database: it lives
+			// in the session's. A declaration converted from a read, as the
+			// rollback of a column drop restores the column from, keeps the
+			// read owner's database, so the facet is read in the table's
+			// terms, as a creation reads its facets (inSubjectTerms).
+			facetOwner = proto.CloneOf(facetOwner)
+			facetOwner.Database = ""
+		}
+		if facetOwner.GetName() != column.Name || !slices.Equal(facetOwner.GetPath(), []string{owner.Name}) ||
+			facetOwner.GetDatabase() != owner.Database || facetOwner.GetSchema() != owner.Schema {
 			return false, fmt.Errorf("YDB added column facet belongs to a different owner")
 		}
 		var intent native.ColumnIntent
