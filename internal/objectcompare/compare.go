@@ -92,6 +92,12 @@ type Family struct {
 	// the reader naming nothing. Empty leaves such an object undecided, and
 	// the current one stays.
 	RequiredRemoval string
+	// UndeclaredRequired says why a declared object may not require an
+	// object of the family that the desired side does not declare, or "".
+	// It is for a family whose object a declaration has to name beside the
+	// object that reads it, whatever the database holds. Nil lets a declared
+	// object require any object.
+	UndeclaredRequired func(required *protocol.ComparisonIdentity) string
 }
 
 type object struct {
@@ -264,15 +270,50 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 			decided = append(decided, *pair)
 		}
 	}
-	for _, family := range families {
-		if err := refuseDottedLimits(bound, family, objects, decided); err != nil {
-			return nil, nil, err
-		}
+	if err := refuseFamilies(bound, families, objects, decided); err != nil {
+		return nil, nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	return result, decided, nil
+}
+
+// refuseFamilies applies the refusals that read the whole comparison of
+// each family: a dotted limit that would drop an object, and an object a
+// declaration requires without declaring it.
+func refuseFamilies(request *protocol.CompareModelsRequest, families []Family, objects []object, decided []Decided) error {
+	for _, family := range families {
+		if err := refuseDottedLimits(request, family, objects, decided); err != nil {
+			return err
+		}
+		if err := refuseUndeclaredRequired(request, family, objects); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// refuseUndeclaredRequired refuses a comparison where a declared object
+// requires an object of family that the desired side does not declare, with
+// the family's reason. A desired side that does not know whether it declares
+// the object, such as a source that cannot describe the kind, is not refused.
+func refuseUndeclaredRequired(request *protocol.CompareModelsRequest, family Family, objects []object) error {
+	if family.UndeclaredRequired == nil {
+		return nil
+	}
+	for _, required := range request.GetRequired() {
+		if required.GetKind() != family.Kind || unknown(knowledge(request.GetDesired().GetCoverage(), family.Kind, required)) ||
+			slices.ContainsFunc(objects, func(item object) bool {
+				return item.family.Kind == family.Kind && item.desired != nil && provider.CompareIdentities(item.subject, required) == 0
+			}) {
+			continue
+		}
+		if reason := family.UndeclaredRequired(required); reason != "" {
+			return authored.New(reason)
+		}
+	}
+	return nil
 }
 
 // refuseDottedLimits refuses a comparison that drops an object a dotted limit

@@ -190,6 +190,56 @@ func TestWorkloadComparison_FailurePath(t *testing.T) {
 	c.Assert(compareWorkload(c, kept).Changes, qt.HasLen, 0)
 }
 
+// A declared classifier requires its pool, and the pools comparison refuses
+// one the schema does not declare, other than the pool default, whatever the
+// database holds: YDB runs the queries of a classifier whose pool does not
+// exist in the pool default without a word. The host's embedded engine
+// refused such a schema in these words. Ported from the host's
+// TestRender_ResourcePool_RefusesWhatYDBKeepsDifferently.
+func TestWorkloadComparisonRefusesAnUndeclaredPool_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		read map[string]proto.Message
+	}{
+		{name: "a pool the database does not hold"},
+		{name: "a pool the database holds", read: map[string]proto.Message{"batch": pool(workload.PoolSpec{})}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := workloadRequest(c, schema.ResourcePoolProperties, nil, test.read)
+			request.Required = []*protocol.ComparisonIdentity{workloadSubject(schema.ResourcePoolProperties, "batch", "")}
+
+			result, err := backend.New().CompareModels(c.Context(), request)
+
+			c.Assert(statusReasons(c, err), qt.DeepEquals, []string{`a declared resource pool classifier names resource pool "batch", which is not declared; ` +
+				`YDB runs the queries of a classifier whose pool does not exist in the pool "default" without a word`})
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// The controls: a classifier may name a pool the schema declares, and the
+// pool default, which YDB creates with the database.
+func TestWorkloadComparisonTakesADeclaredPool_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, required string
+		declared       map[string]proto.Message
+	}{
+		{name: "a declared pool", required: "batch", declared: map[string]proto.Message{"batch": pool(workload.PoolSpec{})}},
+		{name: "the pool default", required: "default"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := workloadRequest(c, schema.ResourcePoolProperties, test.declared, map[string]proto.Message{"default": pool(workload.PoolSpec{})})
+			request.Required = []*protocol.ComparisonIdentity{workloadSubject(schema.ResourcePoolProperties, test.required, "")}
+
+			result := compareWorkload(c, request)
+
+			c.Assert(result.Complete, qt.IsTrue)
+		})
+	}
+}
+
 // workloadPlan compares each request and plans every change in one request,
 // as the host sends the changes of the planner's kinds together.
 func workloadPlan(c *qt.C, capabilities map[string]bool, common []*protocol.CommonPlanningStep, requests ...*protocol.CompareModelsRequest) (*protocol.PlanFeaturesRequest, *protocol.PlannedFeatures) {
