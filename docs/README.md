@@ -12,6 +12,7 @@ page installs and selects this provider.
 | Topic | Where |
 | --- | --- |
 | Using the provider from `ptah` and `ptah-compat` | [Using the provider with Ptah](usage.md) |
+| What topics, consumers, changefeeds, transfers and async replications are, for a relational reader | [YDB objects for relational readers](objects.md) |
 | Go annotations and YAML keys that declare YDB objects | [Declaring YDB objects](declarations.md) |
 | How a migration is split, the migration lock, statement and lock timeouts | [Migrations on YDB](migrations.md) |
 | The vector index of an embedding generation | [Embedding generations on YDB](inference.md) |

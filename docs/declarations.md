@@ -21,7 +21,7 @@ searchAliases:
 overlaps: []
 disposition: keep
 sidebar:
-  order: 2
+  order: 3
 ---
 
 # Declaring YDB objects
