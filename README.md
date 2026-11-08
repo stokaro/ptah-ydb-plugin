@@ -3307,7 +3307,9 @@ after the CREATE TABLE, with `RESTART WITH` the start where it is not 1:
 its absolute path, so a creation that names no database, such as an offline
 render's, is written without it, and the render reports the start and the
 increment as omissions, as the host's embedded engine did (see [Offline schema
-rendering](#offline-schema-rendering)). The migration file carries the database path, and YDB
+rendering](#offline-schema-rendering)). A plan against a database carries the
+path of the database it read in the creation, since the host names the table it
+plans by no database, so a migration file holds the statement, and YDB
 records the restart, which it replays on every later `ALTER SEQUENCE`. A table
 created from such a file therefore keeps the settings it was created with (see
 below), where a table the native call creates can change them.

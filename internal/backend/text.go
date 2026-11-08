@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -101,7 +102,11 @@ func rowTableText(value *protocol.Envelope, database, path string) (string, erro
 		if err != nil {
 			return "", err
 		}
-		return tablecreate.RowTableStatementIn(database, path, request)
+		planned, err := tablecreate.CreationDatabase(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.RowTableStatementIn(cmp.Or(database, planned), path, request)
 	case tablecreate.InventoryOperationKind:
 		change, err := tablecreate.DecodeInventory(value)
 		if err != nil {
