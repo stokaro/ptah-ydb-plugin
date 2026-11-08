@@ -13,7 +13,6 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-	"golang.org/x/mod/semver"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -35,30 +34,6 @@ func requireHostLacks(c *qt.C, feature string) {
 func listLosses(c *qt.C) {
 	c.Helper()
 	c.Setenv("PTAH_LOG_LEVEL", "debug")
-}
-
-// An older host calls a no-op HCL reapply synced. A host that preserves a
-// table-property loss in the coverage header reports the same no-op plan with
-// an unresolved comparison limit for that model.
-func assertHCLTableReplanHasNoChanges(c *qt.C, document, output string) {
-	c.Helper()
-	if strings.Contains(output, "Schema is synced, no changes to be made") {
-		return
-	}
-	c.Assert(output, qt.Contains, "No changes planned, but", qt.Commentf("%s\n%s", document, output))
-	c.Assert(output, qt.Contains, "comparison limit", qt.Commentf("%s\n%s", document, output))
-	c.Assert(output, qt.Contains, schema.TableProperties, qt.Commentf("%s\n%s", document, output))
-}
-
-// editedHCLTTLUnit names the unit an exported HCL document can change. The
-// published host predates #5795 and has no captured table-facet loss to keep;
-// later hosts retain the observed unit until the source has no captured header.
-func editedHCLTTLUnit(c *qt.C) string {
-	c.Helper()
-	if semver.Compare(hostSDKVersion(c), releaseHostSDK) > 0 {
-		return "SECONDS"
-	}
-	return "MILLISECONDS"
 }
 
 // platformItems is the HCL document of directory's items table with a TTL in
@@ -103,11 +78,8 @@ func withoutPlatformBlocks(document string) string {
 // back as the same block, with the unit of an integer column, and warns only
 // about a setting HCL has no spelling for, in the embedded engine's words. The
 // document applied back plans nothing, and so does the same document without
-// the blocks: a table that writes none keeps its TTL. The captured loss keeps
-// an edited platform value for that table undecided. The published host before
-// that header change can apply the edited unit immediately. An explicit source
-// without the captured header can change its unit on either host, while the
-// other table's interval changes in place from the exported document.
+// the blocks: a table that writes none keeps its TTL. A changed interval and a
+// changed unit are each altered in place, and the next run is synced.
 func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.HCLPlatformFeature)
@@ -145,22 +117,14 @@ func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
 	for _, written := range []string{document, withoutPlatformBlocks(document)} {
 		replanned, err := hostReplanSource(c, directory, "hcl", written)
 		c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", written, replanned))
-		assertHCLTableReplanHasNoChanges(c, written, replanned)
+		c.Assert(replanned, qt.Contains, "Schema is synced, no changes to be made", qt.Commentf("%s\n%s", written, replanned))
 	}
 	changed := strings.NewReplacer(`value = "P30D"`, `value = "P7D"`, `value = "SECONDS"`, `value = "MILLISECONDS"`).Replace(document)
 	altered, err := hostApplySource(c, directory, "hcl", changed)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", altered))
 	c.Assert(heldStorage(c, opened, path.Join(database, directory, "items")).TTL, qt.Equals, "ts 604800s")
-	c.Assert(heldStorage(c, opened, events).TTL, qt.Equals, "at 3600s "+editedHCLTTLUnit(c))
-	replanned, err := hostReplanSource(c, directory, "hcl", changed)
-	c.Assert(err, qt.IsNil, qt.Commentf("%s", replanned))
-	assertHCLTableReplanHasNoChanges(c, changed, replanned)
-	explicit := coverageHeaderLine.ReplaceAllString(changed, "")
-	c.Assert(explicit, qt.Not(qt.Contains), "// ptah:feature-coverage ")
-	altered, err = hostApplySource(c, directory, "hcl", explicit)
-	c.Assert(err, qt.IsNil, qt.Commentf("%s", altered))
 	c.Assert(heldStorage(c, opened, events).TTL, qt.Equals, "at 3600s MILLISECONDS")
-	replanned, err = hostReplanSource(c, directory, "hcl", explicit)
+	replanned, err := hostReplanSource(c, directory, "hcl", changed)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", replanned))
 	c.Assert(replanned, qt.Contains, "Schema is synced, no changes to be made", qt.Commentf("%s", replanned))
 }
@@ -253,7 +217,7 @@ func TestHostExportsAGoSourceWithATTLAsHCL(t *testing.T) {
 	c.Assert(notes, qt.Contains, "warning: table."+directory+".events: YDB table settings (AUTO_PARTITIONING_BY_LOAD = ENABLED) are not represented in HCL", qt.Commentf("%s", notes))
 	output, err = hostApplySource(c, directory, "hcl", document)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", document, output))
-	assertHCLTableReplanHasNoChanges(c, document, output)
+	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s\n%s", document, output))
 }
 
 // Ported from the host's TestYDBCompatBinary_InspectWritesTheTTLAsPlatformProperties.
@@ -378,5 +342,5 @@ func TestHostHCLExportListsNoColumnOfTheDefaultFamilyAsALoss_HappyPath(t *testin
 	c.Assert(notes, qt.Contains, ".body: its column family cold is not represented in HCL", qt.Commentf("%s", notes))
 	replanned, err := hostReplanSource(c, directory, "hcl", document)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", document, replanned))
-	assertHCLTableReplanHasNoChanges(c, document, replanned)
+	c.Assert(replanned, qt.Contains, "Schema is synced, no changes to be made", qt.Commentf("%s\n%s", document, replanned))
 }

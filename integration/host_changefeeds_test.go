@@ -370,12 +370,12 @@ func addUnsupportedChangefeed(c *qt.C, opened *connection.Connection, absolute s
 }
 
 // Ported from TestSchemaInspectHCLKeepsAnOwnersLimitInTheHeader: an HCL export
-// from either host surface records a changefeed it cannot declare in the
-// captured coverage header. Applying either export keeps the feed and its
-// unsupported attributes.
+// from either host surface reports a changefeed it cannot declare without
+// claiming that the document describes it. Applying either export keeps the
+// feed and its unsupported attributes.
 func TestHostHCLInspectKeepsUnsupportedChangefeed_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	requireHostChange(c, "stokaro/ptah#5795, which retains HCL losses in the coverage header")
+	requireHostChange(c, "stokaro/ptah#5799, which keeps HCL losses out of the coverage header")
 	h := newHostChangefeeds(c)
 	h.apply("the table", h.events(""), "Schema apply completed successfully")
 	addUnsupportedChangefeed(c, h.opened, path.Join(h.database, h.directory, "events"))
@@ -386,8 +386,7 @@ func TestHostHCLInspectKeepsUnsupportedChangefeed_HappyPath(t *testing.T) {
 	for _, exported := range []struct{ name, document, notes string }{{"native", native, nativeNotes}, {"atlas", compat, compatNotes}} {
 		c.Assert(exported.document, qt.Contains, `table "events"`, qt.Commentf("%s: %s", exported.name, exported.document))
 		c.Assert(exported.document, qt.Contains, "// ptah:feature-coverage ", qt.Commentf("%s: %s", exported.name, exported.document))
-		c.Assert(exported.document, qt.Contains, schema.ChangefeedProperties, qt.Commentf("%s: %s", exported.name, exported.document))
-		c.Assert(exported.document, qt.Contains, "changefeed tagged is not represented in HCL", qt.Commentf("%s: %s", exported.name, exported.document))
+		c.Assert(exported.document, qt.Not(qt.Contains), schema.ChangefeedProperties, qt.Commentf("%s: %s", exported.name, exported.document))
 		c.Assert(exported.notes, qt.Contains, "cannot be represented in HCL", qt.Commentf("%s: %s", exported.name, exported.notes))
 		c.Assert(hostPlanned(c, h.directory, "hcl", exported.document), qt.HasLen, 0, qt.Commentf("%s: %s", exported.name, exported.document))
 	}
