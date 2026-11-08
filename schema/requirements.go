@@ -50,9 +50,11 @@ func RequiredObjects(value *protocol.Envelope) ([]*protocol.ComparisonIdentity, 
 			}
 			pool = spec.ResourcePool
 		}
-		if pool == "default" {
-			pool = ""
-		}
+		// A query that names no pool runs in the pool default and keeps
+		// it, as the host's embedded engine at 74de0b65b kept it: a scope
+		// that selects the query keeps the pool's change. The pool is
+		// never created or dropped, so the requirement does nothing else.
+		pool = cmp.Or(pool, "default")
 	default:
 		return nil, false, nil
 	}

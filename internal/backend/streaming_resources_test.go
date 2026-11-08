@@ -153,21 +153,20 @@ func TestStreamingSplitPreservesAccessOrderingAndDropRewrite(t *testing.T) {
 	}
 }
 
+// A query requires the pool it runs in, the pool default when it names none,
+// so a scope that selects the query keeps the pool, as the host's embedded
+// engine at 74de0b65b kept it.
 func TestStreamingResourcePoolSurvivesNormalization(t *testing.T) {
-	for _, pool := range []string{"", "default", "team.batch"} {
-		t.Run(pool, func(t *testing.T) {
+	for _, test := range []struct{ pool, want string }{{"", "default"}, {"default", "default"}, {"team.batch", "team.batch"}} {
+		t.Run(test.pool, func(t *testing.T) {
 			c := testcheck.New(t)
 			owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}
-			value, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: "SELECT 1;", ResourcePool: pool}, true)
+			value, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: "SELECT 1;", ResourcePool: test.pool}, true)
 			c.Assert(err, qt.IsNil)
 			result, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningObjectContextFeature}, Values: []*protocol.ValueInput{{Id: "query", Representation: protocol.ValueInput_DESIRED, Value: value}}})
 			c.Assert(err, qt.IsNil)
-			if pool == "" || pool == "default" {
-				c.Assert(result.Values[0].RequiredObjects, qt.HasLen, 0)
-				return
-			}
 			c.Assert(result.Values[0].RequiredObjects, qt.CmpEquals(protocmp.Transform()), []*protocol.ComparisonIdentity{{Kind: schema.ResourcePoolProperties,
-				Database: &protocol.ComparisonPart{Source: "/local", Normalized: "/local"}, Name: &protocol.ComparisonPart{Source: pool, Normalized: pool}}})
+				Database: &protocol.ComparisonPart{Source: "/local", Normalized: "/local"}, Name: &protocol.ComparisonPart{Source: test.want, Normalized: test.want}}})
 		})
 	}
 }

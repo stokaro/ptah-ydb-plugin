@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.31.0, which speaks provider contract 25.33.
+The module pins `provider-sdk` v0.35.0, which speaks provider contract 25.37.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -2382,8 +2382,10 @@ the maximum at the minimum, 90% and 30% thresholds and a five-minute window.
 Consumers compare by name. YDB's own attributes and the access metadata are not
 compared. A topic the read finds holding a setting no statement sets
 (`retention_storage_mb`, `partition_count_limit`, a metering mode, the read
-speeds or a metrics level) refuses the comparison, as the host refuses to read
-it.
+speeds or a metrics level), or a consumer whose codec list names a codec no
+declaration names, refuses the comparison as the host refuses to read it,
+whatever the source says of the topic: `YDB topic <path>: <why>`, the path
+from the database root.
 
 The planner writes one step per topic, outside a transaction. It refuses a
 change YDB cannot make in place: fewer partitions than the topic has, and
@@ -2454,6 +2456,10 @@ This assessment also runs when the query declaration is unchanged. Captured
 query values require `planning.object-context` (contract 25.7), and each query
 receives an assessment receipt. A changed input restarts a running query only
 when the desired capture establishes every surviving input and resource pool.
+A resource pool altered in place is no changed input: YDB runs `ALTER RESOURCE
+POOL` beside a query running in the pool and the query keeps running, measured
+on 26.2.1.14, so the plan alters the pool alone, as the host's embedded engine
+did. A plan that drops the pool a running query names is refused.
 Missing definitions, conflicting occupants, and foreign database inputs refuse
 the complete plan. An unscoped inspection walks every directory for streaming
 queries, including dot-prefixed user directories. A failed directory listing
@@ -2474,8 +2480,10 @@ paths, `USE`, and dynamic table functions such as `RANGE` refuse planning:
 their complete physical inputs cannot be proven from the captured body.
 Ordinary strings outside a table expression create no path dependency.
 A named resource pool remains a database-wide dependency, including
-a literal dot in its name. Scope selection keeps that pool when it keeps the
-query, unless the pool is explicitly excluded. Access changes follow a query's
+a literal dot in its name, and a query that names none depends on the pool
+`default`. Scope selection keeps that pool when it keeps the query, unless
+the pool is explicitly excluded, so an `--include` of a query plans the change
+of the pool it runs in, as the host's embedded engine did. Access changes follow a query's
 stop and restart; a final drop accounts for revoking that query's access.
 
 Execution verifies the stored query settings before dispatch, checks
@@ -2585,8 +2593,12 @@ commit interval, or of a transfer's source, target or consumer, which YDB makes
 in no object in place; a connection or credential change of an object that is
 not paused, or of a replication that was failed over; a credential taken away;
 a secret path before 25.4. It refuses a drop of a running replication whose
-replica the plan declares as a table, and a creation where a table stands at a
-target. Where the host negotiates `planning.object-context`, the planner also
+replica the plan declares as a table, a creation where a table stands at a
+target, and a creation whose target lies at, above or below the target of
+another replication the plan keeps or creates: YDB creates the replication over
+the other's replica and both write it, and a later drop of either with
+`CASCADE` drops the replica while the other runs on without it, measured on
+25.1.4.7 and 26.2.1.14. Where the host negotiates `planning.object-context`, the planner also
 assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
@@ -2653,12 +2665,15 @@ YDB creates no transfer into a missing table (`Path does not exist`). A topic of
 the transfer's own database has to be declared as a topic, where the host also
 sends the transfer comparison the declared topics (`models.declared-objects`,
 contract 25.33, ADR 0109 in Ptah), or be a changefeed of a declared table: YDB
-accepts a transfer of a missing topic and then stops it (`Discovery error`). The
-comparison does not see a table's changefeeds, a facet of the table that the
-row-table comparison owns, so it takes any stream of a declared table for one of
-its changefeeds, where the host's embedded engine also refused a changefeed the
-table does not declare. A target without transfers refuses the transfer by the
-capability first, as the embedded engine did.
+accepts a transfer of a missing topic and then stops it (`Discovery error`). A
+table's changefeeds are a facet the row-table comparison owns; a host that
+sends the transfer comparison the declared changefeeds of the tables
+(`models.declared-facets`, contract 25.37, ADR 0119 in Ptah) has a stream of a
+declared table accepted only when it is one of the table's declared
+changefeeds, as the host's embedded engine did. A host that does not send them
+leaves the comparison to take any stream of a declared table for a changefeed.
+A target without transfers refuses the transfer by the capability first, as the
+embedded engine did.
 
 Not modeled yet: HCL blocks.
 
@@ -3298,7 +3313,9 @@ after the CREATE TABLE, with `RESTART WITH` the start where it is not 1:
 its absolute path, so a creation that names no database, such as an offline
 render's, is written without it, and the render reports the start and the
 increment as omissions, as the host's embedded engine did (see [Offline schema
-rendering](#offline-schema-rendering)). The migration file carries the database path, and YDB
+rendering](#offline-schema-rendering)). A plan against a database carries the
+path of the database it read in the creation, since the host names the table it
+plans by no database, so a migration file holds the statement, and YDB
 records the restart, which it replays on every later `ALTER SEQUENCE`. A table
 created from such a file therefore keeps the settings it was created with (see
 below), where a table the native call creates can change them.
@@ -4120,8 +4137,14 @@ statement, and claims complete coverage of the
 row-table, column, column-storage, coordination, topic, external data source,
 external table, streaming query, secret, async replication and transfer models,
 of the changefeed model under that feature, so a table a load declares
-without a changefeed is one with none, and of the index settings model where
-the host also lists `schema.observed-index-facets`. A
+without a changefeed is one with none, of the index settings model where
+the host also lists `schema.observed-index-facets`, and of the native index
+model where it also lists `source.index-kinds`, so a table a load declares
+without a vector or full-text index is one with none. A vector or full-text
+index of a CREATE TABLE is no common index then: it reaches the host in the
+native index set of its table, and a local index in the storage of its column
+table, the values a YAML or Go source of the same index declares, so a YQL
+schema renders, plans and applies them as the host's embedded engine did. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -4158,8 +4181,12 @@ carry is refused by name, with no partial reading:
   both `schema.sql-facets` and `schema.observed-index-facets`: without the
   second the comparison could not see what an index holds, as for a YAML or Go
   source;
-- the settings of a vector index, its partitioning among them: its index set
-  is no model a SQL schema reading carries;
+- a vector, full-text or local index, for a host that does not list both
+  `schema.sql-facets` and `source.index-kinds`;
+- a local index of a row table, a vector or full-text index of a column table,
+  and a comment on one of them, with the words a YAML or Go source of the same
+  index is refused with, and a vector index's partitioning, which the native
+  index set does not hold;
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;
@@ -4561,8 +4588,10 @@ The negotiated `scope.selections` declaration makes secrets, streaming queries,
 coordination nodes, topics, external data sources, external tables, async
 replications and transfers selectable by their directory and name. Resource
 pools and classifiers use database-wide names, including literal dots. A kept
-classifier keeps the pool it requires when the input contains that pool; an
-explicit exclusion of the pool still wins. An external table keeps no data
+classifier or streaming query keeps the pool it requires when the input
+contains that pool, the pool `default` for a query that names none; an
+explicit exclusion of the pool still wins. A table's changefeeds go with the
+table. An external table keeps no data
 source and a data source no secret: an `--include` of a table plans that
 table alone, whether it is created or dropped, as the host's embedded engine
 did. The host keeps a requirement on each side of a comparison alone, so a

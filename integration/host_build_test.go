@@ -19,6 +19,14 @@ const sdkModule = "github.com/stokaro/ptah/provider-sdk"
 // one, a master build or a later release, has them all.
 const releaseHostSDK = "v0.30.0"
 
+// omissionCountsHostSDK is the published SDK version whose report fields the
+// host adapter carries into DBML and JSON export diagnostics.
+const omissionCountsHostSDK = "v0.35.0"
+
+// documentIndexRenameChange is the host change that pairs an index renamed
+// between two SQL documents, which Ptah v0.23.0 plans as a drop and an add.
+const documentIndexRenameChange = "the pairing of an index renamed between two SQL documents, which Ptah v0.23.0 plans as a drop and an add"
+
 // requireHostChange skips a test of host behavior that change gives on a host
 // built with provider SDK releaseHostSDK or an older one, such as Ptah
 // v0.23.0. The version comes from the host binary's build information, not
@@ -31,6 +39,17 @@ func requireHostChange(c *qt.C, change string) {
 	version := hostSDKVersion(c)
 	if semver.Compare(version, releaseHostSDK) <= 0 {
 		c.Skipf("the selected host is built with %s %s and lacks %s", sdkModule, version, change)
+	}
+}
+
+// requireHostOmissionCounts runs an omission-count test only with a host
+// built against the published SDK contract that carries those report fields.
+// Earlier master and release hosts cannot negotiate the feature.
+func requireHostOmissionCounts(c *qt.C) {
+	c.Helper()
+	version := hostSDKVersion(c)
+	if semver.Compare(version, omissionCountsHostSDK) < 0 {
+		c.Skipf("the selected host is built with %s %s, before omission counts in %s", sdkModule, version, omissionCountsHostSDK)
 	}
 }
 

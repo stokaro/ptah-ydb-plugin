@@ -59,8 +59,9 @@ func TestSQLSchemaOfflineSubprocess(t *testing.T) {
 }
 
 // A refused load comes back incomplete, with the refusal at the position the
-// host's own reader names, and with nothing else: a syntax error, and an index
-// setting a SQL schema reading has no home for.
+// host's own reader names, and with nothing else: a syntax error, and a local
+// vector index, which a client that negotiates no source.index-kinds has no
+// home for.
 func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
@@ -72,11 +73,11 @@ func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
 	}{
 		{name: "syntax", text: "CREATE TABLE t (id Uint64, PRIMARY KEY (id));", code: protocol.SQLDiagnostic_SYNTAX, offset: 44,
 			message: `YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL (got ";")`},
-		{name: "vector index settings", text: "CREATE TABLE t (id Uint64 NOT NULL, a String, PRIMARY KEY (id), INDEX i GLOBAL USING vector_kmeans_tree ON (a) " +
+		{name: "a vector index", text: "CREATE TABLE t (id Uint64 NOT NULL, a String, PRIMARY KEY (id), INDEX i GLOBAL USING vector_kmeans_tree ON (a) " +
 			"WITH (distance = cosine, vector_type = 'float', vector_dimension = 3, clusters = 2, levels = 1));",
 			code: protocol.SQLDiagnostic_UNSUPPORTED, offset: 0,
-			message: "index `i` of table `t` declares vector settings, which a SQL schema reading has no home for: " +
-				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"},
+			message: "index `i` of table `t` is a vector_kmeans_tree index, which a SQL schema reading has no home for: " +
+				"the host does not take a table's vector, full-text and local indexes in a SQL schema reading (schema.sql-facets and source.index-kinds)"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
