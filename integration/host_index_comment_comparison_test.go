@@ -18,11 +18,18 @@ func indexCommentDocument(index, comment string) string {
 	return "CREATE TABLE `docs` (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id)" + index + ");\n" + comment
 }
 
-func indexCommentDiff(c *qt.C, address, from, to string) string {
+// indexCommentDiff compares the declaration with the table YDB holds. The
+// legacy comparison cases use an observed index, whose kind and defaults are
+// established by the server, rather than another source document.
+func indexCommentDiff(c *qt.C, from, to string) string {
 	c.Helper()
+	realm := newCLIRealm(c)
 	files := writeFiles(c, c.TempDir(), map[string]string{"from.sql": from, "to.sql": to})
-	out, err := hostCommand(c, "schema", "diff", "--from", filepath.Join(files, "from.sql"),
-		"--to", filepath.Join(files, "to.sql"), "--dev-url", address)
+	seed, err := hostCommand(c, "schema", "apply", "--db-url", realm.address, "--schema-file", filepath.Join(files, "from.sql"),
+		"--auto-approve", "--tx-mode", "none")
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", seed))
+	out, err := hostCommand(c, "schema", "diff", "--from", realm.address,
+		"--to", filepath.Join(files, "to.sql"), "--dev-url", realm.address)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
 	return out
 }
@@ -42,9 +49,6 @@ func indexCommentStatements(sql string) []string {
 // table attribute. The index itself is not rebuilt. This ports the three
 // TestIndexes_YDBCommentChangesInPlace cases through the host.
 func TestHostChangesKeptIndexCommentsInPlace_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
-	requireHostChange(c, selfDiffIndexChange)
-	realm := newCLIRealm(c)
 	const index = ", INDEX by_a GLOBAL ON (a)"
 	for _, test := range []struct {
 		name, oldComment, newComment, want string
@@ -56,7 +60,7 @@ func TestHostChangesKeptIndexCommentsInPlace_HappyPath(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			out := indexCommentDiff(c, realm.address, indexCommentDocument(index, test.oldComment), indexCommentDocument(index, test.newComment))
+			out := indexCommentDiff(c, indexCommentDocument(index, test.oldComment), indexCommentDocument(index, test.newComment))
 			c.Assert(indexCommentStatements(out), qt.DeepEquals, []string{test.want}, qt.Commentf("%s", out))
 			c.Assert(out, qt.Not(qt.Contains), "DROP INDEX")
 			c.Assert(out, qt.Not(qt.Contains), "ADD INDEX")
@@ -70,8 +74,6 @@ func TestHostChangesKeptIndexCommentsInPlace_HappyPath(t *testing.T) {
 func TestHostMovesIndexCommentsWithRename_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.IndexRenamesFeature)
-	requireHostChange(c, documentIndexRenameChange)
-	realm := newCLIRealm(c)
 	for _, test := range []struct {
 		name, oldComment, newComment string
 		want                         []string
@@ -90,7 +92,7 @@ func TestHostMovesIndexCommentsWithRename_HappyPath(t *testing.T) {
 			c := testcheck.New(t)
 			from := indexCommentDocument(", INDEX old GLOBAL ON (a)", indexCommentClause("old", test.oldComment))
 			to := indexCommentDocument(", INDEX new GLOBAL ON (a)", indexCommentClause("new", test.newComment))
-			out := indexCommentDiff(c, realm.address, from, to)
+			out := indexCommentDiff(c, from, to)
 			c.Assert(out, qt.Contains, "RENAME INDEX `old` TO `new`")
 			c.Assert(indexCommentStatements(out), qt.DeepEquals, test.want, qt.Commentf("%s", out))
 			c.Assert(out, qt.Not(qt.Contains), "DROP INDEX")
@@ -110,8 +112,6 @@ func indexCommentClause(name, comment string) string {
 // same name clears an omitted comment or writes the new one on the replacement.
 // This ports the drop and rebuild cases of TestIndexes_YDBCommentOfADroppedIndex.
 func TestHostChangesCommentsOfDroppedAndRebuiltIndexes_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
-	realm := newCLIRealm(c)
 	from := indexCommentDocument(", INDEX by_a GLOBAL ON (a)", indexCommentClause("by_a", "Old"))
 	for _, test := range []struct {
 		name, index, comment, wantComment string
@@ -124,7 +124,7 @@ func TestHostChangesCommentsOfDroppedAndRebuiltIndexes_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			to := indexCommentDocument(test.index, indexCommentClause("by_a", test.comment))
-			out := indexCommentDiff(c, realm.address, from, to)
+			out := indexCommentDiff(c, from, to)
 			c.Assert(out, qt.Contains, "DROP INDEX `by_a`")
 			c.Assert(strings.Count(out, "ADD INDEX `by_a`"), qt.Equals, test.wantAdds)
 			c.Assert(indexCommentStatements(out), qt.DeepEquals, []string{test.wantComment}, qt.Commentf("%s", out))
@@ -138,7 +138,6 @@ func TestHostChangesCommentsOfDroppedAndRebuiltIndexes_HappyPath(t *testing.T) {
 func TestHostChangesCommentsWhenAnIndexBecomesUnique_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireCapability(c, targetCapabilities(c), tablecreate.UniqueIndexOnExistingTableCapability)
-	realm := newCLIRealm(c)
 	from := indexCommentDocument(", INDEX by_a GLOBAL ON (a)", indexCommentClause("by_a", "Old"))
 	for _, test := range []struct {
 		name, comment, wantComment string
@@ -149,7 +148,7 @@ func TestHostChangesCommentsWhenAnIndexBecomesUnique_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			to := indexCommentDocument(", INDEX by_a GLOBAL UNIQUE ON (a)", indexCommentClause("by_a", test.comment))
-			out := indexCommentDiff(c, realm.address, from, to)
+			out := indexCommentDiff(c, from, to)
 			c.Assert(out, qt.Contains, "DROP INDEX `by_a`")
 			c.Assert(out, qt.Contains, "ADD INDEX `by_a` GLOBAL UNIQUE")
 			c.Assert(indexCommentStatements(out), qt.DeepEquals, []string{test.wantComment}, qt.Commentf("%s", out))
