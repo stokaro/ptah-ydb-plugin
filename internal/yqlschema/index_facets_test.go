@@ -121,9 +121,9 @@ func TestReply_IndexSettingsFacetIsTracedToItsIndex_HappyPath(t *testing.T) {
 	c.Assert(slices.DeleteFunc(traced, func(line uint32) bool { return line == 0 }), qt.DeepEquals, []uint32{2})
 }
 
-// An index's settings have no home where the host does not take the facet,
-// and a vector index's settings have none at all: its index set is no SQL
-// model. The load is refused naming the index, with no schema.
+// An index's settings have no home where the host does not take the facet.
+// The load is refused naming the index, with no schema. A vector index is one
+// of its table's native indexes (see TestReply_OwnedIndexes_FailurePath).
 func TestReply_IndexSettingsFacet_FailurePath(t *testing.T) {
 	tests := []struct {
 		name, without, text, want string
@@ -136,11 +136,6 @@ func TestReply_IndexSettingsFacet_FailurePath(t *testing.T) {
 			text: "CREATE TABLE `app/items` (id Int64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL SYNC ON (body) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
 			want: "index `by_body` of table `app/items` declares partitioning settings, which a SQL schema reading has no home for: " +
 				"the host does not take the facets of an index in a SQL schema reading (schema.sql-facets and schema.observed-index-facets)"},
-		{name: "a vector index's settings", without: "",
-			text: "CREATE TABLE `app/items` (id Int64 NOT NULL, embedding String, PRIMARY KEY (id), INDEX by_embedding GLOBAL USING vector_kmeans_tree ON (embedding) " +
-				"WITH (distance = cosine, vector_type = 'float', vector_dimension = 3, clusters = 2, levels = 1));",
-			want: "index `by_embedding` of table `app/items` declares vector settings, which a SQL schema reading has no home for: " +
-				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

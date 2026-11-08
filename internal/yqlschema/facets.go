@@ -24,14 +24,17 @@ import (
 // partitioning, read replicas, key bloom filter, starting layout, column
 // families and TTL are one facet of the table, and each column a family other
 // than the default one holds gets a facet that places it in that family. A
-// column table's hash key, shard count and TTL are one column-storage facet of
-// the table. A table that declares none of them gets none.
+// column table's hash key, shard count, TTL and local indexes are one
+// column-storage facet of the table; where stated is set, the facet says that
+// it lists every local index of the table, as a YAML or Go source's does for
+// a host that negotiates source.index-kinds. A table that declares none of
+// them gets none.
 //
 // A column table that declares a family is refused with the words the YAML
 // and Go sources refuse it with, since the column-storage model holds no
 // family, and so is a row table that declares both starting layouts, which the
 // row-table model refuses where the facet is normalized.
-func tableFacets(table Table) ([]*protocol.Envelope, error) {
+func tableFacets(table Table, locals []*native.LocalIndexObservation, stated bool) ([]*protocol.Envelope, error) {
 	facets := table.Facets
 	if facets.Empty() {
 		return nil, nil
@@ -42,6 +45,7 @@ func tableFacets(table Table) ([]*protocol.Envelope, error) {
 		if err != nil {
 			return nil, err
 		}
+		storage.LocalIndexes, storage.LocalIndexesStated = locals, stated
 		envelope, err := schema.CaptureColumnStorageIntent(owner, storage)
 		if err != nil {
 			return nil, err
