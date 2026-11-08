@@ -20,15 +20,42 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
-Install it with `ptah providers install ydb`. The documentation says what YDB
-does in Ptah, from installing and selecting the provider to the objects it
-declares and how it runs a migration. It is published on
+The documentation says what YDB does in Ptah, from installing and selecting
+the provider to the objects it declares and how it runs a migration. It is
+published on
 [docs.ptah.run](https://docs.ptah.run/edge/extend/providers/ydb/), and its pages
 live in [docs/](docs/README.md).
 
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
+
+## Install
+
+Install the provider with Ptah's own command:
+
+```sh
+ptah providers install ydb
+```
+
+The command installs the newest release whose minimum provider contract the
+running Ptah meets. It checks the archive against the release's
+`checksums.txt` and stores the executable in Ptah's user cache directory. It
+does not run the executable and does not edit a manifest. To install a chosen
+release, add `--version`, for example `--version 0.8.0`.
+
+After the install, a command that names a `ydb://` or `ydbs://` URL or the
+`ydb` dialect uses the provider without a flag or a manifest. Check the
+installed copy:
+
+```sh
+ptah providers check --provider-engine ydb --json
+```
+
+The check reports `"status": "compatible"` when Ptah can run the provider, and
+`provider_missing` when no copy is installed.
+[Install an official provider](https://docs.ptah.run/edge/extend/executable-providers/#install-an-official-provider)
+says how a release is chosen, what is checked and where the file is stored.
 
 ## Releases
 
