@@ -210,6 +210,22 @@ func (o ownedIndex) spec() (*native.IndexIntent, error) {
 	return result, nil
 }
 
+// NativeIndex is the native specification of the vector or full-text index
+// name of kind, on columns and covering include, with the settings options
+// writes, each as its text: what a YAML or Go source's declaration of the
+// same index states. A YQL CREATE TABLE's index reads through it too, so an
+// index means the same whichever format declares it.
+func NativeIndex(name string, kind ydbdecl.IndexKind, columns, include []string, options map[string]string) (*native.IndexIntent, error) {
+	return ownedIndex{name: name, kind: kind, columns: slices.Clone(columns), include: slices.Clone(include), options: cloned(options)}.spec()
+}
+
+// LocalIndex is the local index name of a column table, of kind, on columns
+// and covering include, with the settings options writes, as [NativeIndex] is
+// a vector or full-text index.
+func LocalIndex(name string, kind ydbdecl.IndexKind, columns, include []string, options map[string]string) (*native.LocalIndexObservation, error) {
+	return ownedIndex{name: name, kind: kind, columns: slices.Clone(columns), include: slices.Clone(include), options: cloned(options)}.local()
+}
+
 // cloned is a copy of options.
 func cloned(options map[string]string) map[string]string {
 	result := make(map[string]string, len(options))

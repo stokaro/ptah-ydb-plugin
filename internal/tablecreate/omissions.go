@@ -35,6 +35,10 @@ const (
 // modifiers beside the creation's own fields.
 const typeModifiersKey = "typeModifiers"
 
+// databaseKey is the member of a creation payload that names the database the
+// plan read, beside the creation's own fields (see [CreationInDatabase]).
+const databaseKey = "database"
+
 // Omission is a declared property of a column a creation's statement goes on
 // without, as render.omissions reports it: Column names the column, Property
 // what it lost and Detail the declared value.

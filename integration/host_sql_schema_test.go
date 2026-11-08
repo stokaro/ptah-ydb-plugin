@@ -119,19 +119,19 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 
 // The host refuses a YQL schema this provider refuses, with the provider's
 // words and the position in the document, and changes nothing: a syntax
-// error the host's own reader reports the same way, and a vector index's
-// settings, which a SQL schema reading has no home for. A global index's
+// error the host's own reader reports the same way, and a local index of a
+// row table, which belongs to a column table's storage. A global index's
 // partitioning reaches the host as a facet (see
-// TestHostAppliesAYQLTableWithSettings_HappyPath).
+// TestHostAppliesAYQLTableWithSettings_HappyPath), and a vector index as one
+// of its table's native indexes (see TestHostAppliesAYQLVectorIndex_HappyPath).
 func TestHostRefusesASQLSchema_FailurePath(t *testing.T) {
 	syntax := `YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL \(got ";"\)`
-	settings := "index `by_vector` of table `[^`]+/items` declares vector settings, which a SQL schema reading has no home for: [^\n]*"
+	local := "table `[^`]+/items`: index `by_bloom`: a local index belongs to a column table, and the table is declared as a row table"
 	for _, test := range []struct{ name, text, want string }{
 		{name: "syntax", text: "CREATE TABLE `{dir}/items` (id Uint64, PRIMARY KEY (id));",
 			want: positioned(syntax)},
-		{name: "vector index settings", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, a String, PRIMARY KEY (id), INDEX by_vector GLOBAL USING vector_kmeans_tree ON (a) " +
-			"WITH (distance = cosine, vector_type = 'float', vector_dimension = 3, clusters = 2, levels = 1));",
-			want: positioned(settings)},
+		{name: "a local index of a row table", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id), INDEX by_bloom LOCAL USING bloom_filter ON (a));",
+			want: positioned(local)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

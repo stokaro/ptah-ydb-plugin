@@ -51,3 +51,25 @@ func localPath(root, name string) (*protocol.ComparisonIdentity, bool) {
 	}
 	return PathSubject(strings.TrimSuffix(directory, "/"), leaf), true
 }
+
+// ReadByCommonStep reports whether a common step of request reads the scheme
+// path of the session's database at directory and leaf name: one whose
+// effects read the path, or one that creates a view whose query names it.
+// sidePaths orders a step that creates the path before each such step, so
+// the step's execution can tell whether the rest of the plan needs the path
+// to stand once the step's statement returns.
+func ReadByCommonStep(request *protocol.PlanFeaturesRequest, directory, name string) bool {
+	subject := PathSubject(directory, name)
+	for _, common := range request.GetCommonSteps() {
+		if createsViewReading(request.GetDatabasePath(), common, subject) {
+			return true
+		}
+		for _, effect := range common.GetMetadata().GetEffects() {
+			if effect.GetAction() == protocol.PlanningEffect_READ && effect.GetSubject().GetParent().GetNormalized() == "" && isSchemeSubject(effect.GetSubject()) &&
+				provider.CompareIdentities(slot(effect.Subject), subject) == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}

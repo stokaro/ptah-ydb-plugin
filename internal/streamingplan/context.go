@@ -183,13 +183,33 @@ func inputsChanged(request, paths *protocol.PlanFeaturesRequest, spec streaming.
 			}
 		}
 	}
-	pool := streaming.Pool(spec)
-	for _, changed := range request.ChangedSubjects {
-		if localContextSubject(request, changed) && pool != "default" && changed.Kind == schema.ResourcePoolProperties && changed.GetName().GetNormalized() == pool {
-			return true, nil
-		}
+	return poolReplaced(request, streaming.Pool(spec)), nil
+}
+
+// poolReplaced reports whether the plan creates or drops the resource pool
+// named pool, which a query runs in. A pool both sides hold is altered in
+// place, which is no input change: YDB runs ALTER RESOURCE POOL beside a query
+// running in the pool and the query keeps running, measured on 26.2.1.14, and
+// the host's embedded engine at 74de0b65b planned the ALTER alone. Without
+// this check the plan stops the query and starts it again around the ALTER,
+// and a scope that keeps the query and its pool without its topics cannot
+// plan that restart. A pool the plan drops still counts, so a drop of the pool
+// a running query names is refused (see survivingInputs). The pool default is
+// never created or dropped.
+func poolReplaced(request *protocol.PlanFeaturesRequest, pool string) bool {
+	if pool == "default" || heldPool(request, request.CurrentObjects, pool) && heldPool(request, request.DesiredObjects, pool) {
+		return false
 	}
-	return false, nil
+	return slices.ContainsFunc(request.ChangedSubjects, func(changed *protocol.ComparisonIdentity) bool {
+		return localContextSubject(request, changed) && changed.Kind == schema.ResourcePoolProperties && changed.GetName().GetNormalized() == pool
+	})
+}
+
+// heldPool reports whether state records the resource pool named pool.
+func heldPool(request *protocol.PlanFeaturesRequest, state *protocol.ComparisonState, pool string) bool {
+	return slices.ContainsFunc(state.GetRecords(), func(record *protocol.ComparisonRecord) bool {
+		return localContextSubject(request, record.Subject) && record.Kind == schema.ResourcePoolProperties && record.Subject.GetName().GetNormalized() == pool
+	})
 }
 
 func survivingInputs(request *protocol.PlanFeaturesRequest, spec streaming.Spec) error {

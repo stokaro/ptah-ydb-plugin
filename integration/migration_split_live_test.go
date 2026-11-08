@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -271,6 +272,50 @@ func TestMigrationSplitConflictAbortSetsTheFlags(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(rolledBack.Outcome, qt.Equals, protocol.TransactionResult_ROLLED_BACK)
 	c.Assert(rowValue(c, opened, table, 2), qt.Equals, "other")
+}
+
+// Ported from the host's TestWriter_ExecuteSQL_RetriesAnAbortedDataStatement
+// (internal/dbschema/ydb): a data statement YDB aborts for a conflict runs
+// again and applies once, a comment before its keyword included. Through a
+// provider the host's migrator runs the attempt again on the provider's word
+// that YDB aborted the unit's transaction (migration/migrator), and these are
+// the calls it makes: the split places the statement in a transaction with
+// its checkpoint, the first attempt's commit after another session wrote the
+// key it read is ROLLED_BACK with aborted, and the second attempt commits.
+func TestMigrationSplitRunsAnAbortedDataUnitAgain_HappyPath(t *testing.T) {
+	for _, test := range []struct{ name, body string }{
+		{name: "an upsert of what it reads", body: "UPSERT INTO `%[1]s` SELECT id, v || \"x\"u AS v FROM `%[1]s` WHERE id = 1u;"},
+		{name: "a comment before the keyword", body: "-- seed\nUPDATE `%[1]s` SET v = v || \"x\"u WHERE id = 1u;"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			opened, directory, database := inspectionFixture(c)
+			table := path.Join(database, directory, "rows")
+			seededTable(c, opened, table)
+			client, session := splitSession(c, provider.MigrationSplitFeature)
+			writer, other := splitSession(c, provider.MigrationSplitFeature)
+			split := splitBody(c, client, fmt.Sprintf(test.body, table))
+			c.Assert(split.Units, qt.HasLen, 1)
+			c.Assert(split.Units[0].Placement, qt.Equals, protocol.MigrationUnit_WITH_CHECKPOINT)
+
+			beginSerializable(c, client, session, "first")
+			first := executeSQL(c, client, session, "first", split.Units[0].Sql)
+			conflictingWrite(c, writer, other, table, "1")
+			aborted, abortErr := finish(c, client, session, "first", protocol.FinishTransactionRequest_COMMIT)
+			beginSerializable(c, client, session, "again")
+			again := executeSQL(c, client, session, "again", split.Units[0].Sql)
+			committed, commitErr := finish(c, client, session, "again", protocol.FinishTransactionRequest_COMMIT)
+
+			c.Assert(first.Outcome, qt.Equals, protocol.Execution_APPLIED)
+			c.Assert(abortErr, qt.ErrorIs, provider.ErrExecution)
+			c.Assert(aborted.Outcome, qt.Equals, protocol.TransactionResult_ROLLED_BACK)
+			c.Assert(aborted.Aborted, qt.IsTrue)
+			c.Assert(again.Outcome, qt.Equals, protocol.Execution_APPLIED)
+			c.Assert(commitErr, qt.IsNil)
+			c.Assert(committed.Outcome, qt.Equals, protocol.TransactionResult_COMMITTED)
+			c.Assert(rowValue(c, opened, table, 1), qt.Equals, "otherx")
+		})
+	}
 }
 
 // TestConflictAbortWithoutTheMigrationSplitSetsNoFlag is the control: a host

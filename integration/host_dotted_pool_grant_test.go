@@ -15,9 +15,14 @@ import (
 // A resource pool belongs to the database, so the dot in its name is a
 // literal character. The host must keep the provider's grant target name
 // through its SQL schema model and render the grant on that same pool. This
-// ports the dotted-pool row of the host's TestReadYQLPrivileges.
+// ports the dotted-pool row of the host's TestReadYQLPrivileges. YDB keeps
+// resource pools behind EnableResourcePools, so the test turns it on: a
+// grant on a pool of a server without them is refused for the capability.
 func TestHostRendersYQLGrantOnDottedResourcePool_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, "stokaro/ptah#5777, which keeps the name of a database-wide grant target")
+	opened, _, _ := inspectionFixture(c)
+	enableResourcePools(c, opened)
 	const base = "CREATE USER etl;\n" +
 		"CREATE RESOURCE POOL `batch.v2` WITH (CONCURRENT_QUERY_LIMIT=5);\n"
 	const grant = "GRANT SELECT ROW ON `.metadata/workload_manager/pools/batch.v2` TO etl;\n"

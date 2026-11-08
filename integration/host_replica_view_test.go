@@ -23,9 +23,9 @@ import (
 // and 26.2.1.14; this provider placed the view first (gap G230).
 //
 // YDB creates the replica table some time after CREATE ASYNC REPLICATION
-// returns, so the one plan still fails on the view, with the built-in engine
-// too (gap G231). Once the replica stands, the view is planned alone, applies,
-// and nothing is left to plan.
+// returns, so the creation waits for it when the plan reads it next, and the
+// one plan applies; without the wait the view failed (SCHEME_ERROR, issue
+// 2003), with the built-in engine too (gap G231). Nothing is left to plan.
 func TestHostCreatesAViewOverAReplicaAfterItsReplication_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -39,19 +39,15 @@ func TestHostCreatesAViewOverAReplicaAfterItsReplication_HappyPath(t *testing.T)
 		}
 	})
 	tables := "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n      note: {type: Utf8}\n"
-	replicated := tables + "async_replications:\n  mirror:\n    schema: " + directory + "\n    connection_string: " + strconv.Quote(selfConnection(c, opened)) +
-		"\n    items:\n      - source: " + absolute("src") + "\n        target: " + path.Join(directory, "replica") + "\n"
-	declared := replicated + "views:\n  recent:\n    name: " + directory + ".recent\n    body: \"SELECT id FROM `" + path.Join(directory, "replica") + "`\"\n"
-	view := "CREATE VIEW `" + directory + "/recent` WITH (security_invoker = TRUE) AS"
+	declared := tables + "async_replications:\n  mirror:\n    schema: " + directory + "\n    connection_string: " + strconv.Quote(selfConnection(c, opened)) +
+		"\n    items:\n      - source: " + absolute("src") + "\n        target: " + path.Join(directory, "replica") + "\n" +
+		"views:\n  recent:\n    name: " + directory + ".recent\n    body: \"SELECT id FROM `" + path.Join(directory, "replica") + "`\"\n"
 	hostRun(c, directory, "the table", tables, `(?s).*Schema apply completed successfully.*`)
 
 	planned := hostPlanned(c, directory, "yaml", declared)
-	hostRun(c, directory, "the replication", replicated, `(?s).*Schema apply completed successfully.*`)
-	awaitNames(c, opened, path.Join(database, directory), []string{"mirror", "replica", "src"})
-	viewOnly := hostPlanned(c, directory, "yaml", declared)
-	hostRun(c, directory, "the view", declared, `(?s).*Schema apply completed successfully.*`)
+	hostRun(c, directory, "the replication and the view", declared, `(?s).*Schema apply completed successfully.*`)
 
-	c.Assert(planned, qt.DeepEquals, []string{"async-replication-operation " + directory + ".mirror", view})
-	c.Assert(viewOnly, qt.DeepEquals, []string{view})
+	c.Assert(planned, qt.DeepEquals, []string{"async-replication-operation " + directory + ".mirror", "CREATE VIEW `" + directory + "/recent` WITH (security_invoker = TRUE) AS"})
+	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"mirror", "recent", "replica", "src"})
 	hostRun(c, directory, "a second run", declared, `(?s).*Schema is synced, no changes to be made.*`)
 }

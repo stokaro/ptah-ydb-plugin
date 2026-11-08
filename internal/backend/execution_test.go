@@ -551,3 +551,42 @@ func TestDefaultAdditionRefusesTheWholeBatchBeforeDispatch(t *testing.T) {
 		})
 	}
 }
+
+// A replication creation that awaited its replica tables in vain stands, so
+// it counts as applied, and no unit after it runs, since the plan ordered
+// those after the tables (G231). As the last unit of its batch it leaves the
+// batch applied: nothing there reads the tables.
+func TestExecutionStopsAfterReplicasNotCreated(t *testing.T) {
+	missing := &nativeapi.ReplicasNotCreated{Replication: "app/mirror", Table: "app/rep", Waited: time.Minute}
+	for _, test := range []struct {
+		name     string
+		units    int
+		outcome  protocol.Execution_Outcome
+		code     string
+		runs     int
+		messaged bool
+	}{
+		{name: "a unit follows", units: 2, outcome: protocol.Execution_PARTIAL, code: "ydb.replica-tables-not-created", runs: 1, messaged: true},
+		{name: "the last unit", units: 1, outcome: protocol.Execution_APPLIED, runs: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			runs := 0
+			units := make([]*protocol.Unit, test.units)
+			for i := range units {
+				units[i] = &protocol.Unit{ChangeId: fmt.Sprintf("unit-%d", i)}
+			}
+
+			result := executeUnits(t.Context(), 0, nil, unconfirmed, func(context.Context, *protocol.Unit) (bool, error) {
+				runs++
+				return true, fmt.Errorf("apply: %w", missing)
+			}, units)
+
+			c.Assert(result.Outcome, qt.Equals, test.outcome)
+			c.Assert(result.AppliedCount, qt.Equals, uint32(1))
+			c.Assert(result.DiagnosticCode, qt.Equals, test.code)
+			c.Assert(result.Message != "", qt.Equals, test.messaged)
+			c.Assert(runs, qt.Equals, test.runs)
+		})
+	}
+}

@@ -134,3 +134,23 @@ func TestHostDevDatabaseRefusesAUserOfTheWholeDatabase_FailurePath(t *testing.T)
 	c.Assert(users, qt.Equals, uint64(0))
 	c.Assert(entryNames(heldEntries(c, opened, database)), qt.Not(qt.Contains), connection.RealmDirectory)
 }
+
+// A migration cannot alter grants even on a path inside the disposable dev
+// realm: the realm's baseline owns its access. The replay refuses the GRANT
+// before it reaches YDB and removes the temporary realm afterward.
+func TestHostDevReplayRefusesAGrantInsideTheRealm_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, database := lockFixture(c)
+	migrations := writeFiles(c, c.TempDir(), map[string]string{
+		"0000000001_grant.up.sql":   "GRANT 'ydb.access.grant' ON `/local/ptah_dev/abc` TO `ACCESS-ADMINS`;\n",
+		"0000000001_grant.down.sql": "REVOKE 'ydb.access.grant' ON `/local/ptah_dev/abc` FROM `ACCESS-ADMINS`;\n",
+	})
+	hashed, err := hostOffline(c, "migrations", "hash", "--dir", migrations)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", hashed))
+
+	refused, err := hostCommand(c, "migrations", "validate", "--dir", migrations, "--dev-url", os.Getenv("PTAH_YDB_TEST_URL"))
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(refused, qt.Contains, "ydb migration replay rejects GRANT permission change because its effects cannot be confined to the disposable database realm")
+	c.Assert(refused, qt.Contains, "PTAH_DEV_SERVER_DISPOSABLE=1")
+	c.Assert(entryNames(heldEntries(c, opened, database)), qt.Not(qt.Contains), connection.RealmDirectory)
+}

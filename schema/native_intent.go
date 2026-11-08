@@ -154,8 +154,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// table it declares as index directives or entries of their types,
 		// which a host that negotiates source.index-kinds sends whole; a
 		// table that declares none states an empty set, which an export
-		// writes with the table's declaration.
-		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+		// writes with the table's declaration. A YQL CREATE TABLE declares
+		// them in its INDEX clauses, and a SQL reading carries them as a
+		// facet of the table for a host that takes one and negotiates
+		// source.index-kinds (yqlschema.Reply).
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	case IndexSettingsProperties:
 		// The index directive of a Go source, the index entry of a YAML
 		// source, the index block of an HCL document and the WITH clause of
