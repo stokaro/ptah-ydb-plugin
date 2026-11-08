@@ -407,7 +407,7 @@ func (p *planner) planColumnFeature(owner *protocol.Reference, table *protocol.P
 	if reason != "" {
 		return refused(item.index, reason), nil
 	}
-	item.sequences, reason, err = planSequences(owner, table, capabilities)
+	item.sequences, reason, err = planSequences(owner, table, capabilities, p.request.GetDatabasePath())
 	if err != nil {
 		return nil, err
 	}
