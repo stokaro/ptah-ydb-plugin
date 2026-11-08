@@ -100,8 +100,8 @@ github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6L
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=
 github.com/rogpeppe/go-internal v1.16.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/stokaro/ptah/provider-sdk v0.34.1-0.20261107222409-5c3f840322ba h1:ixQhNoK2BExfFaz0OJ2Tq79GSHXs7BtIPKoNOFHNhgE=
-github.com/stokaro/ptah/provider-sdk v0.34.1-0.20261107222409-5c3f840322ba/go.mod h1:v2kbjNjUNtmEE0ETRNOVN4KzFCcAkmTNjb24nrjCtk0=
+github.com/stokaro/ptah/provider-sdk v0.35.0 h1:vaSyg6dg/+SYYOvpVGTsic0OdYPE66d/M6rOMM5zjq8=
+github.com/stokaro/ptah/provider-sdk v0.35.0/go.mod h1:v2kbjNjUNtmEE0ETRNOVN4KzFCcAkmTNjb24nrjCtk0=
 github.com/stokaro/teststyle v0.2.0 h1:jCyBstcPX+doEkmw5jRoiwPj/9I3srYyI27avIB+7kY=
 github.com/stokaro/teststyle v0.2.0/go.mod h1:/eSKEwaWErHF/URpcA0yaXLbNOD5951tH4y89wX2zio=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
