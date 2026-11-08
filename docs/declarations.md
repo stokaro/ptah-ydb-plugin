@@ -61,7 +61,7 @@ Declares a YDB column family: columns a row table stores together, with a
 storage pool, a compression and a cache mode of their own. It belongs to the
 table of the struct it is on, or to the one `table` names, which the same file
 declares. Every other dialect refuses a table that declares one. See
-[column families](../README.md#column-families).
+[column families](table-settings.md#column-families).
 
 | Attribute | Required | Description |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ Declares a YDB changefeed: a stream of a table's changes, which YDB keeps in a
 topic at `<table>/<name>`. It belongs to the table of the struct it is on, or
 to the one `table` names, which the same file declares. Every other dialect
 refuses a table that declares one. See
-[changefeeds](../README.md#changefeeds).
+[changefeeds](native-objects.md#changefeeds).
 
 | Attribute | Required | Description |
 | --- | --- | --- |
@@ -114,7 +114,7 @@ position in the stream.
 
 Declares a YDB topic: a persistent message queue at a path of the database. A
 setting left out stands for the value YDB gives a new topic. Every target but
-YDB refuses a topic. See [Topics](../README.md#topics) for what a plan
+YDB refuses a topic. See [Topics](streaming-and-workload-objects.md#topics) for what a plan
 does with one.
 
 | Attribute | Required | Description |
@@ -152,7 +152,7 @@ read position of its own.
 Declares a YDB resource pool, which limits the queries that run in it. A pool
 belongs to the whole database, and a setting left out has no limit. YDB keeps
 pools behind the `EnableResourcePools` flag; see
-[resource pools](../README.md#resource-pools-and-classifiers).
+[resource pools](streaming-and-workload-objects.md#resource-pools-and-classifiers).
 
 | Attribute | Required | Description |
 | --- | --- | --- |
@@ -200,7 +200,7 @@ type Locks struct{}
 
 A coordination node is YDB's own object, and every other target refuses the
 declaration. `ptah_locks` at the database root is Ptah's lock node and is
-refused. [Coordination nodes](../README.md#native-coordination-planning-and-execution) says how
+refused. [Coordination nodes](native-objects.md#native-coordination-planning-and-execution) says how
 Ptah applies one.
 ### `//ptah:schema:async_replication`
 
@@ -209,7 +209,7 @@ read-only replica tables YDB creates and keeps current. The tables it copies
 are declared with `//ptah:schema:async_replication:item` in the same file, and
 the replica tables are not declared as tables. A credential names a secret and
 never holds a value. Every target but YDB refuses a replication. See
-[Async replications and transfers](../README.md#async-replications-and-transfers)
+[Async replications and transfers](streaming-and-workload-objects.md#async-replications-and-transfers)
 for what a plan does with one.
 
 | Attribute | Required | Description |
@@ -270,7 +270,7 @@ Declares a YDB secret: a scheme object whose value the server keeps and never
 returns, which an external data source reads a password or a key from. The
 declaration names the environment variable that holds the value, and never the
 value itself. Every other dialect refuses a secret. See
-[secrets](../README.md#secrets).
+[secrets](native-objects.md#secrets).
 
 | Attribute | Required | Description |
 | --- | --- | --- |
@@ -288,7 +288,7 @@ Declares a YDB external data source: another system YDB reads from, such as an
 object storage bucket or a PostgreSQL database, and how YDB authenticates to
 it. A credential is named by the secret that holds it, never written. Every
 other dialect refuses one. See
-[external data sources](../README.md#external-data-sources-and-external-tables).
+[external data sources](native-objects.md#external-data-sources-and-external-tables).
 
 | Attribute | Required | Description |
 | --- | --- | --- |
@@ -331,7 +331,7 @@ A YDB table's column families sit under `tables.<table>.column_families`, keyed
 by name. The keys are the attributes of `//ptah:schema:columnfamily`, with the
 same values; `fields` is a list of the columns the family holds. Every other
 dialect refuses a table that declares a column family. See
-[column families](../README.md#column-families).
+[column families](table-settings.md#column-families).
 
 ```yaml
 tables:
@@ -352,7 +352,7 @@ name, and each changefeed's consumers under its `consumers` map, keyed by
 name. The keys are the attributes of `//ptah:schema:changefeed` and
 `//ptah:schema:changefeed:consumer`, with the same values; `supported_codecs`
 is a list. Every other dialect refuses a table that declares a changefeed. See
-[changefeeds](../README.md#changefeeds).
+[changefeeds](native-objects.md#changefeeds).
 
 ```yaml
 tables:
@@ -377,7 +377,7 @@ directory, and `value_env` for the environment variable that holds the value,
 whose name starts with `PTAH_SECRET_`. A document never holds the value: a
 `value` key is refused, and the error names the key and not what it held. A
 dot is part of the name, and a slash in it is refused. Every other dialect
-refuses a secret. See [secrets](../README.md#secrets).
+refuses a secret. See [secrets](native-objects.md#secrets).
 
 ```yaml
 secrets:
@@ -393,7 +393,7 @@ table under `external_tables`, each keyed by name, with the attributes of
 `//ptah:schema:externaldatasource` and `//ptah:schema:externaltable`. `options`
 is a map of option names, in any letter case, to values, and each column of a
 table has a `name`, a `type` and `not_null`. Every other dialect refuses both.
-See [external data sources](../README.md#external-data-sources-and-external-tables).
+See [external data sources](native-objects.md#external-data-sources-and-external-tables).
 
 ```yaml
 external_data_sources:
@@ -427,5 +427,5 @@ platform group instead.
 Local indexes use `type: bloom_filter`, `bloom_ngram_filter`, or `min_max`.
 Bloom methods accept `false_positive_probability`; the n-gram method also
 accepts `ngram_size` and `case_sensitive`. See the
-[YDB provider's documentation](../README.md#column-tables)
+[YDB provider's documentation](table-models.md#column-tables)
 for limits, cluster flags and examples.

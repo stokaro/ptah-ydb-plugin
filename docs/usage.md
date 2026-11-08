@@ -31,6 +31,7 @@ plans, reads a live database, applies changes, keeps the migration history and
 the migration lock, lints YQL migrations, writes data and runs embedding
 generations. Ptah keeps the shared pipeline: the source formats, the comparison
 and ordering of a plan, the migration policy and the command surfaces.
+
 [Understanding the provider boundary](https://docs.ptah.run/edge/extend/write-a-provider/ydb-walkthrough/)
 follows one table, its changefeed, a transfer and the transfer's target table
 through Ptah Core and this provider, and
@@ -64,7 +65,7 @@ ydbs://ydb.example.com:2135/?database=/ru-central1/b1g/etn
 The provider owns the grammar of the address: the database path, the credential
 parameters, the balancer settings and the `monitoring` endpoint it reads the
 cluster's feature flags from. See
-[Connection addresses](../README.md#connection-addresses).
+[Connection addresses](connections-and-execution.md#connection-addresses).
 
 ## Dev, shadow and scratch databases
 
@@ -73,8 +74,8 @@ database that names a YDB server the run does not own is a dev realm: a
 directory the provider creates for the run in the database the URL names, and
 removes when the run ends. `docker://ydb[/<tag>[/local]]` asks the provider to
 start a local-ydb container for the run. See
-[Dev realms](../README.md#dev-realms) and
-[Dev databases](../README.md#dev-databases).
+[Dev realms](connections-and-execution.md#dev-realms) and
+[Dev databases](connections-and-execution.md#dev-databases).
 
 ## ptah-compat
 

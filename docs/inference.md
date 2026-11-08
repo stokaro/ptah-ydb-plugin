@@ -20,7 +20,7 @@ sidebar:
 # Embedding generations on YDB
 
 `ptah inference` builds an embedding generation on YDB through this provider's
-[embedding store](../README.md#embedding-store).
+[embedding store](data-services.md#embedding-store).
 Ptah's [inference documentation](https://docs.ptah.run/edge/inference/overview/)
 describes the lifecycle for every engine; this page gives the YDB index and the
 refusals particular to YDB.
