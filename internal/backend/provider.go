@@ -154,6 +154,8 @@ func providerFeatures() []string {
 		// The row-table facet comparison counts nothing: a table's settings
 		// stand for no object, and a table's changefeeds change as one set.
 		provider.ComparisonCountsFeature,
+		// Export warnings count the changefeeds held by one table's set.
+		provider.OmissionCountsFeature,
 		provider.DecodeSourceFeature,
 		// A table's facets, a topic with its consumers and a changefeed set
 		// are each written by several declarations; see EncodeSource.
@@ -272,6 +274,11 @@ func providerFeatures() []string {
 		// transfer of a topic it does not declare is refused; see
 		// replicationcompare.CompareTransfers.
 		provider.DeclaredObjectsFeature,
+		// The transfer comparison reads the changefeeds the schema's tables
+		// declare, so a transfer of a stream of a declared table that is none
+		// of its declared changefeeds is refused; see
+		// replicationcompare.CompareTransfers.
+		provider.DeclaredFacetsFeature,
 		// A render reports what its units go on without: the part of a
 		// created column's declared type YDB does not keep, and a Serial's
 		// start and increment an offline creation cannot set; see
@@ -685,10 +692,12 @@ func buildDescription() *protocol.Description {
 						Placement:   protocol.ModelComparison_OBJECTS,
 						Kinds:       []string{schema.TransferProperties},
 						ChangeKinds: []string{schema.TransferChange},
-						// The topics the schema declares, so a transfer of a
-						// topic it does not declare is refused; see
+						// The topics the schema declares, and the changefeeds of
+						// its tables, so a transfer of a topic or a changefeed
+						// it does not declare is refused; see
 						// replicationcompare.CompareTransfers.
-						DeclaredKinds: replicationcompare.TransferDeclaredKinds(),
+						DeclaredKinds:      replicationcompare.TransferDeclaredKinds(),
+						DeclaredFacetKinds: replicationcompare.TransferDeclaredFacetKinds(),
 					},
 					{
 						Id:          tablecompare.ServiceID,

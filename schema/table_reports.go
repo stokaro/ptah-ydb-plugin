@@ -4,6 +4,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
@@ -31,6 +32,10 @@ type rowTableSettings struct {
 	partitioning *Ydb_Table.PartitioningSettings
 	replicas     *Ydb_Table.ReadReplicasSettings
 	bloomFilter  Ydb.FeatureFlag_Status
+	storage      *Ydb_Table.StorageSettings
+	attributes   int
+	tiering      string
+	temporary    bool
 	// layout is a starting layout, which only a declaration states.
 	layout bool
 }
@@ -41,12 +46,14 @@ func rowTable(payload []byte, representation protocol.ValueInput_Representation)
 		err := unmarshalCounted(payload, &table)
 		return rowTableSettings{ttl: table.GetTtlSettings(), families: table.GetColumnFamilies(), partitioning: table.GetPartitioningSettings(),
 			replicas: table.GetReadReplicasSettings(), bloomFilter: table.GetKeyBloomFilter(),
+			storage: table.GetStorageSettings(), attributes: len(table.GetAttributes()), tiering: table.GetTiering(), temporary: table.GetTemporary(),
 			layout: table.GetUniformPartitions() != 0 || len(table.GetPartitionAtKeys()) != 0}, err
 	}
 	var table native.DescribeTableResult
 	err := unmarshalCounted(payload, &table)
 	return rowTableSettings{ttl: table.GetTtlSettings(), families: table.GetColumnFamilies(), partitioning: table.GetPartitioningSettings(),
-		replicas: table.GetReadReplicasSettings(), bloomFilter: table.GetKeyBloomFilter()}, err
+		replicas: table.GetReadReplicasSettings(), bloomFilter: table.GetKeyBloomFilter(),
+		storage: table.GetStorageSettings(), attributes: len(table.GetAttributes()), tiering: table.GetTiering(), temporary: table.GetTemporary()}, err
 }
 
 // ttlTable counts a row table with a TTL.
@@ -62,13 +69,17 @@ func ttlTable(payload []byte, representation protocol.ValueInput_Representation)
 // family that holds what YDB gives a family stating no setting.
 func statedFamilies(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
 	table, err := rowTable(payload, representation)
+	return countStatedFamilies(table.families), err
+}
+
+func countStatedFamilies(families []*native.ColumnFamily) uint64 {
 	var total uint64
-	for _, family := range table.families {
+	for _, family := range families {
 		if family.GetName() != defaultFamilyName || !plainFamily(family) {
 			total++
 		}
 	}
-	return total, err
+	return total
 }
 
 // plainFamily reports a family with no storage pool of its own, no
@@ -87,10 +98,31 @@ func plainFamily(family *native.ColumnFamily) bool {
 // states a starting layout.
 func tablePartitioning(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
 	table, err := rowTable(payload, representation)
-	if table.layout || table.bloomFilter == Ydb.FeatureFlag_ENABLED || partitioningStated(table.partitioning, table.replicas) {
+	if tablePartitioningStated(table) {
 		return 1, err
 	}
 	return 0, err
+}
+
+func tablePartitioningStated(table rowTableSettings) bool {
+	return table.layout || table.bloomFilter == Ydb.FeatureFlag_ENABLED || partitioningStated(table.partitioning, table.replicas)
+}
+
+// rowTableOmission counts a row table only when DBML or inspection JSON loses
+// a native setting. Primary keys and access are carried by common schema
+// models; the server's documented defaults and a plain default family are
+// not omitted settings.
+func rowTableOmission(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
+	table, err := rowTable(payload, representation)
+	if err != nil {
+		return 0, err
+	}
+	storage := declaredStorage(table.storage)
+	if table.ttl.GetMode() != nil || countStatedFamilies(table.families) != 0 || tablePartitioningStated(table) ||
+		(storage != nil && !proto.Equal(storage, &Ydb_Table.StorageSettings{})) || table.attributes != 0 || table.tiering != "" || table.temporary {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 // partitioningStated reports settings of a table or a global index that

@@ -50,6 +50,8 @@ type index struct {
 	storage      map[string]string
 	partitioning *ydbdecl.IndexPartitioning
 	vector       *ydbdecl.VectorIndex
+	// options are the settings the WITH clause writes, each as its text.
+	options map[string]string
 }
 
 // addChangefeed is an ALTER TABLE ... ADD CHANGEFEED.

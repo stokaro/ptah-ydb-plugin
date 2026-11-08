@@ -70,3 +70,36 @@ func TestReplicationPlanningPrecedesAViewOverItsReplica(t *testing.T) {
 		})
 	}
 }
+
+// TestReplicationPlanningAwaitsTheReplicaAViewReads lowers a replication's
+// creation to the operation that waits for its replica tables where a common
+// step of the plan reads one, a view over it here, and to the one that goes on
+// at once where none does: YDB creates the replica tables after CREATE ASYNC
+// REPLICATION returns, and refuses a view over a table not there yet (G231).
+func TestReplicationPlanningAwaitsTheReplicaAViewReads(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		common []*protocol.CommonPlanningStep
+		want   string
+	}{
+		{name: "a view over the replica", common: []*protocol.CommonPlanningStep{viewStep("SELECT id FROM `replica/accounts`")}, want: schema.ReplicationAwaitReplicas},
+		{name: "a view over another table", common: []*protocol.CommonPlanningStep{viewStep("SELECT id FROM `src/accounts`")}, want: schema.ReplicationRun},
+		{name: "no common step", want: schema.ReplicationRun},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := objectRequest(c, schema.ReplicationProperties, replicationcompare.ReplicationServiceID, "mirror", declaredReplication(c, new(mirror())), readReplication(c, nil, replication.StateRunning))
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+
+			planned := planBesideCommonObjects(c, result.Changes[0], test.common)
+
+			c.Assert(planned.Diagnostics, qt.HasLen, 0)
+			c.Assert(planned.Contributions, qt.HasLen, 1)
+			operation, err := schema.ReplicationOperationName(planned.Contributions[0].Steps[0].Operation.Value.Value)
+			c.Assert(err, qt.IsNil)
+			c.Assert(operation, qt.Equals, test.want)
+		})
+	}
+}

@@ -38,7 +38,11 @@ func renderOmissions(request *protocol.RenderRequest, operations []*protocol.Env
 			if err != nil {
 				return nil, err
 			}
-			omissions = append(omissions, tablecreate.SequenceOmissions(owner.GetDatabase(), creation)...)
+			planned, err := tablecreate.CreationDatabase(operation)
+			if err != nil {
+				return nil, err
+			}
+			omissions = append(omissions, tablecreate.SequenceOmissions(cmp.Or(owner.GetDatabase(), planned), creation)...)
 		}
 		for _, omission := range omissions {
 			result = append(result, &protocol.RenderOmission{Reason: "unsupported", Kind: "column",

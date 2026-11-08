@@ -407,7 +407,7 @@ func (p *planner) planColumnFeature(owner *protocol.Reference, table *protocol.P
 	if reason != "" {
 		return refused(item.index, reason), nil
 	}
-	item.sequences, reason, err = planSequences(owner, table, capabilities)
+	item.sequences, reason, err = planSequences(owner, table, capabilities, p.request.GetDatabasePath())
 	if err != nil {
 		return nil, err
 	}
@@ -472,6 +472,9 @@ func (p *planner) planTableCreation(i int, table *protocol.PlanningTable, owner 
 	}
 	if reason != "" {
 		return refused(i, reason), nil
+	}
+	if operation, err = CreationInDatabase(operation, p.request.GetDatabasePath()); err != nil {
+		return nil, err
 	}
 	p.creations = append(p.creations, creation{index: i, table: table, operation: operation, feeds: feeds, settings: settings})
 	return nil, nil

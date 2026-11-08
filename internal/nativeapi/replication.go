@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"time"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -38,6 +39,34 @@ type Replications struct {
 	Service Ydb_Replication_V1.ReplicationServiceClient
 	// Execute runs one schema statement through the query service, once.
 	Execute func(context.Context, string) error
+	// ReplicaWait is how long a creation that awaits its replica tables waits
+	// for them, ReplicaWaitLimit when zero.
+	ReplicaWait time.Duration
+	// ReplicaPoll is how often it looks, replicaPollInterval when zero.
+	ReplicaPoll time.Duration
+}
+
+// ReplicaWaitLimit is how long a replication creation that awaits its replica
+// tables waits for them. With the source table in place, YDB created them
+// within seconds of the statement on 25.1.4.7 and 26.2.1.14.
+const ReplicaWaitLimit = 2 * time.Minute
+
+const replicaPollInterval = 500 * time.Millisecond
+
+// ReplicasNotCreated is the error of a replication creation that awaited its
+// replica tables and found one still missing when the wait ran out. The
+// replication stands; a unit after it reads the table, so the run stops.
+type ReplicasNotCreated struct {
+	// Replication and Table are the replication's path and the missing
+	// table's, relative to the database root.
+	Replication, Table string
+	// Waited is how long the creation waited.
+	Waited time.Duration
+}
+
+func (e *ReplicasNotCreated) Error() string {
+	return fmt.Sprintf("async replication %s was created, but YDB had not created its replica table %s after %s; "+
+		"the plan reads that table next, so it stops here; run the plan again once the table exists", e.Replication, e.Table, e.Waited)
 }
 
 // NewReplications binds the session's native clients and statement runner.
@@ -153,7 +182,24 @@ func replicationServiceError(subject string, err error) error {
 // session's database root: the replication, each replica target and a
 // secret named by its path. A source path belongs to the source database and
 // is written as declared.
+//
+// An operation of the way [schema.ReplicationAwaitReplicas] then waits until
+// each replica table it creates in this database exists, at most ReplicaWait.
+// A table still missing then is a [ReplicasNotCreated] error, after the
+// statement was dispatched.
 func (r *Replications) ApplyReplication(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (bool, error) {
+	name, err := schema.ReplicationOperationName(value)
+	if err != nil {
+		return false, err
+	}
+	dispatched, err := r.applyReplication(ctx, database, value, beforeWrite)
+	if err != nil || name != schema.ReplicationAwaitReplicas {
+		return dispatched, err
+	}
+	return true, r.awaitReplicas(ctx, database, value)
+}
+
+func (r *Replications) applyReplication(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (bool, error) {
 	return applyStep(ctx, r, database, value, beforeWrite, stepOperation[schema.ReplicationStep]{
 		noun:      "async replication",
 		normalize: schema.NormalizeReplicationOperation,
@@ -166,6 +212,69 @@ func (r *Replications) ApplyReplication(ctx context.Context, database string, va
 		statement: replicationStatement,
 		confirm:   confirmReplication,
 	})
+}
+
+// awaitReplicas waits until each replica table the replication creation value
+// creates in the database at root exists, looking every ReplicaPoll, at most
+// ReplicaWait.
+func (r *Replications) awaitReplicas(ctx context.Context, root string, value *protocol.Envelope) error {
+	normalized, err := schema.NormalizeReplicationOperation(&protocol.ValueInput{Id: "await", Representation: protocol.ValueInput_OPERATION, Value: value})
+	if err != nil {
+		return err
+	}
+	step, err := schema.ReplicationStepOf(schema.ReplicationOperationChange(normalized.Value))
+	if err != nil {
+		return err
+	}
+	if step.After == nil {
+		return fmt.Errorf("async replication operation awaits replica tables of no creation")
+	}
+	owner := normalized.NormalizedOwner
+	wait, poll := r.ReplicaWait, r.ReplicaPoll
+	if wait <= 0 {
+		wait = ReplicaWaitLimit
+	}
+	if poll <= 0 {
+		poll = replicaPollInterval
+	}
+	deadline := time.Now().Add(wait)
+	for _, target := range replication.Targets(*step.After) {
+		absolute := path.Join(root, target)
+		for {
+			exists, err := r.tableExists(ctx, absolute)
+			if err != nil {
+				return err
+			}
+			if exists {
+				break
+			}
+			if !time.Now().Before(deadline) {
+				return &ReplicasNotCreated{Replication: path.Join(owner.GetSchema(), owner.GetName()), Table: target, Waited: wait}
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(poll):
+			}
+		}
+	}
+	return nil
+}
+
+// tableExists reports whether YDB describes a table at absolute.
+func (r *Replications) tableExists(ctx context.Context, absolute string) (bool, error) {
+	response, err := r.Scheme.DescribePath(ctx, &Ydb_Scheme.DescribePathRequest{Path: absolute})
+	if err != nil {
+		return false, fmt.Errorf("describe replica table %s: transport failed", absolute)
+	}
+	if response.GetOperation().GetStatus() == Ydb.StatusIds_SCHEME_ERROR {
+		return false, nil
+	}
+	var described Ydb_Scheme.DescribePathResult
+	if err := unpack(response.GetOperation(), &described); err != nil {
+		return false, err
+	}
+	return described.GetSelf().GetType() == Ydb_Scheme.Entry_TABLE, nil
 }
 
 // ApplyTransfer verifies, runs and confirms one transfer operation, as
