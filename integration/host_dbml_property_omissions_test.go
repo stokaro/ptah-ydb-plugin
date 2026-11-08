@@ -17,7 +17,7 @@ import (
 // information when DBML describes the plain table.
 func TestHostInspectedPlainTableHasNoYDBPropertyWarnings_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	requireHostChange(c, "provider-defined export omission counts")
+	requireHostOmissionCounts(c)
 	opened, directory, database := inspectionFixture(c)
 	plain := path.Join(database, directory, "plain")
 	createSchemaObject(c, opened, "CREATE TABLE `"+plain+"` (id Uint64 NOT NULL, PRIMARY KEY (id))", "DROP TABLE `"+plain+"`")
@@ -33,7 +33,7 @@ func TestHostInspectedPlainTableHasNoYDBPropertyWarnings_HappyPath(t *testing.T)
 // index setting to omit. The host writes the index through its common model.
 func TestHostInspectedDefaultIndexHasNoYDBPropertyWarnings_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	requireHostChange(c, "provider-defined export omission counts")
+	requireHostOmissionCounts(c)
 	opened, directory, database := inspectionFixture(c)
 	plain := path.Join(database, directory, "plain")
 	createSchemaObject(c, opened, "CREATE TABLE `"+plain+"` (id Uint64 NOT NULL, label Utf8, PRIMARY KEY (id), INDEX by_label GLOBAL ON (label))",
@@ -50,7 +50,7 @@ func TestHostInspectedDefaultIndexHasNoYDBPropertyWarnings_HappyPath(t *testing.
 // only the plain table removes the rich table's warnings.
 func TestHostDBMLPropertyWarningsRespectTableSelection_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	requireHostChange(c, "provider-defined export omission counts")
+	requireHostOmissionCounts(c)
 	opened, directory, database := inspectionFixture(c)
 	events, plain := path.Join(database, directory, "events"), path.Join(database, directory, "plain")
 	createSchemaObject(c, opened, "CREATE TABLE `"+events+"` (id Uint64 NOT NULL, created_at Timestamp, payload Utf8 FAMILY cold, PRIMARY KEY (id), "+

@@ -199,6 +199,7 @@ func TestHostCompatJSONFragmentsThatSelectNoLossWarnNothing_HappyPath(t *testing
 func TestHostCompatJSONColumnFragmentWarnsOnlyAboutTheColumn_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
+	requireHostOmissionCounts(c)
 	opened, directory, database := inspectionFixture(c)
 	fragmentTable(c, opened, database, directory)
 	scope := ` from column "id" of table "` + directory + `.events"`
@@ -218,6 +219,7 @@ func TestHostCompatJSONColumnFragmentWarnsOnlyAboutTheColumn_HappyPath(t *testin
 func TestHostCompatJSONTableFragmentKeepsItsDirectory_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
+	requireHostOmissionCounts(c)
 	opened, directory, database := inspectionFixture(c)
 	outside := outsideDirectory(c, opened, database, directory)
 	first, second := path.Join(database, directory, "events"), path.Join(database, outside, "events")
@@ -236,7 +238,7 @@ func TestHostCompatJSONTableFragmentKeepsItsDirectory_HappyPath(t *testing.T) {
 func TestHostCompatJSONReportsOnlyNondefaultYDBProperties_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
-	requireHostChange(c, "provider-defined export omission counts")
+	requireHostOmissionCounts(c)
 	opened, directory, database := inspectionFixture(c)
 	events := path.Join(database, directory, "events")
 	createSchemaObject(c, opened, "CREATE TABLE `"+events+"` (id Uint64 NOT NULL, created_at Timestamp, payload Utf8 FAMILY cold, PRIMARY KEY (id), "+
