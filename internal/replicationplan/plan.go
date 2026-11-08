@@ -119,9 +119,10 @@ func replicationOperation(request *protocol.PlanFeaturesRequest, id string, chan
 	return schema.ReplicationOperationAs(id, change, operation)
 }
 
-// PlanTransfers contributes one step per transfer change.
+// PlanTransfers contributes one step per transfer change and assesses held
+// transfers against tables the same plan rebuilds.
 func PlanTransfers(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol.PlannedFeatures, error) {
-	return objectplan.Plan(ctx, request, objectplan.Family{
+	result, err := objectplan.Plan(ctx, request, objectplan.Family{
 		ServiceID: TransferServiceID, Kind: schema.TransferProperties, ChangeKind: schema.TransferChange,
 		Capability: replication.CapabilityTransfers, Noun: "transfer", StepPrefix: "transfer",
 		Strategy: "Create the transfer, change its lambda, batch settings or connection in place, or drop it with the consumer YDB created for it",
@@ -159,6 +160,10 @@ func PlanTransfers(ctx context.Context, request *protocol.PlanFeaturesRequest) (
 			return append(secrets, transferPaths(request.GetDatabasePath(), *step.After, topicByPath)...), nil
 		},
 	})
+	if err != nil || len(result.GetDiagnostics()) != 0 || len(request.GetContextKinds()) == 0 {
+		return result, err
+	}
+	return assessTransfers(ctx, request, result)
 }
 
 // refuseReplicaTables refuses a replication change the plan's tables would
