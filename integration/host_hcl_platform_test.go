@@ -13,6 +13,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"golang.org/x/mod/semver"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -47,6 +48,17 @@ func assertHCLTableReplanHasNoChanges(c *qt.C, document, output string) {
 	c.Assert(output, qt.Contains, "No changes planned, but", qt.Commentf("%s\n%s", document, output))
 	c.Assert(output, qt.Contains, "comparison limit", qt.Commentf("%s\n%s", document, output))
 	c.Assert(output, qt.Contains, schema.TableProperties, qt.Commentf("%s\n%s", document, output))
+}
+
+// editedHCLTTLUnit names the unit an exported HCL document can change. The
+// published host predates #5795 and has no captured table-facet loss to keep;
+// later hosts retain the observed unit until the source has no captured header.
+func editedHCLTTLUnit(c *qt.C) string {
+	c.Helper()
+	if semver.Compare(hostSDKVersion(c), releaseHostSDK) > 0 {
+		return "SECONDS"
+	}
+	return "MILLISECONDS"
 }
 
 // platformItems is the HCL document of directory's items table with a TTL in
@@ -92,9 +104,10 @@ func withoutPlatformBlocks(document string) string {
 // about a setting HCL has no spelling for, in the embedded engine's words. The
 // document applied back plans nothing, and so does the same document without
 // the blocks: a table that writes none keeps its TTL. The captured loss keeps
-// an edited platform value for that table undecided. An explicit source without
-// the captured header can change its unit, while the other table's interval
-// changes in place from the exported document.
+// an edited platform value for that table undecided. The published host before
+// that header change can apply the edited unit immediately. An explicit source
+// without the captured header can change its unit on either host, while the
+// other table's interval changes in place from the exported document.
 func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.HCLPlatformFeature)
@@ -138,7 +151,7 @@ func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
 	altered, err := hostApplySource(c, directory, "hcl", changed)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", altered))
 	c.Assert(heldStorage(c, opened, path.Join(database, directory, "items")).TTL, qt.Equals, "ts 604800s")
-	c.Assert(heldStorage(c, opened, events).TTL, qt.Equals, "at 3600s SECONDS")
+	c.Assert(heldStorage(c, opened, events).TTL, qt.Equals, "at 3600s "+editedHCLTTLUnit(c))
 	replanned, err := hostReplanSource(c, directory, "hcl", changed)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", replanned))
 	assertHCLTableReplanHasNoChanges(c, changed, replanned)
