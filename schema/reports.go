@@ -84,7 +84,14 @@ func Reports() []*protocol.ModelReport {
 			metrics = append(metrics, &protocol.ModelMetric{Name: metric.name, Help: metric.help})
 		}
 		for _, representation := range []protocol.ValueInput_Representation{protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED} {
-			result = append(result, &protocol.ModelReport{Kind: reported.kind, Representation: representation, Metrics: metrics})
+			report := &protocol.ModelReport{Kind: reported.kind, Representation: representation, Metrics: metrics}
+			if reported.kind == ChangefeedProperties {
+				// One value holds every changefeed of a table. Export warnings
+				// count the feeds, including none for an empty set.
+				report.OmissionLabel = "changefeeds"
+				report.OmissionCountMetric = "changefeeds"
+			}
+			result = append(result, report)
 		}
 	}
 	return result
