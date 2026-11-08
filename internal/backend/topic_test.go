@@ -1,6 +1,7 @@
 package backend_test
 
 import (
+	"regexp"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -131,16 +132,51 @@ func TestTopicComparisonKeepsAnUndescribedTopic_HappyPath(t *testing.T) {
 	c.Assert(spec.Consumers, qt.DeepEquals, []ydbdecl.Consumer{{Name: "worker"}})
 }
 
+// unreadableTopics are read topics no declaration can describe, each with the
+// reason the host's embedded engine refused to read it with.
+func unreadableTopics() []struct {
+	name, why string
+	read      *native.DescribeTopicResult
+} {
+	storage, codec := readTopic(), readTopic()
+	storage.RetentionStorageMb = 64
+	codec.Consumers = append(codec.Consumers, &native.Consumer{Name: "custom", SupportedCodecs: &Ydb_Topic.SupportedCodecs{Codecs: []int32{10042}}})
+	return []struct {
+		name, why string
+		read      *native.DescribeTopicResult
+	}{
+		{name: "an unmodeled setting", why: "it holds retention_storage_mb, which Ptah does not model and no YQL statement sets; read a schema that does not hold the topic", read: storage},
+		{name: "a consumer's codec", why: `consumer "custom": its codec list names codec 10042, which Ptah does not declare`, read: codec},
+	}
+}
+
 // A read topic holding a setting no declaration states refuses the
-// comparison with the host's words, whatever the declaration says.
+// comparison with the host's words, whatever the declaration says, and a
+// source that does not describe the topic too: `YDB topic <path>: <why>`, as
+// a reason the host prints.
 func TestTopicComparison_FailurePath(t *testing.T) {
-	c := testcheck.New(t)
-	read := readTopic()
-	read.RetentionStorageMb = 64
-	for _, declared := range []*ydbdecl.Topic{nil, {}} {
-		result, err := backend.New().CompareModels(t.Context(), topicRequest(c, declared, read))
-		c.Assert(err, qt.ErrorMatches, `.*it holds retention_storage_mb, which Ptah does not model and no YQL statement sets.*`)
-		c.Assert(result, qt.IsNil)
+	for _, topic := range unreadableTopics() {
+		for _, test := range []struct {
+			name     string
+			declared *ydbdecl.Topic
+			outside  protocol.ModelKnowledge_State
+		}{
+			{name: "no declaration", outside: protocol.ModelKnowledge_COMPLETE},
+			{name: "a declaration", declared: &ydbdecl.Topic{}, outside: protocol.ModelKnowledge_COMPLETE},
+			{name: "a source that does not describe it", outside: protocol.ModelKnowledge_UNINSPECTED},
+		} {
+			t.Run(topic.name+"/"+test.name, func(t *testing.T) {
+				c := testcheck.New(t)
+				request := topicRequest(c, test.declared, topic.read)
+				request.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(test.outside)
+
+				result, err := backend.New().CompareModels(t.Context(), request)
+
+				c.Assert(err, qt.ErrorMatches, `rpc error: code = InvalidArgument desc = `+regexp.QuoteMeta("YDB topic app/events: "+topic.why))
+				c.Assert(statusReasons(c, err), qt.DeepEquals, []string{"YDB topic app/events: " + topic.why})
+				c.Assert(result, qt.IsNil)
+			})
+		}
 	}
 }
 
