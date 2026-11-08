@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -61,6 +62,7 @@ func replicationFamily() objectplan.Family {
 		},
 		NormalizeChange: schema.NormalizeReplicationChange,
 		Operation:       schema.ReplicationOperationFromChange,
+		OperationIn:     replicationOperation,
 		Present: func(change *protocol.Envelope) (bool, bool, error) {
 			before, after, err := schema.ReplicationOperands(change)
 			return before != nil, after != nil, err
@@ -95,6 +97,26 @@ func replicationFamily() objectplan.Family {
 			return append(append(secrets, targetPaths(step.After.Items, protocol.PlanningEffect_CREATE)...), sourcePaths(root, *step.After)...), nil
 		},
 	}
+}
+
+// replicationOperation lowers a replication change to the operation that runs
+// it. A creation whose replica table a common step of the plan reads, such as
+// a view over it, waits for its replica tables before the plan goes on: YDB
+// creates them some time after CREATE ASYNC REPLICATION returns, and refuses
+// the view until then (SCHEME_ERROR, issue 2003, on 25.1.4.7 and 26.2.1.14).
+// Every other change goes on at once.
+func replicationOperation(request *protocol.PlanFeaturesRequest, id string, change *protocol.Envelope) (*protocol.NormalizedValue, error) {
+	step, err := schema.ReplicationStepOf(change)
+	if err != nil {
+		return nil, err
+	}
+	operation := schema.ReplicationRun
+	if step.Before == nil && step.After != nil && slices.ContainsFunc(targetPaths(step.After.Items, protocol.PlanningEffect_CREATE), func(target objectplan.PathEffect) bool {
+		return objectplan.ReadByCommonStep(request, target.Schema, target.Name)
+	}) {
+		operation = schema.ReplicationAwaitReplicas
+	}
+	return schema.ReplicationOperationAs(id, change, operation)
 }
 
 // PlanTransfers contributes one step per transfer change.

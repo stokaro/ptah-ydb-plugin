@@ -29,6 +29,22 @@ const (
 	TransferOperation = modelNamespace + "transfer-operation"
 )
 
+// The ways a replication operation runs. YDB creates the replica tables of an
+// async replication some time after CREATE ASYNC REPLICATION returns, so a
+// statement of the same plan that reads one of them, such as a view over it,
+// fails unless the creation waits for them.
+const (
+	// ReplicationRun runs the replication's statement and goes on at once.
+	ReplicationRun = "run"
+	// ReplicationAwaitReplicas creates the replication and then waits for the
+	// replica tables it creates in the session's database.
+	ReplicationAwaitReplicas = "create-and-await-replicas"
+)
+
+func replicationAllowed(operation string, before, after bool) bool {
+	return operation == ReplicationRun || !before && after
+}
+
 // The reasons a replication or a transfer change gives for its impact, in the
 // words of the host's embedded engine. Measured on 25.1.4.7 and 26.2.1.14: a
 // replication dropped with CASCADE takes its replica tables with it, and one
@@ -56,7 +72,7 @@ const replicationDefinition = "the connection string as YDB rebuilds it from end
 	"runtime statistics, item ids, source changefeeds and access are not modeled here"
 
 var replicationChanges = newObjectChanges(objectChanges{kind: ReplicationProperties, change: ReplicationChange, operation: ReplicationOperation, noun: "async replication",
-	semantics: replicationSemantics,
+	semantics: replicationSemantics, operations: []string{ReplicationRun, ReplicationAwaitReplicas}, allowed: replicationAllowed,
 	definition: map[string]any{
 		"semantics": "create: additive, access unknown; drop: destructive with CASCADE, which drops the replica tables, unless the replication was failed over (state done), " +
 			"when the tables stay and the drop is behavioral; alter: behavioral, access unchanged; never replaces owner",
@@ -64,7 +80,8 @@ var replicationChanges = newObjectChanges(objectChanges{kind: ReplicationPropert
 		"validation": "a pair that holds no change is refused",
 	},
 	execution: map[string]any{
-		"execution":    "YQL CREATE ASYNC REPLICATION, ALTER ASYNC REPLICATION ... SET or DROP ASYNC REPLICATION [CASCADE], one query each, outside SQL transactions; no automatic retry",
+		"execution": "YQL CREATE ASYNC REPLICATION, ALTER ASYNC REPLICATION ... SET or DROP ASYNC REPLICATION [CASCADE], one query each, outside SQL transactions; no automatic retry; " +
+			"create-and-await-replicas then waits, for a bounded time, until each replica table in the session's database exists, and fails when one does not",
 		"precondition": "before is the replication as the replication service described it to the plan, or its established absence; verified immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation": "read back the declared settings, or the absence after a drop",
 		"database":     "a nonempty owner database must equal the selected session database; empty selects that session database",
@@ -120,9 +137,17 @@ func ReplicationOperands(change *protocol.Envelope) (before, after *protocol.Env
 	return replicationChanges.operands(change)
 }
 
-// ReplicationOperationFromChange lowers a complete change to its operation.
+// ReplicationOperationFromChange lowers a complete change to the operation
+// that runs it and goes on at once.
 func ReplicationOperationFromChange(id string, change *protocol.Envelope) (*protocol.NormalizedValue, error) {
-	return replicationChanges.operationFromChange(id, change)
+	return replicationChanges.operationAs(id, change, ReplicationRun)
+}
+
+// ReplicationOperationAs lowers a complete change to the operation that
+// carries it out the way operation names: ReplicationRun, or
+// ReplicationAwaitReplicas for a creation.
+func ReplicationOperationAs(id string, change *protocol.Envelope, operation string) (*protocol.NormalizedValue, error) {
+	return replicationChanges.operationAs(id, change, operation)
 }
 
 // NormalizeReplicationOperation reconstructs an operation's facts.
@@ -130,9 +155,22 @@ func NormalizeReplicationOperation(input *protocol.ValueInput) (*protocol.Normal
 	return replicationChanges.normalizeOperation(input)
 }
 
-// ReplicationOperationChange restores the change an operation carries.
+// ReplicationOperationChange restores the change an operation carries. An
+// operation that names no way it runs restores a change whose payload still
+// carries what it names, which reading its operands refuses.
 func ReplicationOperationChange(operation *protocol.Envelope) *protocol.Envelope {
-	return replicationChanges.operationChange(operation)
+	change, _, err := replicationChanges.split(operation)
+	if err != nil {
+		return replicationChanges.operationChange(operation)
+	}
+	return change
+}
+
+// ReplicationOperationName is the way a normalized operation runs:
+// ReplicationRun or ReplicationAwaitReplicas.
+func ReplicationOperationName(operation *protocol.Envelope) (string, error) {
+	_, name, err := replicationChanges.split(operation)
+	return name, err
 }
 
 // CaptureTransferChange retains complete operands under one owner; either may

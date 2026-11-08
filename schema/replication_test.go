@@ -66,7 +66,8 @@ func TestReplicationChange_FailurePath(t *testing.T) {
 // A replication or a transfer operation refuses a payload with no change, an
 // owner with no name or a slash in its name, which its statement would write
 // as another object, and operands of the other kind. Ported from the host's
-// TestReplicationCodecs_FailurePath.
+// TestReplicationCodecs_FailurePath. A replication operation also names the
+// way it runs, and only a creation waits for its replica tables.
 func TestReplicationOperation_FailurePath(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -76,10 +77,14 @@ func TestReplicationOperation_FailurePath(t *testing.T) {
 		payload    string
 		wantErr    string
 	}{
-		{"no change", schema.ReplicationOperationModel(), schema.ReplicationProperties, "mirror", `{}`, `async replication change requires exact before and after operands`},
-		{"no name", schema.ReplicationOperationModel(), schema.ReplicationProperties, "", `{"before":` + mirror + `,"after":null}`, `invalid YDB observation owner`},
+		{"no change", schema.ReplicationOperationModel(), schema.ReplicationProperties, "mirror", `{"operation":"run"}`, `async replication change requires exact before and after operands`},
+		{"no name", schema.ReplicationOperationModel(), schema.ReplicationProperties, "", `{"operation":"run","before":` + mirror + `,"after":null}`, `invalid YDB observation owner`},
 		{"a slash in the name", schema.TransferOperationModel(), schema.TransferProperties, "a/b", `{"before":` + ingest + `,"after":null}`, `invalid YDB object path`},
-		{"transfer operands", schema.ReplicationOperationModel(), schema.ReplicationProperties, "mirror", `{"before":` + ingest + `,"after":null}`, `invalid YDB observation JSON`},
+		{"transfer operands", schema.ReplicationOperationModel(), schema.ReplicationProperties, "mirror", `{"operation":"run","before":` + ingest + `,"after":null}`, `invalid YDB observation JSON`},
+		{"no way to run", schema.ReplicationOperationModel(), schema.ReplicationProperties, "mirror", `{"before":` + mirror + `,"after":null}`,
+			`async replication operation names none of \[run create-and-await-replicas\]`},
+		{"an await of a drop", schema.ReplicationOperationModel(), schema.ReplicationProperties, "mirror", `{"operation":"create-and-await-replicas","before":` + mirror + `,"after":null}`,
+			`async replication operation "create-and-await-replicas" cannot carry out its change`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
