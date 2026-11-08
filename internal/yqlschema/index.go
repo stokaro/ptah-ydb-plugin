@@ -59,6 +59,7 @@ func (p *parser) indexSettings(index *index, raw map[string]string) {
 		p.failf("%v", err)
 	}
 	index.vector = vector
+	index.options = maps.Clone(values)
 	values["type"] = strings.ToLower(index.kind)
 	if index.storage, err = ydbdecl.ParseIndexOptions(values); err != nil {
 		p.failf("%v", err)

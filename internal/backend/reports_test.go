@@ -34,8 +34,35 @@ func TestDescriptionReportsTheCountedModels(t *testing.T) {
 	c := testcheck.New(t)
 	description := backend.Description()
 	c.Assert(description.Features, qt.Contains, provider.ReportCountsFeature)
+	c.Assert(description.Features, qt.Contains, provider.OmissionCountsFeature)
+	c.Assert(description.Engines[0].Features, qt.Contains, provider.OmissionCountsFeature)
 	c.Assert(description.Engines[0].Reports, qt.HasLen, len(schema.Reports()))
 	negotiated := provider.NegotiatedDescription(description, []string{provider.ReportCountsFeature})
+	for _, report := range negotiated.Engines[0].Reports {
+		c.Assert(report.GetOmissionLabel(), qt.Equals, "")
+		c.Assert(report.GetOmissionCountMetric(), qt.Equals, "")
+	}
+	withOmissionCounts := provider.NegotiatedDescription(description, []string{provider.ReportCountsFeature, provider.OmissionCountsFeature})
+	reportsByKind := make(map[string][]*protocol.ModelReport)
+	for _, report := range withOmissionCounts.Engines[0].Reports {
+		reportsByKind[report.GetKind()] = append(reportsByKind[report.GetKind()], report)
+	}
+	c.Assert(reportsByKind[schema.ChangefeedProperties], qt.HasLen, 2)
+	for _, report := range reportsByKind[schema.ChangefeedProperties] {
+		c.Assert(report.GetOmissionLabel(), qt.Equals, "changefeeds")
+		c.Assert(report.GetOmissionCountMetric(), qt.Equals, "changefeeds")
+	}
+	for kind, metric := range map[string]string{
+		schema.TableProperties:         "ydb_row_table_omissions",
+		schema.ColumnProperties:        "ydb_column_property_omissions",
+		schema.IndexProperties:         "indexes",
+		schema.IndexSettingsProperties: "ydb_index_partitioning",
+	} {
+		c.Assert(reportsByKind[kind], qt.HasLen, 2)
+		for _, report := range reportsByKind[kind] {
+			c.Assert(report.GetOmissionCountMetric(), qt.Equals, metric)
+		}
+	}
 	request := &protocol.ReportValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.ReportCountsFeature},
 		Values: []*protocol.ValueInput{{Id: "0", Representation: protocol.ValueInput_OBSERVED, Value: reportedTopic(c)}}}
 	c.Assert(provider.ValidateReportValuesRequest(negotiated, request), qt.IsNil)
@@ -61,6 +88,7 @@ func TestReportValues_FailurePath(t *testing.T) {
 	column, err := schema.CaptureColumn(&protocol.Reference{Engine: "ydb", Database: "/local", Kind: "column", Path: []string{"t"}, Name: "c"},
 		&native.ColumnMeta{Name: "c", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}})
 	c.Assert(err, qt.IsNil)
+	column.Payload = []byte(`{"family":42}`)
 	request := &protocol.ReportValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "0", Representation: protocol.ValueInput_OBSERVED, Value: column}}}
 
 	reply, err := backend.New().ReportValues(c.Context(), request)

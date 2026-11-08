@@ -1,4 +1,0 @@
-# Draft only: TestHostYQLSourceListExplainsTheHCLTable_FailurePath needs the
-# host adoption of contract 25.38, which this branch of the host carries.
-# Remove this file before marking the PR ready.
-feat/4204-adopt-sql-undeclared

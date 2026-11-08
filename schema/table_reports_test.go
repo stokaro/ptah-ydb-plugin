@@ -112,62 +112,74 @@ func TestCountValue_TableSettings_HappyPath(t *testing.T) {
 		want     []string
 	}{
 		{"a row table with the documented settings", capturedTable(c, rowTable(func(*native.DescribeTableResult) {})),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
 		{"a row table described with no settings", capturedTable(c, &native.DescribeTableResult{PrimaryKey: []string{"id"}}),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
+		{"the default external blob setting", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
+			table.StorageSettings = &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
+		{"external blob storage", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
+			table.StorageSettings = &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_ENABLED}
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
+		{"a native attribute", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
+			table.Attributes = map[string]string{"custom": "kept"}
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
+		{"a temporary table", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
+			table.Temporary = true
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a TTL on a date column", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.TtlSettings = &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{DateTypeColumn: &Ydb_Table.DateTypeColumnModeSettings{ColumnName: "ts", ExpireAfterSeconds: 86400}}}
-		})), []string{"ydb_ttl_tables=1", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=1", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a TTL on an epoch column", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.TtlSettings = &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_ValueSinceUnixEpoch{ValueSinceUnixEpoch: &Ydb_Table.ValueSinceUnixEpochModeSettings{
 				ColumnName: "expiry", ColumnUnit: Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_SECONDS, ExpireAfterSeconds: 3600}}}
-		})), []string{"ydb_ttl_tables=1", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=1", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a compressed default family and a family that states nothing", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ColumnFamilies = []*native.ColumnFamily{{Name: "default", Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4}, {Name: "cold", Compression: Ydb_Table.ColumnFamily_COMPRESSION_NONE}}
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=2", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=2", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a plain default family and a compressed family", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ColumnFamilies = append(table.ColumnFamilies, &native.ColumnFamily{Name: "cold", Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4})
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a default family on a storage pool of its own", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ColumnFamilies[0].Data = &Ydb_Table.StoragePool{Media: "ssd"}
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a default family kept in memory", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ColumnFamilies[0].KeepInMemory = Ydb.FeatureFlag_ENABLED
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a default family in the in-memory cache", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ColumnFamilies[0].CacheMode = native.ColumnFamily_CACHE_MODE_IN_MEMORY
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=0", "ydb_row_table_omissions=1"}},
 		{"a default family in the regular cache", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ColumnFamilies[0].CacheMode = native.ColumnFamily_CACHE_MODE_REGULAR
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
 		{"split by load", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.PartitioningSettings.PartitioningByLoad = Ydb.FeatureFlag_ENABLED
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"not split by size", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.PartitioningSettings.PartitioningBySize, table.PartitioningSettings.PartitionSizeMb = Ydb.FeatureFlag_DISABLED, 0
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"split at another size", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.PartitioningSettings.PartitionSizeMb = 100
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"a minimum of four partitions", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.PartitioningSettings.MinPartitionsCount = 4
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"a maximum of nine partitions", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.PartitioningSettings.MaxPartitionsCount = 9
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"a read replica in each zone", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ReadReplicasSettings = &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount{PerAzReadReplicasCount: 1}}
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"read replicas across the zones", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ReadReplicasSettings = &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_AnyAzReadReplicasCount{AnyAzReadReplicasCount: 2}}
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"no read replicas in each zone", capturedTable(c, rowTable(func(table *native.DescribeTableResult) {
 			table.ReadReplicasSettings = &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount{}}
-		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+		})), []string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
 		{"a key bloom filter", capturedTable(c, rowTable(func(table *native.DescribeTableResult) { table.KeyBloomFilter = Ydb.FeatureFlag_ENABLED })),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"a key bloom filter turned off", capturedTable(c, rowTable(func(table *native.DescribeTableResult) { table.KeyBloomFilter = Ydb.FeatureFlag_DISABLED })),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
 		{"a column table without a TTL", capturedStorage(c, nil),
 			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0", "indexes=0"}},
 		{"a column table whose TTL is off", capturedStorage(c, &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Disabled{Disabled: &emptypb.Empty{}}}),
@@ -299,14 +311,14 @@ func TestCountValue_DeclaredTableSettings_HappyPath(t *testing.T) {
 		want  []string
 	}{
 		{"a table that states nothing", desiredValue(c, schema.TableProperties, table, `{"primaryKey":["id"]}`),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0", "ydb_row_table_omissions=0"}},
 		{"uniform partitions", desiredValue(c, schema.TableProperties, table, `{"primaryKey":["id"],"uniformPartitions":"4"}`),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"split points", desiredValue(c, schema.TableProperties, table, `{"primaryKey":["id"],"partitionAtKeys":[{"values":["10"]}]}`),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"split by load and a family", desiredValue(c, schema.TableProperties, table,
 			`{"primaryKey":["id"],"partitioningSettings":{"partitioningByLoad":"ENABLED"},"columnFamilies":[{"name":"cold","compression":"COMPRESSION_LZ4"}]}`),
-			[]string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=1"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=1", "ydb_row_table_omissions=1"}},
 		{"a column table whose TTL deletes rows", desiredValue(c, schema.ColumnStorageProperties, storage,
 			`{"ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`),
 			[]string{"ydb_ttl_tables=1", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0", "indexes=0"}},

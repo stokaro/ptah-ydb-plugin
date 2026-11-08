@@ -2382,8 +2382,10 @@ the maximum at the minimum, 90% and 30% thresholds and a five-minute window.
 Consumers compare by name. YDB's own attributes and the access metadata are not
 compared. A topic the read finds holding a setting no statement sets
 (`retention_storage_mb`, `partition_count_limit`, a metering mode, the read
-speeds or a metrics level) refuses the comparison, as the host refuses to read
-it.
+speeds or a metrics level), or a consumer whose codec list names a codec no
+declaration names, refuses the comparison as the host refuses to read it,
+whatever the source says of the topic: `YDB topic <path>: <why>`, the path
+from the database root.
 
 The planner writes one step per topic, outside a transaction. It refuses a
 change YDB cannot make in place: fewer partitions than the topic has, and
@@ -2591,8 +2593,12 @@ commit interval, or of a transfer's source, target or consumer, which YDB makes
 in no object in place; a connection or credential change of an object that is
 not paused, or of a replication that was failed over; a credential taken away;
 a secret path before 25.4. It refuses a drop of a running replication whose
-replica the plan declares as a table, and a creation where a table stands at a
-target. Where the host negotiates `planning.object-context`, the planner also
+replica the plan declares as a table, a creation where a table stands at a
+target, and a creation whose target lies at, above or below the target of
+another replication the plan keeps or creates: YDB creates the replication over
+the other's replica and both write it, and a later drop of either with
+`CASCADE` drops the replica while the other runs on without it, measured on
+25.1.4.7 and 26.2.1.14. Where the host negotiates `planning.object-context`, the planner also
 assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
@@ -4131,8 +4137,14 @@ statement, and claims complete coverage of the
 row-table, column, column-storage, coordination, topic, external data source,
 external table, streaming query, secret, async replication and transfer models,
 of the changefeed model under that feature, so a table a load declares
-without a changefeed is one with none, and of the index settings model where
-the host also lists `schema.observed-index-facets`. A
+without a changefeed is one with none, of the index settings model where
+the host also lists `schema.observed-index-facets`, and of the native index
+model where it also lists `source.index-kinds`, so a table a load declares
+without a vector or full-text index is one with none. A vector or full-text
+index of a CREATE TABLE is no common index then: it reaches the host in the
+native index set of its table, and a local index in the storage of its column
+table, the values a YAML or Go source of the same index declares, so a YQL
+schema renders, plans and applies them as the host's embedded engine did. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -4180,8 +4192,12 @@ carry is refused by name, with no partial reading:
   both `schema.sql-facets` and `schema.observed-index-facets`: without the
   second the comparison could not see what an index holds, as for a YAML or Go
   source;
-- the settings of a vector index, its partitioning among them: its index set
-  is no model a SQL schema reading carries;
+- a vector, full-text or local index, for a host that does not list both
+  `schema.sql-facets` and `source.index-kinds`;
+- a local index of a row table, a vector or full-text index of a column table,
+  and a comment on one of them, with the words a YAML or Go source of the same
+  index is refused with, and a vector index's partitioning, which the native
+  index set does not hold;
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;
