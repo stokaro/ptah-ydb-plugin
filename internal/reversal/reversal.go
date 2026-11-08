@@ -13,11 +13,13 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
@@ -186,6 +188,14 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 }
 
 func describeTableSettings(result *protocol.ReversedChange, reversed schema.Reversed, name string) error {
+	if reversed.Kind == schema.ChangefeedProperties {
+		limitations, err := changefeedLimitations(reversed, name)
+		if err != nil {
+			return err
+		}
+		result.Strategy, result.Limitations = "restore the changefeeds the table held", limitations
+		return nil
+	}
 	if reversed.Kind == schema.IndexSettingsProperties {
 		limitations, err := indexSettingsLimitations(reversed)
 		if err != nil {
@@ -456,6 +466,69 @@ func indexSettingsLimitations(reversed schema.Reversed) ([]string, error) {
 		"which the forward change set.", maximum)}, nil
 }
 
+// changefeedRetention is the retention YDB gives a changefeed's topic that
+// states none.
+var changefeedRetention = durationpb.New(24 * time.Hour)
+
+// changefeedLimitations names what the reverse of a change of the changefeed
+// set of table cannot undo, in the words of the host's engine: a changefeed
+// the forward change dropped, or recreated in another mode or format, starts
+// a new stream when the rollback adds it again, one the forward change added
+// is dropped with its unread messages, and a retention the forward change made
+// shorter has expired messages the rollback cannot recover. A change the
+// rollback undoes in place otherwise loses nothing. Without
+// reading the set, the reverse of a retention change in place said a stream
+// was added again (G234).
+func changefeedLimitations(reversed schema.Reversed, table string) ([]string, error) {
+	held, left := &native.ChangefeedObservations{}, &native.ChangefeedObservations{}
+	if reversed.Before != nil {
+		if err := protojson.Unmarshal(reversed.Before.GetPayload(), held); err != nil {
+			return nil, err
+		}
+	}
+	if reversed.Left != nil {
+		if err := protojson.Unmarshal(reversed.Left.GetPayload(), left); err != nil {
+			return nil, err
+		}
+	}
+	leaves := make(map[string]*native.ObservedChangefeed, len(left.GetChangefeeds()))
+	for _, feed := range left.GetChangefeeds() {
+		leaves[feed.GetDescription().GetName()] = feed
+	}
+	retention := func(feed *native.ObservedChangefeed) *durationpb.Duration {
+		if period := feed.GetTopic().GetRetentionPeriod(); period != nil {
+			return period
+		}
+		return changefeedRetention
+	}
+	var restarted, expired, added bool
+	found := make(map[string]bool, len(held.GetChangefeeds()))
+	for _, feed := range held.GetChangefeeds() {
+		found[feed.GetDescription().GetName()] = true
+		after, kept := leaves[feed.GetDescription().GetName()]
+		switch {
+		case !kept || after.GetDescription().GetMode() != feed.GetDescription().GetMode() || after.GetDescription().GetFormat() != feed.GetDescription().GetFormat():
+			restarted = true
+		case retention(after).AsDuration() < retention(feed).AsDuration():
+			expired = true
+		}
+	}
+	for name := range leaves {
+		added = added || !found[name]
+	}
+	var limitations []string
+	if added {
+		limitations = append(limitations, fmt.Sprintf("a changefeed the forward change added to table %s is dropped by the rollback with its topic; its unread messages and consumer positions are lost", table))
+	}
+	if restarted {
+		limitations = append(limitations, fmt.Sprintf("a changefeed of table %s the rollback adds again starts a new stream; the messages and the consumers' positions of the dropped one are lost", table))
+	}
+	if expired {
+		limitations = append(limitations, "Restoring retention cannot recover messages that have already expired.")
+	}
+	return limitations, nil
+}
+
 // ttlChange is what a change of a table's own settings does to its TTL.
 type ttlChange int
 
@@ -477,8 +550,6 @@ func tableSettings(kind, table string, ttl ttlChange) (string, []string) {
 		return "move the column back to its family", nil
 	case kind == schema.IndexProperties:
 		return "restore the indexes the table held", []string{fmt.Sprintf("an index of table %s the rollback adds again is built anew from the table's rows", table)}
-	case kind == schema.ChangefeedProperties:
-		return "restore the changefeeds the table held", []string{fmt.Sprintf("a changefeed of table %s the rollback adds again starts a new stream; the messages and the consumers' positions of the dropped one are lost", table)}
 	case ttl == ttlAdded:
 		return "remove the TTL the forward change added", lost
 	case ttl == ttlChanged:
