@@ -31,7 +31,7 @@ func observedSettings(column *protocol.ObservedColumn) (ydbsequence.Settings, er
 // start or an increment on a 16-bit or 32-bit Serial, whose maximum any ALTER
 // SEQUENCE raises to the Int64 maximum. A column that becomes or stops being a
 // Serial is a type change, which rebuildNeeds finds first.
-func planSequences(owner *protocol.Reference, table *protocol.PlanningTable, caps map[string]bool) ([]sequenceStep, string, error) {
+func planSequences(owner *protocol.Reference, table *protocol.PlanningTable, caps map[string]bool, database string) ([]sequenceStep, string, error) {
 	columns, err := compileDefinitionColumns(owner, table.Desired, caps)
 	if err != nil {
 		return nil, err.Error(), nil
@@ -87,7 +87,7 @@ func planSequences(owner *protocol.Reference, table *protocol.PlanningTable, cap
 		if captured.GetFromSequence() == nil || captured.GetFromSequence().GetSetVal() != nil || heldSettings(captured.GetFromSequence()) != held {
 			return nil, fmt.Sprintf("%s: the common and native reads of the sequence disagree", subject), nil
 		}
-		operation, err := CaptureSequence("pending", owner, &SequenceAlteration{Held: captured, Settings: wanted})
+		operation, err := CaptureSequence("pending", owner, &SequenceAlteration{Held: captured, Settings: wanted, Database: database})
 		if err != nil {
 			return nil, err.Error(), nil
 		}

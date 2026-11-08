@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -61,6 +62,7 @@ func replicationFamily() objectplan.Family {
 		},
 		NormalizeChange: schema.NormalizeReplicationChange,
 		Operation:       schema.ReplicationOperationFromChange,
+		OperationIn:     replicationOperation,
 		Present: func(change *protocol.Envelope) (bool, bool, error) {
 			before, after, err := schema.ReplicationOperands(change)
 			return before != nil, after != nil, err
@@ -95,6 +97,26 @@ func replicationFamily() objectplan.Family {
 			return append(append(secrets, targetPaths(step.After.Items, protocol.PlanningEffect_CREATE)...), sourcePaths(root, *step.After)...), nil
 		},
 	}
+}
+
+// replicationOperation lowers a replication change to the operation that runs
+// it. A creation whose replica table a common step of the plan reads, such as
+// a view over it, waits for its replica tables before the plan goes on: YDB
+// creates them some time after CREATE ASYNC REPLICATION returns, and refuses
+// the view until then (SCHEME_ERROR, issue 2003, on 25.1.4.7 and 26.2.1.14).
+// Every other change goes on at once.
+func replicationOperation(request *protocol.PlanFeaturesRequest, id string, change *protocol.Envelope) (*protocol.NormalizedValue, error) {
+	step, err := schema.ReplicationStepOf(change)
+	if err != nil {
+		return nil, err
+	}
+	operation := schema.ReplicationRun
+	if step.Before == nil && step.After != nil && slices.ContainsFunc(targetPaths(step.After.Items, protocol.PlanningEffect_CREATE), func(target objectplan.PathEffect) bool {
+		return objectplan.ReadByCommonStep(request, target.Schema, target.Name)
+	}) {
+		operation = schema.ReplicationAwaitReplicas
+	}
+	return schema.ReplicationOperationAs(id, change, operation)
 }
 
 // PlanTransfers contributes one step per transfer change.
@@ -147,7 +169,9 @@ func PlanTransfers(ctx context.Context, request *protocol.PlanFeaturesRequest) (
 //     without it leaves the table read-only for good;
 //   - a creation where the plan keeps or creates a table at one of its
 //     targets, since YDB creates a replica only at a free path (measured:
-//     `Create dst error`).
+//     `Create dst error`);
+//   - a creation whose target overlaps the target of another replication the
+//     plan keeps or creates (see replicaOverlapRefusal).
 func refuseReplicaTables(request *protocol.PlanFeaturesRequest, change *protocol.Envelope) error {
 	step, err := schema.ReplicationStepOf(change)
 	if err != nil {
@@ -178,8 +202,67 @@ func refuseReplicaTables(request *protocol.PlanFeaturesRequest, change *protocol
 					"and YDB creates a replica only at a free path (measured: `Create dst error`)", target, tablePath(table.Subject))}
 			}
 		}
+		return replicaOverlapRefusal(request, name, *step.After)
 	}
 	return nil
+}
+
+// replicaOverlapRefusal refuses the replication named name, which the plan
+// creates as created, where one of its targets lies at, above or below the
+// target of another replication the plan keeps or creates, a path where that
+// replication writes its replica. YDB creates the replication over the
+// replica and both write it, and a drop of either with CASCADE drops the
+// replica while the other runs on without it, measured on 25.1.4.7 and
+// 26.2.1.14. The host's embedded engine at 74de0b65b refused such a plan;
+// without this refusal the provider planned and applied it.
+func replicaOverlapRefusal(request *protocol.PlanFeaturesRequest, name string, created replication.ReplicationSpec) error {
+	type other struct {
+		name string
+		spec replication.ReplicationSpec
+	}
+	var others []other
+	for _, record := range request.GetCurrentObjects().GetRecords() {
+		if record.GetKind() != schema.ReplicationProperties || subjectName(record.Subject) == name || dropped(request, record.Subject) {
+			continue
+		}
+		spec, _, err := schema.ObservedReplication(record.GetValue().GetValue())
+		if err != nil {
+			return err
+		}
+		others = append(others, other{name: subjectName(record.Subject), spec: spec})
+	}
+	for _, desired := range request.GetDesiredObjects().GetRecords() {
+		if desired.GetKind() != schema.ReplicationProperties || subjectName(desired.Subject) == name || record(request.GetCurrentObjects(), desired.Subject) != nil {
+			continue
+		}
+		spec, err := schema.DesiredReplication(desired.GetValue().GetValue())
+		if err != nil {
+			return err
+		}
+		others = append(others, other{name: subjectName(desired.Subject), spec: spec})
+	}
+	for _, target := range replication.Targets(created) {
+		for _, held := range others {
+			for _, replica := range replication.Targets(held.spec) {
+				if target != replica && !strings.HasPrefix(target, replica+"/") && !strings.HasPrefix(replica, target+"/") {
+					continue
+				}
+				return &replication.Refusal{Subject: "async replication " + name, Reason: fmt.Sprintf("its target %s overlaps %s, where async "+
+					"replication %s writes its replica; YDB creates the replication over that replica, both then write it, and a drop of "+
+					"either with CASCADE drops it while the other runs on without it (measured on 25.1.4.7 and 26.2.1.14)", target, replica, held.name)}
+			}
+		}
+	}
+	return nil
+}
+
+// subjectName is the directory and the name of the replication subject
+// names, as a refusal names it.
+func subjectName(subject *protocol.ComparisonIdentity) string {
+	if directory := subject.GetSchema().GetNormalized(); directory != "" {
+		return directory + "/" + subject.GetName().GetNormalized()
+	}
+	return subject.GetName().GetNormalized()
 }
 
 // secretReads is a read of each scheme secret connection names by path, as a

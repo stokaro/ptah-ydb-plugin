@@ -162,6 +162,13 @@ func CaptureChangefeedIntent(owner *protocol.Reference, intent *native.Changefee
 	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: ChangefeedProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
 }
 
+// CaptureIndexSetIntent writes the vector and full-text indexes a table
+// declares as the provider's desired facet of that table.
+func CaptureIndexSetIntent(owner *protocol.Reference, intent *native.IndexSetIntent) (*protocol.Envelope, error) {
+	definition := NativeDesiredModel(IndexProperties)
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: IndexProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
+}
+
 func topicSemantics(before, after *protocol.Envelope) (*protocol.ChangeSemantics, error) {
 	current, desired, err := topicOperandSpecs(before, after)
 	if err != nil {

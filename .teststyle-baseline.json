@@ -415,18 +415,6 @@
       "count": 1
     },
     {
-      "path": "internal/backend/streaming_context_test.go",
-      "function": "TestUnchangedStreamingQueryUsesDatabaseWidePoolIdentity",
-      "kind": "if",
-      "count": 3
-    },
-    {
-      "path": "internal/backend/streaming_resources_test.go",
-      "function": "TestStreamingResourcePoolSurvivesNormalization",
-      "kind": "if",
-      "count": 1
-    },
-    {
       "path": "internal/backend/streaming_resources_test.go",
       "function": "TestStreamingResourcesBindPathsAndPool",
       "kind": "if",

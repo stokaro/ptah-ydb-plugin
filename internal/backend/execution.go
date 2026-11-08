@@ -589,7 +589,7 @@ type failedUnit func(unit *protocol.Unit, err error, applied uint32) *protocol.E
 // dispatch is answered for by failed.
 func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUnit, failed failedUnit, run func(context.Context, *protocol.Unit) (bool, error), units []*protocol.Unit) *protocol.Execution {
 	var applied uint32
-	for _, unit := range units {
+	for i, unit := range units {
 		if ctx.Err() != nil {
 			return &protocol.Execution{Outcome: partialOr(protocol.Execution_NOT_STARTED, applied), AppliedCount: applied, DiagnosticCode: "ydb.canceled-before-unit"}
 		}
@@ -612,6 +612,16 @@ func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUni
 				return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, StatementTimedOut: true, DiagnosticCode: "ydb.statement-timeout",
 					Message: "The statement timeout stopped waiting for the unit, which YDB may still apply; no automatic retry was attempted"}
 			}
+		}
+		if missing, ok := errors.AsType[*nativeapi.ReplicasNotCreated](err); ok && dispatched {
+			// The replication stands; the units after it read a replica
+			// table that is not there yet, so none of them runs.
+			applied++
+			if i+1 < len(units) {
+				return &protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: applied, DiagnosticCode: "ydb.replica-tables-not-created",
+					Message: rowdata.OneLine(missing.Error())}
+			}
+			continue
 		}
 		if err != nil {
 			if !dispatched {

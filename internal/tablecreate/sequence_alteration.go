@@ -2,8 +2,10 @@ package tablecreate
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"path"
 	"strconv"
 
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
@@ -21,7 +23,8 @@ import (
 const SequenceOperationKind = schema.ProviderID + "/serial-sequence-operation"
 
 var sequenceModel = buildStatementModel(SequenceOperationKind, map[string]any{
-	"payload":      "held: the complete native column observation, its sequence included and unrestarted; start and increment: what the sequence takes, each a whole number of at least 1 in decimal text, not both what it holds",
+	"payload": "held: the complete native column observation, its sequence included and unrestarted; start and increment: what the sequence takes, each a whole number of at least 1 in decimal text, not both what it holds; " +
+		"database: the path of the database the plan read, which the TEXT form names the sequence under when the owner names no database, absent for a plan made against no read",
 	"execution":    "one YQL ALTER SEQUENCE ... START WITH ... INCREMENT BY ... on the sequence's absolute path through the query service, outside transactions, without a restart and without retries; the absolute path is bound at dispatch",
 	"precondition": "the owner is a row table and the column matches the captured native column, its sequence included; a 16-bit or 32-bit Serial needs serial_sequence_keeps_range",
 	"confirmation": "the sequence reads back with the requested start and increment and no restart; the key and every other column remain unchanged",
@@ -36,19 +39,28 @@ func SequenceModel() *protocol.ValueModel { return proto.CloneOf(sequenceModel) 
 type SequenceAlteration struct {
 	Held     *native.ColumnMeta
 	Settings ydbsequence.Settings
+	// Database is the path of the database the plan read, "" for a plan made
+	// against no read. The host names a table it plans by no database, so the
+	// TEXT form, which names the sequence by its absolute path, takes it from
+	// here.
+	Database string
 }
 
 type sequencePayload struct {
 	Held      json.RawMessage `json:"held"`
 	Start     string          `json:"start"`
 	Increment string          `json:"increment"`
+	Database  string          `json:"database,omitempty"`
 }
 
 func (p sequencePayload) decode() (*SequenceAlteration, error) {
 	if len(p.Held) == 0 || bytes.Equal(p.Held, []byte("null")) {
 		return nil, fmt.Errorf("a sequence operation requires a captured column")
 	}
-	result := &SequenceAlteration{Held: &native.ColumnMeta{}}
+	if p.Database != "" && (!path.IsAbs(p.Database) || path.Clean(p.Database) != p.Database) {
+		return nil, fmt.Errorf("a sequence operation names its database by a clean absolute path")
+	}
+	result := &SequenceAlteration{Held: &native.ColumnMeta{}, Database: p.Database}
 	if err := protojson.Unmarshal(p.Held, result.Held); err != nil {
 		return nil, err
 	}
@@ -123,7 +135,7 @@ func CaptureSequence(id string, owner *protocol.Reference, change *SequenceAlter
 	if err != nil {
 		return nil, err
 	}
-	payload := sequencePayload{Held: held, Start: strconv.FormatInt(change.Settings.Start, 10), Increment: strconv.FormatInt(change.Settings.Increment, 10)}
+	payload := sequencePayload{Held: held, Start: strconv.FormatInt(change.Settings.Start, 10), Increment: strconv.FormatInt(change.Settings.Increment, 10), Database: change.Database}
 	return captureStatement(id, owner, SequenceModel(), payload, NormalizeSequence)
 }
 
@@ -160,14 +172,15 @@ func DecodeSequence(value *protocol.Envelope) (*SequenceAlteration, error) {
 }
 
 // SequenceAlterationStatement is the ALTER SEQUENCE that changes the sequence
-// of a Serial column of the table at path, in the database at database, as the
-// host's embedded engine writes it for a table that exists: no restart, since
-// a restart onto a value a row holds fails the next insert. The statement names
-// the sequence by its absolute path, so a change in no named database has no
-// text form.
-func SequenceAlterationStatement(database, path string, change *SequenceAlteration) (string, error) {
+// of a Serial column of the table at table, in the database at database, or in
+// the one the plan read where database is "", as the host's embedded engine
+// writes it for a table that exists: no restart, since a restart onto a value
+// a row holds fails the next insert. The statement names the sequence by its
+// absolute path, so a change in no named database has no text form.
+func SequenceAlterationStatement(database, table string, change *SequenceAlteration) (string, error) {
+	database = cmp.Or(database, change.Database)
 	if database == "" {
 		return "", noTextForm("the sequence of column %q changes through an ALTER SEQUENCE, which names the sequence by its absolute path, and the change names no database", change.Held.GetName())
 	}
-	return SequenceStatement(ydbsequence.Path(database, "", path, change.Held.GetName()), change.Settings), nil
+	return SequenceStatement(ydbsequence.Path(database, "", table, change.Held.GetName()), change.Settings), nil
 }

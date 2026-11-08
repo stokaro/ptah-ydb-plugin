@@ -82,8 +82,11 @@ type Index struct {
 	TableName    string                     `json:"TableName"`
 	Partitioning *ydbdecl.IndexPartitioning `json:"-"`
 	Vector       *ydbdecl.VectorIndex       `json:"-"`
-	span         span
-	document     int
+	// Options are the settings the index's WITH clause writes, each as its
+	// text, as a YAML or Go source's declaration of the index writes them.
+	Options  map[string]string `json:"-"`
+	span     span
+	document int
 }
 
 // View is a view.
