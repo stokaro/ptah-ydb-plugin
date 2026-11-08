@@ -137,11 +137,52 @@ func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
 		if kept {
 			continue
 		}
+		topic := ydbtopics.Display(source.GetSchema().GetNormalized(), source.GetName().GetNormalized())
+		uninspected, err := uninspectedSource(request, source)
+		if err != nil {
+			return err
+		}
+		if uninspected {
+			return authored.New(fmt.Sprintf("%s: it reads topic %s, which the schema declares neither as a topic nor as a changefeed, and "+
+				"which is in a directory this run does not read, so the plan cannot tell whether it is there, and YDB accepts a transfer of "+
+				"a missing topic and then stops it (`Discovery error`); select the topic's directory, or declare the topic or the "+
+				"changefeed", subject, topic))
+		}
 		return authored.New(fmt.Sprintf("%s: it reads topic %s, which the schema declares neither as a topic nor as a changefeed, so the "+
 			"plan leaves no such topic, and YDB accepts such a transfer and then stops it (`Discovery error`); declare the topic or the "+
-			"changefeed", subject, ydbtopics.Display(source.GetSchema().GetNormalized(), source.GetName().GetNormalized())))
+			"changefeed", subject, topic))
 	}
 	return nil
+}
+
+// uninspectedSource reports whether the read left uninspected the place of
+// source, a topic of this database that a declared transfer reads and the
+// plan does not keep. That is the case when neither the topic's own directory
+// nor the changefeeds of a table at the topic's parent path were inspected,
+// such as a topic in a directory the run's selection leaves out. Then the
+// plan neither creates nor drops the topic, and the comparison cannot say
+// whether it is there. A directory the read covered, holding no such topic
+// or one the plan drops, is the case [undeclaredDependencies] reports as a
+// topic the plan leaves out. Only a host that sends the current context
+// (models.current-context) says what the read covered; without it the
+// answer is no.
+func uninspectedSource(request *protocol.CompareModelsRequest, source *protocol.ComparisonIdentity) (bool, error) {
+	if !slices.Contains(request.GetTargetFeatures(), provider.CurrentContextFeature) || request.GetCurrentContext() == nil {
+		return false, nil
+	}
+	topic, err := objectcompare.ContextKnowledge(request, schema.TopicProperties, source)
+	if err != nil {
+		return false, err
+	}
+	directory, name := path.Split(source.GetSchema().GetNormalized())
+	table := &protocol.ComparisonIdentity{Kind: schema.ChangefeedProperties, Database: source.GetDatabase(), Catalog: &protocol.ComparisonPart{},
+		Schema: &protocol.ComparisonPart{Source: strings.TrimSuffix(directory, "/"), Normalized: strings.TrimSuffix(directory, "/")},
+		Parent: &protocol.ComparisonPart{}, Name: &protocol.ComparisonPart{Source: name, Normalized: name}}
+	feeds, err := objectcompare.ContextKnowledge(request, schema.ChangefeedProperties, table)
+	if err != nil {
+		return false, err
+	}
+	return topic.GetState() == protocol.ModelKnowledge_UNINSPECTED && feeds.GetState() == protocol.ModelKnowledge_UNINSPECTED, nil
 }
 
 // keepsSource reports whether the plan leaves source, a topic of this
