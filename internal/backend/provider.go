@@ -290,6 +290,10 @@ func providerFeatures() []string {
 		// A YQL reading returns the password a document gives a user; see
 		// yqlschema.Reply.
 		provider.SQLRolePasswordsFeature,
+		// A YQL reading reports a statement that changes an object no
+		// document of the load declares as UNDECLARED, which the host reads
+		// as its own reader's refusal; see yqlschema.diagnosticCode.
+		provider.SQLUndeclaredFeature,
 		// A view query is compared in the form YDB stores it, keeping case,
 		// in place of the host's reading, which folds it; see
 		// CompareViewQueries.
@@ -611,6 +615,7 @@ func buildDescription() *protocol.Description {
 					{
 						Id:             replicationplan.TransferServiceID,
 						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+						ContextKinds:   []string{schema.TransferProperties},
 						ChangeKinds:    []string{schema.TransferChange},
 						OperationKinds: []string{schema.TransferOperation},
 					},
