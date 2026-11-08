@@ -2454,6 +2454,10 @@ This assessment also runs when the query declaration is unchanged. Captured
 query values require `planning.object-context` (contract 25.7), and each query
 receives an assessment receipt. A changed input restarts a running query only
 when the desired capture establishes every surviving input and resource pool.
+A resource pool altered in place is no changed input: YDB runs `ALTER RESOURCE
+POOL` beside a query running in the pool and the query keeps running, measured
+on 26.2.1.14, so the plan alters the pool alone, as the host's embedded engine
+did. A plan that drops the pool a running query names is refused.
 Missing definitions, conflicting occupants, and foreign database inputs refuse
 the complete plan. An unscoped inspection walks every directory for streaming
 queries, including dot-prefixed user directories. A failed directory listing
@@ -2474,8 +2478,10 @@ paths, `USE`, and dynamic table functions such as `RANGE` refuse planning:
 their complete physical inputs cannot be proven from the captured body.
 Ordinary strings outside a table expression create no path dependency.
 A named resource pool remains a database-wide dependency, including
-a literal dot in its name. Scope selection keeps that pool when it keeps the
-query, unless the pool is explicitly excluded. Access changes follow a query's
+a literal dot in its name, and a query that names none depends on the pool
+`default`. Scope selection keeps that pool when it keeps the query, unless
+the pool is explicitly excluded, so an `--include` of a query plans the change
+of the pool it runs in, as the host's embedded engine did. Access changes follow a query's
 stop and restart; a final drop accounts for revoking that query's access.
 
 Execution verifies the stored query settings before dispatch, checks
@@ -4561,8 +4567,10 @@ The negotiated `scope.selections` declaration makes secrets, streaming queries,
 coordination nodes, topics, external data sources, external tables, async
 replications and transfers selectable by their directory and name. Resource
 pools and classifiers use database-wide names, including literal dots. A kept
-classifier keeps the pool it requires when the input contains that pool; an
-explicit exclusion of the pool still wins. An external table keeps no data
+classifier or streaming query keeps the pool it requires when the input
+contains that pool, the pool `default` for a query that names none; an
+explicit exclusion of the pool still wins. A table's changefeeds go with the
+table. An external table keeps no data
 source and a data source no secret: an `--include` of a table plans that
 table alone, whether it is created or dropped, as the host's embedded engine
 did. The host keeps a requirement on each side of a comparison alone, so a
