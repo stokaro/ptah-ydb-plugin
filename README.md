@@ -2382,8 +2382,10 @@ the maximum at the minimum, 90% and 30% thresholds and a five-minute window.
 Consumers compare by name. YDB's own attributes and the access metadata are not
 compared. A topic the read finds holding a setting no statement sets
 (`retention_storage_mb`, `partition_count_limit`, a metering mode, the read
-speeds or a metrics level) refuses the comparison, as the host refuses to read
-it.
+speeds or a metrics level), or a consumer whose codec list names a codec no
+declaration names, refuses the comparison as the host refuses to read it,
+whatever the source says of the topic: `YDB topic <path>: <why>`, the path
+from the database root.
 
 The planner writes one step per topic, outside a transaction. It refuses a
 change YDB cannot make in place: fewer partitions than the topic has, and
