@@ -8,12 +8,15 @@ import (
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
@@ -1082,6 +1085,105 @@ func TestTransferComparisonRefusesAnUndeclaredTopic_HappyPath(t *testing.T) {
 			c := testcheck.New(t)
 
 			result, err := backend.New().CompareModels(c.Context(), transferTopicsRequest(c, test.spec, test.relations, test.objects...))
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+		})
+	}
+}
+
+// changefeedFacet is the declared changefeed set of the table at directory
+// and name, holding a changefeed of each name given, as a host that lists
+// models.declared-facets names it among the declared facets of the transfer
+// comparison.
+func changefeedFacet(c *qt.C, directory, name string, changefeeds ...string) *protocol.ComparisonRecord {
+	c.Helper()
+	intent := &native.ChangefeedSetIntent{}
+	for _, feed := range changefeeds {
+		intent.Changefeeds = append(intent.Changefeeds, &native.ChangefeedIntent{Name: feed, Mode: Ydb_Table.ChangefeedMode_MODE_UPDATES,
+			Format: Ydb_Table.ChangefeedFormat_FORMAT_JSON, Topic: &native.TopicIntent{PartitioningSettings: &Ydb_Topic.PartitioningSettings{}}})
+	}
+	value, err := schema.CaptureChangefeedIntent(&protocol.Reference{Engine: "ydb", Schema: directory, Kind: "table", Name: name}, intent)
+	c.Assert(err, qt.IsNil)
+	normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb",
+		Values: []*protocol.ValueInput{{Id: "changefeeds-" + name, Representation: protocol.ValueInput_DESIRED, Value: value}}})
+	c.Assert(err, qt.IsNil)
+	return &protocol.ComparisonRecord{Kind: schema.ChangefeedProperties, Subject: tableRelation(directory, name), Value: normalized.Values[0]}
+}
+
+// transferChangefeedsRequest is transferTopicsRequest from a host that also
+// sends the declared changefeeds of the tables, facets.
+func transferChangefeedsRequest(c *qt.C, spec replication.TransferSpec, relations []*protocol.ComparisonIdentity, facets ...*protocol.ComparisonRecord) *protocol.CompareModelsRequest {
+	c.Helper()
+	request := transferTopicsRequest(c, spec, relations)
+	request.TargetFeatures = append(request.TargetFeatures, provider.DeclaredFacetsFeature)
+	request.DeclaredFacets = facets
+	return request
+}
+
+// The transfer comparison names the changefeeds of the tables among its
+// declared facet kinds, so a host that lists models.declared-facets sends it
+// the changefeeds the schema's tables declare.
+func TestTransferComparisonReadsTheDeclaredChangefeeds(t *testing.T) {
+	c := testcheck.New(t)
+
+	comparisons := backend.Description().GetEngines()[0].GetComparisons()
+
+	transfers := slices.IndexFunc(comparisons, func(comparison *protocol.ModelComparison) bool {
+		return comparison.GetId() == replicationcompare.TransferServiceID
+	})
+
+	c.Assert(transfers >= 0, qt.IsTrue)
+	c.Assert(comparisons[transfers].GetDeclaredFacetKinds(), qt.DeepEquals, []string{schema.ChangefeedProperties})
+	c.Assert(backend.Description().GetFeatures(), qt.Contains, provider.DeclaredFacetsFeature)
+}
+
+// With the declared changefeeds, a transfer of a stream of a declared table
+// that is none of the table's declared changefeeds is refused in the words of
+// the host's embedded engine (G228). Measured with built-in 74de0b65b on
+// 26.2.1.14: a transfer of orders/other beside a table orders declaring the
+// changefeed feed was refused.
+func TestTransferComparisonRefusesAnUndeclaredChangefeed_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		facets []string
+	}{
+		{name: "another changefeed of the table", facets: []string{"feed"}},
+		{name: "a table that declares no changefeed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			facets := []*protocol.ComparisonRecord{changefeedFacet(c, "", "orders", test.facets...)}
+
+			result, err := backend.New().CompareModels(c.Context(), transferChangefeedsRequest(c, withSource("orders/other"),
+				[]*protocol.ComparisonIdentity{tableRelation("", "orders")}, facets...))
+
+			c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it reads topic orders/other, which the schema "+
+				"declares neither as a topic nor as a changefeed, so the plan leaves no such topic, and YDB accepts such a transfer and then stops it "+
+				"\\(`Discovery error`\\); declare the topic or the changefeed")
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// A transfer of a declared changefeed is compared, in the table's directory
+// too, and a declared topic is compared whatever the changefeeds say.
+func TestTransferComparisonRefusesAnUndeclaredChangefeed_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		source      string
+		directory   string
+		changefeeds []string
+	}{
+		{name: "a declared changefeed", source: "orders/feed", changefeeds: []string{"other", "feed"}},
+		{name: "a declared changefeed of a table in a directory", source: "app/orders/feed", directory: "app", changefeeds: []string{"feed"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			relations := []*protocol.ComparisonIdentity{tableRelation(test.directory, "orders")}
+
+			result, err := backend.New().CompareModels(c.Context(), transferChangefeedsRequest(c, withSource(test.source), relations,
+				changefeedFacet(c, test.directory, "orders", test.changefeeds...)))
 
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Changes, qt.HasLen, 1)
