@@ -72,16 +72,14 @@ func TestHostDropsATableWithItsIndexComment_HappyPath(t *testing.T) {
 // name that held no comment to one the declaration comments takes the
 // comment under its new name alone, with nothing to clear under the old one.
 // TestHostMovesIndexCommentsWithRename_HappyPath holds the half where the
-// rename removes a comment.
+// rename removes a comment. Both compare against the index YDB holds.
 func TestHostRenamesAnIndexIntoAComment_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.IndexRenamesFeature)
-	requireHostChange(c, "the pairing of an index renamed between two SQL documents, which Ptah v0.23.0 plans as a drop and an add")
-	realm := newCLIRealm(c)
 	from := indexCommentDocument(", INDEX old GLOBAL ON (a)", "")
 	to := indexCommentDocument(", INDEX new GLOBAL ON (a)", indexCommentClause("new", "New"))
 
-	out := indexCommentDiff(c, realm.address, from, to)
+	out := indexCommentDiff(c, from, to)
 
 	c.Assert(out, qt.Contains, "RENAME INDEX `old` TO `new`")
 	c.Assert(indexCommentStatements(out), qt.DeepEquals, []string{"COMMENT ON INDEX `new` ON `docs` IS 'New';"}, qt.Commentf("%s", out))
