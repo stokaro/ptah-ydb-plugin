@@ -18,6 +18,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -38,10 +39,12 @@ func HeaderKinds() []string {
 // table, an async replication and a transfer, a table's changefeeds when the
 // host takes the facets of a reading (see [takesFacets]), and an index's
 // partitioning and read replicas when it also reads an index's own facets
-// (see [takesIndexFacets]). Their source formats include SQL. Without that
-// feature the reading cannot say a changefeed, so it claims nothing about the
-// changefeeds of its tables and leaves those a table holds unmanaged; an
-// index's settings are left so in the same way. A table's settings, a
+// (see [takesIndexFacets]), and a table's vector and full-text indexes when
+// its sources state them too (see [takesNativeIndexes]). Their source formats
+// include SQL. Without that feature the reading cannot say a changefeed, so
+// it claims nothing about the changefeeds of its tables and leaves those a
+// table holds unmanaged; an index's settings and a table's vector and
+// full-text indexes are left so in the same way. A table's settings, a
 // column's and a column table's storage are claimed either way, as a YAML or
 // Go source claims them; without the feature a load that declares one is
 // refused.
@@ -52,6 +55,9 @@ func ClaimedModels(request *protocol.ReadSQLSchemaRequest) []*protocol.ValueMode
 	}
 	if takesIndexFacets(request) {
 		models = append(models, schema.NativeDesiredModel(schema.IndexSettingsProperties))
+	}
+	if takesNativeIndexes(request) {
+		models = append(models, schema.NativeDesiredModel(schema.IndexProperties))
 	}
 	return models
 }
@@ -71,6 +77,18 @@ func takesFacets(request *protocol.ReadSQLSchemaRequest) bool {
 // a YAML or Go source's would.
 func takesIndexFacets(request *protocol.ReadSQLSchemaRequest) bool {
 	return takesFacets(request) && slices.Contains(request.GetTargetFeatures(), provider.ObservedIndexFacetsFeature)
+}
+
+// takesNativeIndexes reports whether the host that sent request takes a
+// table's vector, full-text and local indexes in a SQL schema reading: it
+// takes the facets of a reading, and its sources state those indexes
+// (provider.IndexKindsFeature), so the comparison reads a table a source
+// declares with none of them as one that has none. The reading then writes a
+// table's vector and full-text indexes as one facet of the table and a column
+// table's local indexes in its storage facet, the values a YAML or Go source
+// of the table declares, and builds no common index of them.
+func takesNativeIndexes(request *protocol.ReadSQLSchemaRequest) bool {
+	return takesFacets(request) && slices.Contains(request.GetTargetFeatures(), provider.IndexKindsFeature)
 }
 
 func claimedModels() []*protocol.ValueModel {
@@ -204,7 +222,8 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 // as it binds a password a YAML or HCL source declares, and the provider's
 // execution writes HASH for a hash, as the host's embedded engine wrote it.
 func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.SQLSchema, []*Refusal) {
-	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request), indexFacets: takesIndexFacets(request)}
+	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request), indexFacets: takesIndexFacets(request),
+		nativeIndexes: takesNativeIndexes(request)}
 	w.tables(reading)
 	for _, view := range reading.Views {
 		w.trace(protocol.SQLObjectTrace_VIEWS, len(w.reply.Views), view.document, view.span)
@@ -246,14 +265,16 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.S
 }
 
 // wiring is the reply wire writes: the request it answers, the refusals it
-// collects, whether the host takes the facets of a reading, and whether it
-// takes an index's own (see [takesIndexFacets]).
+// collects, whether the host takes the facets of a reading, whether it takes
+// an index's own (see [takesIndexFacets]), and whether it takes a table's
+// vector, full-text and local indexes (see [takesNativeIndexes]).
 type wiring struct {
-	request     *protocol.ReadSQLSchemaRequest
-	reply       *protocol.SQLSchema
-	gaps        []*Refusal
-	facets      bool
-	indexFacets bool
+	request       *protocol.ReadSQLSchemaRequest
+	reply         *protocol.SQLSchema
+	gaps          []*Refusal
+	facets        bool
+	indexFacets   bool
+	nativeIndexes bool
 }
 
 // trace traces the object at index of a reply collection to the text of its
@@ -279,10 +300,12 @@ func (w *wiring) tables(reading *Reading) {
 		w.gaps = append(w.gaps, refused...)
 		w.trace(protocol.SQLObjectTrace_TABLES, len(w.reply.Tables), table.document, table.span)
 		w.reply.Tables = append(w.reply.Tables, declared)
+		owned, refused := w.ownedIndexes(reading, table)
+		w.gaps = append(w.gaps, refused...)
 		if !w.facets {
 			continue
 		}
-		envelopes, err := tableFacets(table)
+		envelopes, err := tableFacets(table, owned.locals, w.nativeIndexes)
 		if err != nil {
 			w.gaps = append(w.gaps, &Refusal{Document: table.document, Start: table.span.start, End: table.span.end, Code: Invalid,
 				Message: fmt.Sprintf("table %s: %v", quoteName(ydbPath(table.Schema, table.Name)), err)})
@@ -296,7 +319,96 @@ func (w *wiring) tables(reading *Reading) {
 			w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), index.document, index.text)
 			w.reply.Facets = append(w.reply.Facets, index.envelope)
 		}
+		if owned.set != nil {
+			w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), owned.set.document, owned.set.text)
+			w.reply.Facets = append(w.reply.Facets, owned.set.envelope)
+		}
 	}
+}
+
+// ownedIndexSet is what a table's vector, full-text and local indexes give
+// the reply: the facet of its vector and full-text indexes, nil where it
+// declares none, and its local indexes, which its storage facet holds.
+type ownedIndexSet struct {
+	set    *indexFacet
+	locals []*native.LocalIndexObservation
+}
+
+// ownedIndexes reads the vector, full-text and local indexes of table as a
+// YAML or Go source's declarations of the same indexes state them, for a host
+// that takes them (see [takesNativeIndexes]), and refuses each one for a host
+// that does not. A vector or full-text index of a column table and a local
+// index of a row table are refused with the words a YAML or Go source of
+// them is refused with, and so is a comment on one or a vector index's
+// partitioning, which no model of them holds.
+func (w *wiring) ownedIndexes(reading *Reading, table Table) (ownedIndexSet, []*Refusal) {
+	var result ownedIndexSet
+	var gaps []*Refusal
+	var set native.IndexSetIntent
+	var first *Index
+	label := quoteName(ydbPath(table.Schema, table.Name))
+	for _, index := range reading.Indexes {
+		kind, _ := ydbdecl.IndexKindOf(index.Type)
+		if index.TableName != table.Qualified() || !ownedKind(kind) {
+			continue
+		}
+		refuse := func(message string) {
+			gaps = append(gaps, &Refusal{Document: index.document, Start: index.span.start, End: index.span.end, Code: Invalid,
+				Message: fmt.Sprintf("table %s: index %s: %s", label, quoteName(index.Name), message)})
+		}
+		switch {
+		case !w.nativeIndexes:
+			gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s is a %s index, which a SQL schema reading has no home for: "+
+				"the host does not take a table's vector, full-text and local indexes in a SQL schema reading (%s and %s)", quoteName(index.Name), label, kind,
+				provider.SQLFacetsFeature, provider.IndexKindsFeature)))
+			continue
+		case index.Comment != "":
+			refuse("a comment on a vector, full-text or local index has no place this provider reads back")
+			continue
+		case kind.IsLocal() && table.Facets.ColumnStore == nil:
+			refuse("a local index belongs to a column table, and the table is declared as a row table")
+			continue
+		case !kind.IsLocal() && table.Facets.ColumnStore != nil:
+			refuse(fmt.Sprintf("a column table takes local indexes only; a %s index belongs to a row table", kind))
+			continue
+		case index.Partitioning != nil && kind == ydbdecl.IndexVector:
+			refuse("a vector index states no partitioning this provider keeps")
+			continue
+		case kind.IsLocal():
+			local, err := tablesource.LocalIndex(index.Name, kind, index.Fields, index.IncludeColumns, index.Options)
+			if err != nil {
+				refuse(err.Error())
+				continue
+			}
+			result.locals = append(result.locals, local)
+			continue
+		}
+		spec, err := tablesource.NativeIndex(index.Name, kind, index.Fields, index.IncludeColumns, index.Options)
+		if err != nil {
+			refuse(err.Error())
+			continue
+		}
+		if first == nil {
+			first = &index
+		}
+		set.Indexes = append(set.Indexes, &native.IndexDeclaration{Specification: spec})
+	}
+	if first == nil || len(gaps) != 0 {
+		return result, gaps
+	}
+	envelope, err := schema.CaptureIndexSetIntent(&protocol.Reference{Engine: "ydb", Kind: "table", Schema: table.Schema, Name: table.Name}, &set)
+	if err != nil {
+		return result, []*Refusal{{Document: first.document, Start: first.span.start, End: first.span.end, Code: Invalid,
+			Message: fmt.Sprintf("table %s: the vector and full-text indexes: %v", label, err)}}
+	}
+	result.set = &indexFacet{envelope: envelope, document: first.document, text: first.span}
+	return result, nil
+}
+
+// ownedKind reports whether an index of kind is one a YAML or Go source
+// declares in place of a common index: a vector, full-text or local one.
+func ownedKind(kind ydbdecl.IndexKind) bool {
+	return kind == ydbdecl.IndexVector || kind.IsFullText() || kind.IsLocal()
 }
 
 // grants writes the grants of the reading, then its revocations.
@@ -346,9 +458,11 @@ type indexFacet struct {
 }
 
 // declaredTable writes a table of the reading as the reply declares it, with
-// its key parts, columns and indexes, and returns the facets of its indexes'
-// settings where the host takes them (see [wiring.indexSettingsFacet]) and the
-// refusals of the index settings a SQL schema reading has no home for.
+// its key parts, columns and global indexes, and returns the facets of those
+// indexes' settings where the host takes them (see
+// [wiring.indexSettingsFacet]) and the refusals of the index settings a SQL
+// schema reading has no home for. Its vector, full-text and local indexes are
+// no common index (see [wiring.ownedIndexes]).
 func (w *wiring) declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []indexFacet, []*Refusal) {
 	var gaps []*Refusal
 	var facets []indexFacet
@@ -364,7 +478,7 @@ func (w *wiring) declaredTable(reading *Reading, table Table) (*protocol.Declare
 			IdentityStart: field.IdentityStart, IdentityIncrement: field.IdentityIncrement, DefaultValue: field.Default, DefaultSet: field.DefaultSet, Comment: field.Comment})
 	}
 	for _, index := range reading.Indexes {
-		if index.TableName != table.Qualified() {
+		if kind, _ := ydbdecl.IndexKindOf(index.Type); index.TableName != table.Qualified() || ownedKind(kind) {
 			continue
 		}
 		envelope, refusal := w.indexSettingsFacet(table, index)
@@ -380,12 +494,11 @@ func (w *wiring) declaredTable(reading *Reading, table Table) (*protocol.Declare
 	return declared, facets, gaps
 }
 
-// indexSettingsFacet is the facet of the partitioning and the read replicas
-// index declares, owned by the index as a YAML or Go source's index entry owns
-// it, or nil where it declares none. The facet needs a host that takes it (see
-// [takesIndexFacets]), and a global sync, async or unique index: a vector
-// index's settings, its partitioning among them, have no home in a SQL schema
-// reading, since its index set is no SQL model. What has no home is refused.
+// indexSettingsFacet is the facet of the partitioning and the read replicas a
+// global sync, async or unique index declares, owned by the index as a YAML or
+// Go source's index entry owns it, or nil where it declares none. The facet
+// needs a host that takes it (see [takesIndexFacets]); without one the
+// settings are refused.
 func (w *wiring) indexSettingsFacet(table Table, index Index) (*protocol.Envelope, *Refusal) {
 	settings := indexSettings(index)
 	if len(settings) == 0 {
@@ -393,9 +506,6 @@ func (w *wiring) indexSettingsFacet(table Table, index Index) (*protocol.Envelop
 	}
 	named := fmt.Sprintf("index %s of table %s", quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)))
 	declares := fmt.Sprintf("%s declares %s, which a SQL schema reading has no home for: ", named, strings.Join(settings, ", "))
-	if kind, _ := ydbdecl.IndexKindOf(index.Type); index.Vector != nil || kind == ydbdecl.IndexVector {
-		return nil, gap(index.document, index.span, declares+"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes")
-	}
 	if !w.indexFacets {
 		return nil, gap(index.document, index.span, declares+fmt.Sprintf("the host does not take the facets of an index in a SQL schema reading (%s and %s)",
 			provider.SQLFacetsFeature, provider.ObservedIndexFacetsFeature))
@@ -460,14 +570,12 @@ func tableSettings(facets ydbdecl.TableFacets) []string {
 	return settings
 }
 
-// indexSettings names the YDB settings an index declares beyond its options.
+// indexSettings names the YDB settings a global index declares beyond its
+// options.
 func indexSettings(index Index) []string {
 	var settings []string
 	if index.Partitioning != nil {
 		settings = append(settings, "partitioning settings")
-	}
-	if index.Vector != nil {
-		settings = append(settings, "vector settings")
 	}
 	return settings
 }

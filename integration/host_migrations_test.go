@@ -21,6 +21,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -512,6 +513,48 @@ func TestHostRepairResumesTheBody_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", repaired))
 	c.Assert(failedStatement, qt.Equals, "CREATE TABLE `"+f.table("bad")+"` (id NoSuchType NOT NULL, PRIMARY KEY (id))")
 	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+f.table("r")+"` WHERE note = 'repaired'u"), qt.Equals, int64(1))
+	c.Assert(f.progress(c, protocol.HistoryScope_NATIVE), qt.DeepEquals, []progress{{"1", applied, 2, 2}})
+}
+
+// Ported from the host's TestYDBMigrator_RepairRunsADataQueryWithItsCheckpoint
+// (integration/dbschema/ydb): a repair that resumes the body runs a data
+// query as a run does, in one transaction with its checkpoint and with no
+// in-flight mark written before it. The INSERT copies the revision row as the
+// query reads it, so it holds the failure the first run recorded; a mark
+// written before the INSERT would have put the INSERT itself there. The host's
+// test copied the row's error_stmt column; this provider stores a revision as
+// one encoded record, so the INSERT copies the record and the test decodes it.
+// The host writes no mark for a unit the provider's split places with its
+// checkpoint.
+func TestHostRepairRunsADataQueryWithItsCheckpoint_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	f := newMigrationsFixture(c)
+	head := "CREATE TABLE `" + f.table("r") + "` (id Int64 NOT NULL, copied String, PRIMARY KEY (id));\n"
+	down := "DROP TABLE `" + f.table("r") + "`;\n"
+	broken := writeFiles(c, c.TempDir(), map[string]string{
+		"0000000001_r.up.sql":   head + "CREATE TABLE `" + f.table("bad") + "` (id NoSuchType NOT NULL, PRIMARY KEY (id));\n",
+		"0000000001_r.down.sql": down,
+	})
+	fixed := writeFiles(c, c.TempDir(), map[string]string{
+		"0000000001_r.up.sql": head + "INSERT INTO `" + f.table("r") + "` SELECT 1l AS id, revision AS copied FROM `" + f.table("schema_migrations") +
+			"` WHERE version = 1l;\n",
+		"0000000001_r.down.sql": down,
+	})
+	failure, failErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(broken)...)...)
+	c.Assert(failErr, qt.IsNotNil, qt.Commentf("%s", failure))
+	failedStatement := f.failedStatement(c, "1")
+
+	repaired, err := hostCommand(c, append([]string{"migrations", "repair", "--version", "1", "--resume-from", "2"}, f.target(fixed)...)...)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", repaired))
+	c.Assert(failedStatement, qt.Equals, "CREATE TABLE `"+f.table("bad")+"` (id NoSuchType NOT NULL, PRIMARY KEY (id))")
+	var record []byte
+	row := f.opened.DB.QueryRowContext(c.Context(), "SELECT copied FROM `"+f.table("r")+"` WHERE id = 1l") // #nosec G202 -- the path is a table under a directory this test generated
+	c.Assert(row.Scan(&record), qt.IsNil)
+	copied, err := history.Store{Format: protocol.HistoryScope_NATIVE}.Decode("1", record)
+	c.Assert(err, qt.IsNil)
+	c.Assert(copied.GetState(), qt.Equals, failed)
+	c.Assert(copied.GetErrorStatement(), qt.Equals, failedStatement)
 	c.Assert(f.progress(c, protocol.HistoryScope_NATIVE), qt.DeepEquals, []progress{{"1", applied, 2, 2}})
 }
 
