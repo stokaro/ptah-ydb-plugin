@@ -97,12 +97,12 @@ before the run writes anything:
 
 [Migration bodies the provider splits](https://docs.ptah.run/edge/extend/executable-providers/#migration-bodies-the-provider-splits)
 shows how such a refusal reads, and
-[Migration splits](../README.md#migration-splits)
+[Migration splits](connections-and-execution.md#migration-splits)
 gives the provider's rules in full.
 
 The provider keeps the revision table, the migration log and the tag table, in
 the directory `--migrations-schema` names or at the database root; see
-[Migration history](../README.md#migration-history). A database Ptah's
+[Migration history](migration-state.md#migration-history). A database Ptah's
 built-in YDB engine migrated keeps its tables: the provider reads and writes
 that engine's `schema_migrations`, `schema_migrations_log`,
 `ptah_migration_tags` and `atlas_schema_revisions` in their own layout, so
@@ -113,7 +113,7 @@ engine can still read the tables.
 A primary key change, a column type change or `SET NOT NULL` is planned only as
 a table rebuild, and only when `migrations generate` is given
 `--allow-table-rebuild`; see
-[Native table rebuild](../README.md#native-table-rebuild).
+[Native table rebuild](table-creation-and-rebuild.md#native-table-rebuild).
 Each step of the rebuild is a query of its own, so a run interrupted between two
 of them resumes at the next with `up --allow-dirty`.
 
@@ -149,7 +149,7 @@ semaphore per lock name. It is exclusive and ephemeral: the server releases it
 when the session that holds it ends, whether the run released it or died. The
 provider creates a missing node with strict consistency, makes strict the node
 Ptah's built-in YDB engine created with neither mode set, and refuses a node
-someone set otherwise, as [Coordination locks](../README.md#coordination-locks)
+someone set otherwise, as [Coordination locks](migration-state.md#coordination-locks)
 describes. The node holds no data, so dropping it while no run is active is
 safe, and the next run creates it again. The provider's read leaves it out, so a
 plan never drops it. Like every advisory lock, it keeps Ptah runs apart; it does
@@ -161,5 +161,5 @@ goes on. When the provider reports the lock lost, the statement running then is
 canceled, no further statement starts and no data query commits, nothing more
 is written to the revision table, and the run fails with the loss. The revision
 table then records what the run committed, and a resume starts there. See
-[Coordination locks](../README.md#coordination-locks)
+[Coordination locks](migration-state.md#coordination-locks)
 for the session and its keepalives.
