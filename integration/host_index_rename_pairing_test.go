@@ -22,7 +22,8 @@ func indexPairingSource(indexes string) string {
 
 // When two identical global indexes are renamed at once, the host pairs the
 // names in sorted order even when the source files list them in reverse order.
-// This ports TestIndexes_YDBPairsEqualRenamesInNameOrder through schema diff.
+// This ports TestIndexes_YDBPairsEqualRenamesInNameOrder against the indexes
+// YDB holds after applying the first source.
 func TestHostPairsEquivalentIndexRenamesInNameOrder_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.IndexRenamesFeature)
@@ -31,7 +32,10 @@ func TestHostPairsEquivalentIndexRenamesInNameOrder_HappyPath(t *testing.T) {
 		"from.yaml": indexPairingSource("      old_2: {fields: [a]}\n      old_1: {fields: [a]}\n"),
 		"to.yaml":   indexPairingSource("      new_2: {fields: [a]}\n      new_1: {fields: [a]}\n"),
 	})
-	out, err := hostCommand(c, "schema", "diff", "--from", filepath.Join(files, "from.yaml"),
+	seed, err := hostCommand(c, "schema", "apply", "--db-url", realm.address, "--schema-file", filepath.Join(files, "from.yaml"),
+		"--auto-approve", "--tx-mode", "none")
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", seed))
+	out, err := hostCommand(c, "schema", "diff", "--from", realm.address,
 		"--to", filepath.Join(files, "to.yaml"), "--dev-url", realm.address)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
 	first := "RENAME INDEX `old_1` TO `new_1`"
