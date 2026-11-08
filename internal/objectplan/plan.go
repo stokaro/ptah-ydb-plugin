@@ -44,6 +44,9 @@ type Family struct {
 	// Operation lowers a normalized change to its operation. An error is a
 	// refusal of the change, not of the request.
 	Operation func(id string, change *protocol.Envelope) (*protocol.NormalizedValue, error)
+	// OperationIn, when set, lowers the change in place of Operation, knowing
+	// the request the step is planned in, such as what its common steps read.
+	OperationIn func(request *protocol.PlanFeaturesRequest, id string, change *protocol.Envelope) (*protocol.NormalizedValue, error)
 	// Present reports which operands of a normalized change are present.
 	Present func(change *protocol.Envelope) (before, after bool, err error)
 	// Refuse says why a normalized change cannot be planned on a target
@@ -304,7 +307,13 @@ func captureChange(request *protocol.PlanFeaturesRequest, family Family, i int, 
 			return change{}, refusal(family, i, err.Error()), nil
 		}
 	}
-	value, err := family.Operation("pending", captured.Value)
+	operation := family.Operation
+	if family.OperationIn != nil {
+		operation = func(id string, change *protocol.Envelope) (*protocol.NormalizedValue, error) {
+			return family.OperationIn(request, id, change)
+		}
+	}
+	value, err := operation("pending", captured.Value)
 	if err != nil {
 		return change{}, refusal(family, i, err.Error()), nil
 	}

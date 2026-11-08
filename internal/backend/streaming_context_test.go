@@ -199,44 +199,81 @@ func TestUnchangedStreamingRestartPreservesCapturedContext(t *testing.T) {
 	}
 }
 
-func TestUnchangedStreamingQueryUsesDatabaseWidePoolIdentity(t *testing.T) {
-	for _, survives := range []bool{true, false} {
-		t.Run(map[bool]string{true: "surviving pool", false: "removed pool"}[survives], func(t *testing.T) {
-			c := testcheck.New(t)
-			request := unchangedStreamingRequest(c, nil)
-			replaceContextQuery(c, request, streaming.Spec{Text: "SELECT * FROM `app/input`;", ResourcePool: "team.batch"}, nil)
-			owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Name: "team.batch"}
-			desired, err := schema.CaptureWorkloadIntent(owner, &native.ResourcePoolSettings{})
-			c.Assert(err, qt.IsNil)
-			current, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
-			c.Assert(err, qt.IsNil)
-			appendContextValue(c, request.CurrentObjects, current)
-			request.ChangedSubjects = []*protocol.ComparisonIdentity{proto.CloneOf(request.CurrentObjects.Records[2].Subject)}
-			if survives {
-				appendContextValue(c, request.DesiredObjects, desired)
-			}
-			result, err := backend.New().PlanFeatures(c.Context(), request)
-			c.Assert(err, qt.IsNil)
-			if !survives {
-				c.Assert(result.Contributions, qt.HasLen, 0)
-				c.Assert(result.Diagnostics, qt.HasLen, 1)
-				c.Assert(result.Diagnostics[0].Message, qt.Contains, "resource pool")
-				return
-			}
-			c.Assert(result.Diagnostics, qt.HasLen, 0)
-			c.Assert(result.Contributions[0].Steps, qt.HasLen, 2)
-			for _, step := range result.Contributions[0].Steps {
-				var pools []string
-				for _, effect := range step.Metadata.Effects {
-					if effect.Subject.Kind == schema.ResourcePoolProperties {
-						pools = append(pools, effect.Subject.GetName().GetNormalized())
-						c.Assert(effect.Subject.GetSchema().GetNormalized(), qt.Equals, "")
-					}
-				}
-				c.Assert(pools, qt.DeepEquals, []string{"team.batch"})
-			}
-		})
+// poolStreamingRequest is unchangedStreamingRequest with the query running in
+// the pool team.batch, which both sides hold, the pool's record last on each.
+// changed names the subjects the comparison changed, in identity order: the
+// pool, the topic the query reads, or both.
+func poolStreamingRequest(c *qt.C, changed ...string) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := unchangedStreamingRequest(c, nil)
+	topic := request.ChangedSubjects[0]
+	replaceContextQuery(c, request, streaming.Spec{Text: "SELECT * FROM `app/input`;", ResourcePool: "team.batch"}, nil)
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Name: "team.batch"}
+	desired, err := schema.CaptureWorkloadIntent(owner, &native.ResourcePoolSettings{})
+	c.Assert(err, qt.IsNil)
+	current, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	c.Assert(err, qt.IsNil)
+	appendContextValue(c, request.CurrentObjects, current)
+	appendContextValue(c, request.DesiredObjects, desired)
+	subjects := map[string]*protocol.ComparisonIdentity{"topic": topic, "pool": request.CurrentObjects.Records[len(request.CurrentObjects.Records)-1].Subject}
+	request.ChangedSubjects = nil
+	for _, name := range changed {
+		request.ChangedSubjects = append(request.ChangedSubjects, proto.CloneOf(subjects[name]))
 	}
+	return request
+}
+
+// A running query restarted around a changed input reads its pool by the
+// pool's database-wide identity, with no schema, in each step.
+func TestUnchangedStreamingQueryRestartUsesDatabaseWidePoolIdentity(t *testing.T) {
+	c := testcheck.New(t)
+	request := poolStreamingRequest(c, "pool", "topic")
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(result.Contributions, qt.HasLen, 1)
+	c.Assert(result.Contributions[0].Steps, qt.HasLen, 2)
+	for _, step := range result.Contributions[0].Steps {
+		pools := slices.DeleteFunc(slices.Clone(step.Metadata.Effects), func(effect *protocol.PlanningEffect) bool {
+			return effect.Subject.Kind != schema.ResourcePoolProperties
+		})
+		c.Assert(pools, qt.HasLen, 1)
+		c.Assert(pools[0].Subject.GetName().GetNormalized(), qt.Equals, "team.batch")
+		c.Assert(pools[0].Subject.GetSchema().GetNormalized(), qt.Equals, "")
+	}
+}
+
+// The pool a running query runs in, altered in place, leaves the query
+// running: YDB runs ALTER RESOURCE POOL beside it, and the host's embedded
+// engine planned the ALTER alone.
+func TestUnchangedStreamingQueryKeepsRunningBesideAnAlteredPool(t *testing.T) {
+	c := testcheck.New(t)
+	request := poolStreamingRequest(c, "pool")
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(result.Objects, qt.HasLen, 1)
+	c.Assert(result.Objects[0].Steps, qt.HasLen, 0)
+}
+
+// A plan that drops the pool a running query names is refused: the query
+// would run in a pool that is gone.
+func TestUnchangedStreamingQueryRefusesARemovedPool(t *testing.T) {
+	c := testcheck.New(t)
+	request := poolStreamingRequest(c, "pool")
+	request.DesiredObjects.Records = request.DesiredObjects.Records[:len(request.DesiredObjects.Records)-1]
+
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].Message, qt.Equals, `streaming query resource pool "team.batch" has no captured surviving definition`)
 }
 
 func TestUnchangedStreamingQueryOrdersCommonInputReplacement(t *testing.T) {

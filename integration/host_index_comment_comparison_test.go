@@ -43,6 +43,7 @@ func indexCommentStatements(sql string) []string {
 // TestIndexes_YDBCommentChangesInPlace cases through the host.
 func TestHostChangesKeptIndexCommentsInPlace_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, selfDiffIndexChange)
 	realm := newCLIRealm(c)
 	const index = ", INDEX by_a GLOBAL ON (a)"
 	for _, test := range []struct {
@@ -69,6 +70,7 @@ func TestHostChangesKeptIndexCommentsInPlace_HappyPath(t *testing.T) {
 func TestHostMovesIndexCommentsWithRename_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.IndexRenamesFeature)
+	requireHostChange(c, documentIndexRenameChange)
 	realm := newCLIRealm(c)
 	for _, test := range []struct {
 		name, oldComment, newComment string

@@ -107,6 +107,9 @@ func ReverseObjectChange(id string, change *protocol.Envelope, access AccessWire
 	if restored, err = keepStateReset(family, parts.After, restored); err != nil {
 		return Reversed{}, err
 	}
+	if left, err = keepHeldConsumer(family, parts.Before, left); err != nil {
+		return Reversed{}, err
+	}
 	nearest, err := rollbackReached(family, parts.Before, parts.After, left, restored)
 	if err != nil {
 		return Reversed{}, err
@@ -145,6 +148,36 @@ func reversedOperands(before, after *protocol.Envelope, convert func(*protocol.E
 		restored.Context = proto.CloneOf(before.Context)
 	}
 	return left, restored, nil
+}
+
+// keepHeldConsumer carries the consumer a transfer reads through from what
+// the forward change found to what it leaves, where the forward declaration
+// names none. YDB keeps a transfer's consumer whatever else ALTER TRANSFER
+// changes, and a declaration that names none takes the one the transfer has.
+// Without it the reverse compared the consumer YDB made with none, a change
+// YDB makes in no transfer in place, and refused the rollback of a lambda
+// change (G233), as the host's embedded engine did.
+func keepHeldConsumer(family *objectChanges, before, left *protocol.Envelope) (*protocol.Envelope, error) {
+	if family != transferChanges || before == nil || left == nil {
+		return left, nil
+	}
+	held, leaves := &native.TransferSettings{}, &native.TransferSettings{}
+	if err := protojson.Unmarshal(before.GetPayload(), held); err != nil {
+		return nil, err
+	}
+	if err := protojson.Unmarshal(left.GetPayload(), leaves); err != nil {
+		return nil, err
+	}
+	if leaves.GetConsumer() != "" || held.GetConsumer() == "" {
+		return left, nil
+	}
+	leaves.Consumer = held.GetConsumer()
+	kept, err := convertedEnvelope(left, model(TransferProperties), leaves, Normalize)
+	if err != nil {
+		return nil, err
+	}
+	kept.Context = proto.CloneOf(left.Context)
+	return kept, nil
 }
 
 // keepStateReset carries a streaming query's permission to reset its state

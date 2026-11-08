@@ -55,9 +55,10 @@ func wireRows(c *qt.C) []row {
 // gaps names what a reading declares that a SQL schema reading has no home
 // for: a column table that declares a row table's settings, a row table that
 // declares both starting layouts, which the row-table model refuses as YDB
-// does, an index's YDB settings, a password, and an object other than a
-// coordination node, a topic, an external data source or an external table. A
-// coordination node at a path the provider's model refuses counts as one too.
+// does, a vector, full-text or local index no native model holds, a password,
+// and an object other than a coordination node, a topic, an external data
+// source or an external table. A coordination node at a path the provider's
+// model refuses counts as one too.
 func gaps(reading *yqlschema.Reading) []string {
 	var found []string
 	for _, table := range reading.Tables {
@@ -68,10 +69,18 @@ func gaps(reading *yqlschema.Reading) []string {
 		}
 	}
 	// A global sync, async or unique index's partitioning and read replicas
-	// are a facet of the index; a vector index's settings have no home.
+	// are a facet of the index. A vector or full-text index belongs to the
+	// native index set of a row table and a local index to the storage of a
+	// column table; one on a table of the other storage, one with a comment
+	// and a vector index with partitioning have no home.
+	columnTables := make(map[string]bool)
+	for _, table := range reading.Tables {
+		columnTables[table.Qualified()] = table.Facets.ColumnStore != nil
+	}
 	for _, index := range reading.Indexes {
 		kind, _ := ydbdecl.IndexKindOf(index.Type)
-		if len(yqlschema.IndexFacetPayloads(index)) != 0 && (index.Vector != nil || kind == ydbdecl.IndexVector) {
+		owned := kind == ydbdecl.IndexVector || kind.IsFullText() || kind.IsLocal()
+		if owned && (kind.IsLocal() != columnTables[index.TableName] || index.Comment != "" || kind == ydbdecl.IndexVector && index.Partitioning != nil) {
 			found = append(found, "index "+index.Name)
 		}
 	}
@@ -131,7 +140,7 @@ func TestReply_HappyPath(t *testing.T) {
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
 			c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
 			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals,
-				wireOrder(settle(c, normalChangefeeds(c, normalExternals(c, normalTopics(c, normalTableFacets(c, hostMeaning(c, r.golden.Grammar))))))))
+				wireOrder(settle(c, normalOwnedIndexes(normalChangefeeds(c, normalExternals(c, normalTopics(c, normalTableFacets(c, hostMeaning(c, r.golden.Grammar)))))))))
 		})
 	}
 }
@@ -143,9 +152,10 @@ func TestReply_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return complete(c, r) })
 	// The users with a password reach a complete reply under
-	// source.sql-role-passwords, which the request lists. The dotted resource
-	// pool grant is now complete through the host's database-wide naming.
-	c.Assert(len(rows) >= 7, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
+	// source.sql-role-passwords, which the request lists, the dotted resource
+	// pool grant through the host's database-wide naming, and the vector,
+	// full-text and local indexes under source.index-kinds.
+	c.Assert(len(rows) >= 4, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -246,9 +256,65 @@ func wireOrder(m meaning) meaning {
 		return cmp.Or(strings.Compare(a.Kind, b.Kind), strings.Compare(a.Schema, b.Schema), strings.Compare(a.Parent, b.Parent), strings.Compare(a.Name, b.Name))
 	})
 	slices.SortStableFunc(m.Indexes, func(a, b map[string]any) int {
-		return strings.Compare(a["TableName"].(string), b["TableName"].(string))
+		return cmp.Or(strings.Compare(a["TableName"].(string), b["TableName"].(string)), strings.Compare(a["Name"].(string), b["Name"].(string)))
 	})
 	return m
+}
+
+// normalOwnedIndexes writes the host's vector, full-text and local indexes as
+// a reply carries them, in the native index set of their table or in its
+// storage: by name, columns, covered columns and method, the method in the
+// spelling a declaration may use. Their settings are compared with a Go
+// source's instead (see TestReply_OwnedIndexesAgreeWithGo_HappyPath).
+func normalOwnedIndexes(m meaning) meaning {
+	for _, index := range m.Indexes {
+		written, _ := index["Type"].(string)
+		kind, _ := ydbdecl.IndexKindOf(written)
+		if kind != ydbdecl.IndexVector && !kind.IsFullText() && !kind.IsLocal() {
+			continue
+		}
+		index["Type"] = kind.String()
+		delete(index, "StorageParams")
+		delete(m.IndexFacets, index["TableName"].(string)+"\x00"+index["Name"].(string))
+	}
+	return m
+}
+
+// ownedIndexMeanings are the indexes the facets of a reply's table hold: the
+// vector and full-text indexes of its native index set and the local indexes
+// of its storage, as [normalOwnedIndexes] writes the host's.
+func ownedIndexMeanings(c *qt.C, facet *protocol.Envelope) []map[string]any {
+	c.Helper()
+	table := canonical(facet.GetOwner().GetSchema(), facet.GetOwner().GetName())
+	var result []map[string]any
+	switch facet.GetKind() {
+	case schema.IndexProperties:
+		var set native.IndexSetIntent
+		c.Assert(protojson.Unmarshal(facet.GetPayload(), &set), qt.IsNil)
+		for _, declared := range set.GetIndexes() {
+			spec := declared.GetSpecification()
+			kind := map[bool]ydbdecl.IndexKind{true: ydbdecl.IndexVector, false: ydbdecl.IndexFullTextPlain}[spec.GetGlobalVectorKmeansTreeIndex() != nil]
+			if spec.GetGlobalFulltextRelevanceIndex() != nil {
+				kind = ydbdecl.IndexFullTextRelevance
+			}
+			result = append(result, element(c, marshal(c, map[string]any{"Name": spec.GetName(), "Fields": spec.GetIndexColumns(),
+				"IncludeColumns": spec.GetDataColumns(), "Type": kind.String(), "TableName": table})))
+		}
+	case schema.ColumnStorageProperties:
+		var storage native.ColumnStorageIntent
+		c.Assert(protojson.Unmarshal(facet.GetPayload(), &storage), qt.IsNil)
+		for _, local := range storage.GetLocalIndexes() {
+			kind := ydbdecl.IndexLocalMinMax
+			switch {
+			case local.GetBloom() != nil:
+				kind = ydbdecl.IndexLocalBloom
+			case local.GetNgram() != nil:
+				kind = ydbdecl.IndexLocalNgram
+			}
+			result = append(result, element(c, marshal(c, map[string]any{"Name": local.GetName(), "Fields": local.GetColumns(), "Type": kind.String(), "TableName": table})))
+		}
+	}
+	return result
 }
 
 // hostMapping is the meaning of the model the host maps a complete reply to,
@@ -285,6 +351,9 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 				"Unique": index.GetUnique(), "Comment": index.GetComment(), "Type": index.GetType(), "IncludeColumns": index.GetIncludeColumns(),
 				"StorageParams": index.GetStorageParameters(), "TableName": tableName})))
 		}
+	}
+	for _, facet := range reply.GetFacets() {
+		result.Indexes = append(result.Indexes, ownedIndexMeanings(c, facet)...)
 	}
 	for _, view := range reply.GetViews() {
 		result.Views = append(result.Views, element(c, marshal(c, map[string]any{"Name": canonical(view.GetSchema(), view.GetName()), "Body": view.GetBody(),
