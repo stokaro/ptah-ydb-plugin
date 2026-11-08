@@ -31,7 +31,8 @@ Ptah reads them only when a command selects the provider: a `ydb://` or
 `ydbs://` URL, `--dialect ydb`, or a `docker://ydb/...` dev URL.
 
 This page lists the Go annotation directives and the YAML keys that declare an
-object only YDB has. The attributes YDB adds to a directive or key every engine
+object only YDB has. [YDB objects for relational readers](objects.md) explains
+what each object is and what it needs. The attributes YDB adds to a directive or key every engine
 has, such as `on_topic` on a grant, `group` on a role, or the `COVER` columns
 of an index, stay with that directive in Ptah's
 [Go annotation reference](https://docs.ptah.run/edge/reference/go-annotations/) and
@@ -243,6 +244,8 @@ through a YQL lambda. The table is declared in the same schema, and so is the
 topic, as a topic or as a changefeed, unless the transfer reads another
 database or a topic or changefeed the database holds and Ptah cannot describe,
 which the plan keeps. Every target but YDB refuses a transfer.
+[What a comparison may conclude](https://docs.ptah.run/edge/extend/write-a-provider/ydb-incomplete-knowledge/)
+shows each refusal with the test that measures it.
 
 | Attribute | Required | Description |
 | --- | --- | --- |

@@ -31,6 +31,11 @@ plans, reads a live database, applies changes, keeps the migration history and
 the migration lock, lints YQL migrations, writes data and runs embedding
 generations. Ptah keeps the shared pipeline: the source formats, the comparison
 and ordering of a plan, the migration policy and the command surfaces.
+[Understanding the provider boundary](https://docs.ptah.run/edge/extend/write-a-provider/ydb-walkthrough/)
+follows one table, its changefeed, a transfer and the transfer's target table
+through Ptah Core and this provider, and
+[Explore the YDB walkthrough](https://docs.ptah.run/edge/extend/write-a-provider/ydb-walkthrough-explore/)
+shows the same example as an interactive figure.
 
 The engine name is `ydb`, with the alias `ydbs`. Ptah recognizes it without the
 provider: a `ydb://` or `ydbs://` URL, `--dialect ydb` and a `docker://ydb/...`
