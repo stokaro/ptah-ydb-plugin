@@ -70,7 +70,7 @@ func replicationValues(c *qt.C) []*protocol.EncodeSourceValue {
 	async := replication.ReplicationSpec{
 		Connection: replication.Connection{ConnectionString: "grpcs://primary:2135/?database=/prod", User: "replicator",
 			PasswordSecretPath: "secrets/password"},
-		Items:            []replication.Item{{Source: "ledger", Target: "replica/ledger"}, {Source: "archive", Target: "replica/archive"}},
+		Items:            []replication.Item{{Source: "accounts", Target: "replica/accounts"}, {Source: "/prod/ledger", Target: "replica/ledger"}},
 		ConsistencyLevel: replication.ConsistencyGlobal, CommitInterval: "PT1.5S",
 	}
 	transfer := replication.TransferSpec{
@@ -85,7 +85,7 @@ func replicationValues(c *qt.C) []*protocol.EncodeSourceValue {
 		if i == 0 {
 			kind = schema.ReplicationProperties
 		}
-		owner := &protocol.Reference{Engine: "ydb", Kind: kind, Schema: "app", Name: []string{"replicate", "copy", "local"}[i]}
+		owner := &protocol.Reference{Engine: "ydb", Kind: kind, Schema: []string{"app", "app", ""}[i], Name: []string{"replicate", "copy", "local"}[i]}
 		var value *protocol.Envelope
 		var err error
 		switch typed := spec.(type) {
