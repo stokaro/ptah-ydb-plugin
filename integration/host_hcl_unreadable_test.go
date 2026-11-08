@@ -47,15 +47,12 @@ func unreadableConsumer(c *qt.C, opened *connection.Connection, absolute string)
 }
 
 // An HCL export of a directory whose table has a changefeed with a consumer
-// the read cannot describe writes the table and leaves the changefeed out:
-// its coverage header claims no changefeed, so the document says nothing of
-// one, and the host lists the changefeed among the details HCL cannot
-// represent. Applied back, the document plans nothing and the changefeed
-// keeps its consumer. Ported from the host's
+// the read cannot describe writes the table and leaves the changefeed out.
+// Its coverage header records the read limit. Applied back, the document
+// plans nothing and the changefeed keeps its consumer. Ported from the host's
 // TestSchemaInspectHCLKeepsAnOwnersLimitInTheHeader (internal/atlasreport),
 // whose record of such a changefeed the built-in YDB engine wrote from a read
-// it was handed: at host 74de0b65b its own read recorded none, and the
-// header it wrote held no changefeed, on 25.1.4.7 and 26.2.1.14.
+// it was handed.
 func TestHostHCLExportLeavesOutAChangefeedTheReadCannotDescribe_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -70,7 +67,10 @@ func TestHostHCLExportLeavesOutAChangefeedTheReadCannotDescribe_HappyPath(t *tes
 
 	c.Assert(document, qt.Contains, "table \"t\" {\n  schema = schema."+directory+"\n")
 	c.Assert(document, qt.Not(qt.Contains), "ptah-ydb-plugin/changefeed\"")
-	c.Assert(reported, qt.Contains, "table."+directory+".t: changefeed updates is not represented in HCL")
+	c.Assert(document, qt.Contains, `"kind":"github.com/stokaro/ptah-ydb-plugin/table-changefeeds","subject"`)
+	c.Assert(document, qt.Contains, `"state":"unrepresentable","reason":"changefeed \"updates\" has settings this provider cannot represent`)
+	c.Assert(document, qt.Contains, `consumer \"custom\": its codec list names codec 10042, which Ptah does not declare`)
+	c.Assert(reported, qt.Not(qt.Contains), "changefeed updates is not represented in HCL")
 	c.Assert(planned, qt.HasLen, 0)
 	c.Assert(found, qt.IsTrue)
 	c.Assert(feeds["updates"].Consumers, qt.DeepEquals, []string{"custom"})

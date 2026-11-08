@@ -679,6 +679,39 @@ func unrepresentableProperties(side *protocol.ComparisonState) {
 		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: "an unknown TTL parameter"}})
 }
 
+// A read that cannot establish a table's complete changefeed set must leave
+// the comparison undecided even when the desired source names no feed or
+// names a feed the read could not model. There is no observed facet value to
+// compare, so the subject coverage carries the limit.
+func TestCompare_LeavesAnUndescribedChangefeedReadUndecided(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		desired side
+	}{
+		{name: "source omits the feed"},
+		{name: "source names the feed", desired: side{changefeeds: declaredFeed}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			req := request(c, test.desired, side{})
+			req.Parents = []*protocol.ComparisonParent{{Subject: subject("table", ""), Desired: true, Current: true}}
+			req.Current.Coverage.Subjects = append(req.Current.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{
+				Kind: schema.ChangefeedProperties, Subject: subject("table", ""),
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: "changefeed f holds an unsupported attribute"},
+			})
+
+			result, err := backend.New().CompareModels(c.Context(), req)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), req, result), qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 0)
+			c.Assert(result.Undecided, qt.HasLen, 1)
+			c.Assert(result.Undecided[0].Kind, qt.Equals, schema.ChangefeedProperties)
+			c.Assert(result.Undecided[0].Reason, qt.Equals, "changefeed f holds an unsupported attribute")
+		})
+	}
+}
+
 // A declared table whose source could not describe its TTL, families or
 // partitioning is left undecided rather than kept as it is held or created
 // without them, whether the plan keeps the table or creates it. Ported from
