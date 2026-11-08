@@ -375,6 +375,7 @@ func addUnsupportedChangefeed(c *qt.C, opened *connection.Connection, absolute s
 // unsupported attributes.
 func TestHostHCLInspectKeepsUnsupportedChangefeed_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostChange(c, "stokaro/ptah#5795, which retains HCL losses in the coverage header")
 	h := newHostChangefeeds(c)
 	h.apply("the table", h.events(""), "Schema apply completed successfully")
 	addUnsupportedChangefeed(c, h.opened, path.Join(h.database, h.directory, "events"))

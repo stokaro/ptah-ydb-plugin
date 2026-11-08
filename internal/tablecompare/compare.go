@@ -150,6 +150,17 @@ func compareDeclared(ctx context.Context, request *protocol.CompareModelsRequest
 		if !compared(request, want) || observed == nil || !compared(request, observed) || !both[recordKey("", want.GetSubject())] {
 			continue
 		}
+		// A concrete platform block can coexist with a captured loss for the
+		// same table. Its value is partial, so the limit below must decide the
+		// whole model before a change can be returned to the host.
+		if want.GetKind() == schema.TableProperties {
+			if _, limited := unrepresentableClaim(request.GetDesired(), want.GetSubject()); limited {
+				continue
+			}
+			if _, limited := unrepresentableClaim(request.GetCurrent(), want.GetSubject()); limited {
+				continue
+			}
+		}
 		if err := compareRecord(result, want, observed); err != nil {
 			return err
 		}

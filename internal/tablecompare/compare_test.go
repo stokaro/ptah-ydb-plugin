@@ -689,15 +689,17 @@ func unrepresentableProperties(side *protocol.ComparisonState) {
 func TestCompare_LeavesAnUndescribedDeclarationUndecided(t *testing.T) {
 	for _, test := range []struct {
 		name    string
+		desired side
 		held    side
 		current bool
 	}{
 		{name: "a table both sides hold", held: side{table: withTTL(daily)}, current: true},
+		{name: "a declared TTL beside an unrepresentable setting", desired: side{table: withTTL(hourly)}, held: side{table: withTTL(daily)}, current: true},
 		{name: "a table the plan creates"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := request(c, side{}, test.held)
+			request := request(c, test.desired, test.held)
 			unrepresentableProperties(request.Desired)
 			request.Parents = []*protocol.ComparisonParent{{Subject: subject("table", ""), Desired: true, Current: test.current}}
 
@@ -724,13 +726,15 @@ func TestCompare_LeavesAnUndescribedReadUndecided_FailurePath(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		desired side
+		held    side
 	}{
 		{name: "a declared TTL", desired: side{table: withTTL(daily)}},
 		{name: "a declaration of no TTL", desired: side{}},
+		{name: "a read with a partial TTL value", desired: side{table: withTTL(daily)}, held: side{table: withTTL(hourly)}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := request(c, test.desired, side{})
+			request := request(c, test.desired, test.held)
 			unrepresentableProperties(request.Current)
 			request.Parents = []*protocol.ComparisonParent{{Subject: subject("table", ""), Desired: true, Current: true}}
 
