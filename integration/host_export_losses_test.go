@@ -194,9 +194,8 @@ func TestHostCompatJSONFragmentsThatSelectNoLossWarnNothing_HappyPath(t *testing
 // TestSchemaInspectJSON_TemplateFragmentsOnlyReportSelectedProperties: a
 // fragment that writes a column warns only about that column, the comment it
 // leaves out included, and not about the TTL of the table the column belongs
-// to, nor with the comment's text. This provider also warns of the column's
-// YDB column properties (G229); the built-in engine at 74de0b65b warned the
-// comment alone.
+// to, nor with the comment's text. The column's default-only YDB properties
+// add no warning, as with the built-in engine at 74de0b65b.
 func TestHostCompatJSONColumnFragmentWarnsOnlyAboutTheColumn_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
@@ -207,17 +206,15 @@ func TestHostCompatJSONColumnFragmentWarnsOnlyAboutTheColumn_HappyPath(t *testin
 	document, warnings := jsonInspect(c, directory, `{{ range .Realm.Schemas }}{{ range .Tables }}{{ json (index .Columns 0) }}{{ end }}{{ end }}`)
 
 	c.Assert(strings.TrimSpace(document), qt.Equals, `{"name":"id","type":"Int64"}`)
-	c.Assert(warnings, qt.Contains, "column comments (1)"+scope)
+	c.Assert(warnings, qt.DeepEquals, []string{"column comments (1)" + scope})
 	c.Assert(strings.Join(warnings, "\n"), qt.Not(qt.Contains), "private")
-	c.Assert(slices.DeleteFunc(slices.Clone(warnings), func(warning string) bool { return strings.HasSuffix(warning, scope) }), qt.HasLen, 0)
 }
 
 // Ported from the host's TestSchemaInspectJSON_TableFragmentsKeepSchemaIdentity:
 // a fragment that writes the table of the second directory writes that
 // directory's table, though the first holds one of the same name, and warns
-// only about it. The built-in engine at 74de0b65b warned there too, of the
-// default column family it read; this provider warns of the table's YDB
-// properties (G229).
+// only about it. The table has no nondefault native settings, so the provider
+// has no omitted property to report (G229).
 func TestHostCompatJSONTableFragmentKeepsItsDirectory_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
@@ -226,14 +223,34 @@ func TestHostCompatJSONTableFragmentKeepsItsDirectory_HappyPath(t *testing.T) {
 	first, second := path.Join(database, directory, "events"), path.Join(database, outside, "events")
 	createSchemaObject(c, opened, "CREATE TABLE `"+first+"` (id Int64 NOT NULL, PRIMARY KEY (id))", "DROP TABLE `"+first+"`")
 	createSchemaObject(c, opened, "CREATE TABLE `"+second+"` (id Int64 NOT NULL, kind Utf8, PRIMARY KEY (id))", "DROP TABLE `"+second+"`")
-	scope := `table "` + outside + `.events"`
-
 	document, warnings := jsonInspect(c, directory+","+outside, `{{ json (index (index .Realm.Schemas 1).Tables 0) }}`)
 
 	c.Assert(strings.TrimSpace(document), qt.Equals,
 		`{"name":"events","columns":[{"name":"id","type":"Int64"},{"name":"kind","type":"Utf8","null":true}],"primary_key":{"parts":[{"column":"id"}]}}`)
-	c.Assert(warnings, qt.Not(qt.HasLen), 0)
-	c.Assert(slices.DeleteFunc(slices.Clone(warnings), func(warning string) bool { return strings.HasSuffix(warning, scope) }), qt.HasLen, 0)
+	c.Assert(warnings, qt.HasLen, 0)
+}
+
+// A live table's nondefault native TTL and column family remain visible as
+// JSON omission warnings. Empty index and changefeed sets, default-only
+// columns, and documented table defaults add no native warning.
+func TestHostCompatJSONReportsOnlyNondefaultYDBProperties_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	hostCompat(c)
+	requireHostChange(c, "provider-defined export omission counts")
+	opened, directory, database := inspectionFixture(c)
+	events := path.Join(database, directory, "events")
+	createSchemaObject(c, opened, "CREATE TABLE `"+events+"` (id Uint64 NOT NULL, created_at Timestamp, payload Utf8 FAMILY cold, PRIMARY KEY (id), "+
+		"FAMILY cold (COMPRESSION = 'lz4')) WITH (TTL = Interval('P1D') ON created_at)", "DROP TABLE `"+events+"`")
+
+	document, warnings := jsonInspect(c, directory, `{{ json . }}`)
+	nativeWarnings := slices.DeleteFunc(slices.Clone(warnings), func(warning string) bool { return !strings.HasPrefix(warning, "YDB ") })
+	slices.Sort(nativeWarnings)
+
+	c.Assert(document, qt.Contains, `"name":"events"`)
+	c.Assert(nativeWarnings, qt.DeepEquals, []string{
+		`YDB column properties (1) from column "payload" of table "` + directory + `.events"`,
+		`YDB row-table properties (1) from table "` + directory + `.events"`,
+	})
 }
 
 // Ported from the host's

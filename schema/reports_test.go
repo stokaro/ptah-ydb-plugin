@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -38,9 +39,9 @@ func reportText(reports []*protocol.ModelReport) []string {
 	return result
 }
 
-// The metric names and help texts are the built-in YDB engine's, so a scrape
-// through the provider has the lines a scrape through that engine has; the
-// desired and observed models report the same metrics.
+// The built-in YDB engine's metrics remain available, alongside metrics that
+// count native settings omitted by JSON and DBML. Desired and observed models
+// report the same metrics.
 func TestReports_NameTheBuiltInEnginesMetrics(t *testing.T) {
 	c := testcheck.New(t)
 	c.Assert(reportText(schema.Reports()), qt.DeepEquals, []string{
@@ -62,9 +63,13 @@ func TestReports_NameTheBuiltInEnginesMetrics(t *testing.T) {
 		`row-table-properties/DESIRED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
 		`row-table-properties/DESIRED: ydb_column_families "YDB column families a table states, without a default family that states nothing"`,
 		`row-table-properties/DESIRED: ydb_table_partitioning "YDB row tables stating partitioning, read replicas or a key bloom filter"`,
+		`row-table-properties/DESIRED: ydb_row_table_omissions "YDB row tables with native settings an export omits"`,
 		`row-table-properties/OBSERVED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
 		`row-table-properties/OBSERVED: ydb_column_families "YDB column families a table states, without a default family that states nothing"`,
 		`row-table-properties/OBSERVED: ydb_table_partitioning "YDB row tables stating partitioning, read replicas or a key bloom filter"`,
+		`row-table-properties/OBSERVED: ydb_row_table_omissions "YDB row tables with native settings an export omits"`,
+		`column-properties/DESIRED: ydb_column_property_omissions "YDB columns with native settings an export omits"`,
+		`column-properties/OBSERVED: ydb_column_property_omissions "YDB columns with native settings an export omits"`,
 		`index-properties/DESIRED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
 		`index-properties/OBSERVED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
 		`column-storage-properties/DESIRED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
@@ -172,7 +177,10 @@ func TestCountValue_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	topic, err := schema.CaptureObject(topicOwner(), nativeTopic())
 	c.Assert(err, qt.IsNil)
-	column, err := schema.CaptureColumn(columnOwner(), &native.ColumnMeta{Name: "label", Type: primitive(Ydb.Type_UTF8)})
+	view, err := schema.CaptureObject(objectOwner(schema.ViewProperties), &native.ViewObservation{
+		View:       &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT 1"},
+		Properties: &native.DescribeTableResult{Self: objectSelf()},
+	})
 	c.Assert(err, qt.IsNil)
 	forged, err := schema.CaptureObject(topicOwner(), nativeTopic())
 	c.Assert(err, qt.IsNil)
@@ -183,7 +191,7 @@ func TestCountValue_FailurePath(t *testing.T) {
 		representation protocol.ValueInput_Representation
 		wantErr        string
 	}{
-		{"a model no report names", column, protocol.ValueInput_OBSERVED, `the YDB provider counts no YDB column properties`},
+		{"a model no report names", view, protocol.ValueInput_OBSERVED, `the YDB provider counts no YDB views`},
 		{"a change representation", topic, protocol.ValueInput_CHANGE, `only a desired or observed YDB value is counted`},
 		{"an observation counted as a declaration", topic, protocol.ValueInput_DESIRED, `.*`},
 		{"a payload that does not validate", forged, protocol.ValueInput_OBSERVED, `invalid YDB observation JSON`},
