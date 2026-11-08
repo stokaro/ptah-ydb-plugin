@@ -146,6 +146,7 @@ func hostPlannedUnitsAt(c *qt.C, address, selectors, format, text string, flags 
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl", "dbml": "schema.dbml"}[format]
+	// #nosec G703 -- name comes only from fixed file names above, and root is a test temp directory.
 	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {
