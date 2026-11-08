@@ -2593,8 +2593,12 @@ commit interval, or of a transfer's source, target or consumer, which YDB makes
 in no object in place; a connection or credential change of an object that is
 not paused, or of a replication that was failed over; a credential taken away;
 a secret path before 25.4. It refuses a drop of a running replication whose
-replica the plan declares as a table, and a creation where a table stands at a
-target. Where the host negotiates `planning.object-context`, the planner also
+replica the plan declares as a table, a creation where a table stands at a
+target, and a creation whose target lies at, above or below the target of
+another replication the plan keeps or creates: YDB creates the replication over
+the other's replica and both write it, and a later drop of either with
+`CASCADE` drops the replica while the other runs on without it, measured on
+25.1.4.7 and 26.2.1.14. Where the host negotiates `planning.object-context`, the planner also
 assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
