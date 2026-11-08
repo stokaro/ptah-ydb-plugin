@@ -241,7 +241,8 @@ where its replica is created. The replication is declared in the same file.
 Declares a YDB transfer: messages of a topic turned into rows of a table
 through a YQL lambda. The table is declared in the same schema, and so is the
 topic, as a topic or as a changefeed, unless the transfer reads another
-database. Every target but YDB refuses a transfer.
+database or a topic or changefeed the database holds and Ptah cannot describe,
+which the plan keeps. Every target but YDB refuses a transfer.
 
 | Attribute | Required | Description |
 | --- | --- | --- |

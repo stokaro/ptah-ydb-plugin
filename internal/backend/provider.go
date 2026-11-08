@@ -279,6 +279,11 @@ func providerFeatures() []string {
 		// of its declared changefeeds is refused; see
 		// replicationcompare.CompareTransfers.
 		provider.DeclaredFacetsFeature,
+		// The transfer comparison reads the topics and the changefeeds the
+		// database holds too, so a transfer of one the read recorded without
+		// describing it, which the plan keeps, is compared; see
+		// replicationcompare.CompareTransfers.
+		provider.CurrentContextFeature,
 		// A render reports what its units go on without: the part of a
 		// created column's declared type YDB does not keep, and a Serial's
 		// start and increment an offline creation cannot set; see

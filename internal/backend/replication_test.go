@@ -3,6 +3,7 @@ package backend_test
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -12,6 +13,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -1189,6 +1191,167 @@ func TestTransferComparisonRefusesAnUndeclaredChangefeed_HappyPath(t *testing.T)
 			c.Assert(result.Changes, qt.HasLen, 1)
 		})
 	}
+}
+
+// heldFeed is the read's JSON of one changefeed of a table, named name, which
+// a declaration can describe.
+func heldFeed(name string) string {
+	return `{"description":{"name":"` + name + `","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},"topic":{"partitioningSettings":{}}}`
+}
+
+// heldChangefeeds is the held changefeed set of the table at directory and
+// name, holding each changefeed of feeds, the read's JSON of each, as a host
+// that lists models.current-context names it in the current context of the
+// transfer comparison.
+func heldChangefeeds(c *qt.C, directory, name string, feeds ...string) *protocol.ComparisonRecord {
+	c.Helper()
+	held := &native.ChangefeedObservations{}
+	c.Assert(protojson.Unmarshal([]byte(`{"changefeeds":[`+strings.Join(feeds, ",")+`]}`), held), qt.IsNil)
+	value, err := schema.CaptureChangefeeds(&protocol.Reference{Engine: "ydb", Database: "/local", Schema: directory, Kind: "table", Name: name}, held)
+	c.Assert(err, qt.IsNil)
+	normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb",
+		Values: []*protocol.ValueInput{{Id: "held-" + name, Representation: protocol.ValueInput_OBSERVED, Value: value}}})
+	c.Assert(err, qt.IsNil)
+	subject := tableRelation(directory, name)
+	subject.Database = testcomparison.Part("/local")
+	return &protocol.ComparisonRecord{Kind: schema.ChangefeedProperties, Subject: subject, Value: normalized.Values[0]}
+}
+
+// changefeedsKnown is the coverage record of the changefeed set of the table
+// at directory and name in state.
+func changefeedsKnown(directory, name string, state protocol.ModelKnowledge_State) *protocol.ComparisonSubjectCoverage {
+	subject := tableRelation(directory, name)
+	subject.Database = testcomparison.Part("/local")
+	return &protocol.ComparisonSubjectCoverage{Kind: schema.ChangefeedProperties, Subject: subject, Knowledge: testcomparison.Knowledge(state)}
+}
+
+// unreadChangefeeds is the changefeed set of the table at directory and name
+// as the read records one holding a changefeed it cannot describe, such as one
+// whose topic has a consumer with a codec Ptah does not declare: the set
+// unrepresentable, and no value.
+func unreadChangefeeds(directory, name string) *protocol.ComparisonSubjectCoverage {
+	return changefeedsKnown(directory, name, protocol.ModelKnowledge_UNREPRESENTABLE)
+}
+
+// topicKnown is the coverage record of the topic at directory and name in
+// state.
+func topicKnown(directory, name string, state protocol.ModelKnowledge_State) *protocol.ComparisonSubjectCoverage {
+	subject := topicObject(directory, name)
+	subject.Database = testcomparison.Part("/local")
+	return &protocol.ComparisonSubjectCoverage{Kind: schema.TopicProperties, Subject: subject, Knowledge: testcomparison.Knowledge(state)}
+}
+
+// recordedTopic is the topic at directory and name the read lists and does
+// not read, such as a queue of the older persistent queue kind.
+func recordedTopic(directory, name string) *protocol.ComparisonSubjectCoverage {
+	return topicKnown(directory, name, protocol.ModelKnowledge_UNINSPECTED)
+}
+
+// transferCurrentRequest is transferChangefeedsRequest of a table orders
+// that declares no changefeed, from a host that also sends what the read
+// holds (models.current-context): the held changefeed sets, and the coverage
+// records of the topics and changefeed sets the read recorded without
+// describing them.
+func transferCurrentRequest(c *qt.C, spec replication.TransferSpec, relations []*protocol.ComparisonIdentity, held []*protocol.ComparisonRecord,
+	recorded ...*protocol.ComparisonSubjectCoverage,
+) *protocol.CompareModelsRequest {
+	c.Helper()
+	request := transferChangefeedsRequest(c, spec, relations, changefeedFacet(c, "", "orders"))
+	request.TargetFeatures = append(request.TargetFeatures, provider.CurrentContextFeature)
+	current := testcomparison.State(observedModel(schema.ChangefeedProperties))
+	current.Coverage.Kinds = append(current.Coverage.Kinds, testcomparison.State(observedModel(schema.TopicProperties)).Coverage.Kinds...)
+	current.Coverage.Subjects = recorded
+	current.Records = held
+	request.CurrentContext = current
+	return request
+}
+
+// The transfer comparison lists models.current-context, so a host that lists
+// it sends the comparison what the read holds of the topics and the tables'
+// changefeeds.
+func TestTransferComparisonReadsTheCurrentContext(t *testing.T) {
+	c := testcheck.New(t)
+
+	description := backend.Description()
+
+	c.Assert(description.GetFeatures(), qt.Contains, provider.CurrentContextFeature)
+	c.Assert(description.GetEngines()[0].GetFeatures(), qt.Contains, provider.CurrentContextFeature)
+}
+
+// A transfer of a topic or a changefeed the read recorded without describing
+// it is compared, since the plan neither drops nor changes such an object, as
+// the host's embedded engine accepted it (G239). The read leaves out the whole
+// changefeed set of a table that holds a changefeed it cannot describe, so any
+// stream of that table is taken for one of its changefeeds. Measured with
+// built-in 74de0b65b on 26.2.1.14: a transfer of a changefeed whose consumer
+// names codec 10042, under a table that declares no changefeed, was planned.
+func TestTransferComparisonAcceptsARecordedSource_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		source    string
+		directory string
+		recorded  []*protocol.ComparisonSubjectCoverage
+	}{
+		{name: "a table whose changefeeds the read could not describe", source: "orders/feed", recorded: []*protocol.ComparisonSubjectCoverage{unreadChangefeeds("", "orders")}},
+		{name: "such a table in a directory", source: "app/orders/feed", directory: "app", recorded: []*protocol.ComparisonSubjectCoverage{unreadChangefeeds("app", "orders")}},
+		{name: "a topic the read lists and does not read", source: "events", recorded: []*protocol.ComparisonSubjectCoverage{recordedTopic("", "events")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			relations := []*protocol.ComparisonIdentity{tableRelation(test.directory, "orders")}
+
+			result, err := backend.New().CompareModels(c.Context(), transferCurrentRequest(c, withSource(test.source), relations, nil, test.recorded...))
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+		})
+	}
+}
+
+// A changefeed the read describes is one the plan drops when the table does
+// not declare it, and the changefeeds of an undeclared table go with it; an
+// unread set of another table, or a recorded topic of another name, says
+// nothing of the topic the transfer reads. Each transfer is refused as one of
+// a missing topic.
+func TestTransferComparisonAcceptsARecordedSource_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		source    string
+		relations []*protocol.ComparisonIdentity
+		feeds     []string
+		recorded  []*protocol.ComparisonSubjectCoverage
+	}{
+		{name: "a changefeed the read describes", source: "orders/feed", relations: []*protocol.ComparisonIdentity{tableRelation("", "orders")},
+			feeds: []string{heldFeed("feed")}},
+		{name: "the unread changefeeds of an undeclared table", source: "orders/feed", recorded: []*protocol.ComparisonSubjectCoverage{unreadChangefeeds("", "orders")}},
+		{name: "the unread changefeeds of another table", source: "orders/feed", relations: []*protocol.ComparisonIdentity{tableRelation("", "orders")},
+			recorded: []*protocol.ComparisonSubjectCoverage{unreadChangefeeds("", "items")}},
+		{name: "a recorded topic of another name", source: "events", recorded: []*protocol.ComparisonSubjectCoverage{recordedTopic("", "other")}},
+		{name: "a table whose changefeeds the read describes", source: "orders/feed", relations: []*protocol.ComparisonIdentity{tableRelation("", "orders")},
+			recorded: []*protocol.ComparisonSubjectCoverage{changefeedsKnown("", "orders", protocol.ModelKnowledge_COMPLETE)}},
+		{name: "a topic the read describes", source: "events", recorded: []*protocol.ComparisonSubjectCoverage{topicKnown("", "events", protocol.ModelKnowledge_COMPLETE)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			held := []*protocol.ComparisonRecord{heldChangefeeds(c, "", "orders", test.feeds...)}
+
+			result, err := backend.New().CompareModels(c.Context(), transferCurrentRequest(c, withSource(test.source), test.relations, held, test.recorded...))
+
+			c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it reads topic "+test.source+", which the schema "+
+				"declares neither as a topic nor as a changefeed, so the plan leaves no such topic, and YDB accepts such a transfer and then stops it "+
+				"\\(`Discovery error`\\); declare the topic or the changefeed")
+			c.Assert(result, qt.IsNil)
+		})
+	}
+	t.Run("a host that sends no current context", func(t *testing.T) {
+		c := testcheck.New(t)
+		request := transferChangefeedsRequest(c, withSource("orders/feed"), []*protocol.ComparisonIdentity{tableRelation("", "orders")}, changefeedFacet(c, "", "orders"))
+
+		result, err := backend.New().CompareModels(c.Context(), request)
+
+		c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it reads topic orders/feed, which the schema .*")
+		c.Assert(result, qt.IsNil)
+	})
 }
 
 // A host that does not send the declared topics cannot say a topic is

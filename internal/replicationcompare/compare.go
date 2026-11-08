@@ -86,13 +86,21 @@ func TransferDeclaredFacetKinds() []string {
 // any stream of a declared table for one of its changefeeds. A topic of
 // another database is not this plan's to keep.
 //
+// A topic or a changefeed the read recorded without describing it is one the
+// plan neither drops nor changes, so a transfer that reads it stays valid, as
+// the host's embedded engine accepted it: a topic the read lists and does not
+// read, such as a queue of the older persistent queue kind, and a stream of a
+// declared table whose changefeeds the read could not describe, such as one
+// whose topic has a consumer with a codec Ptah does not declare. Only a host
+// that sends the current context (models.current-context) says what the read
+// holds; without it the comparison refuses such a transfer.
+//
 // A target without transfers is left to the comparison, which refuses a
 // declared transfer by the capability first, as the embedded engine did.
 func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
 	features := request.GetTargetFeatures()
 	tables := slices.Contains(features, provider.DeclaredRelationsFeature)
 	declaredTopics := tables && slices.Contains(features, provider.DeclaredObjectsFeature)
-	declaredChangefeeds := tables && slices.Contains(features, provider.DeclaredFacetsFeature)
 	if !tables || !request.GetCapabilities()[replication.CapabilityTransfers] {
 		return nil
 	}
@@ -119,26 +127,40 @@ func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
 		if err != nil {
 			return err
 		}
-		if source == nil || declaresTopic(request, source) {
+		if source == nil {
 			continue
 		}
-		if declaresTable(request, source.GetSchema().GetNormalized()) {
-			if !declaredChangefeeds {
-				continue
-			}
-			changefeed, err := declaresChangefeed(request, source)
-			if err != nil {
-				return err
-			}
-			if changefeed {
-				continue
-			}
+		kept, err := keepsSource(request, source)
+		if err != nil {
+			return err
+		}
+		if kept {
+			continue
 		}
 		return authored.New(fmt.Sprintf("%s: it reads topic %s, which the schema declares neither as a topic nor as a changefeed, so the "+
 			"plan leaves no such topic, and YDB accepts such a transfer and then stops it (`Discovery error`); declare the topic or the "+
 			"changefeed", subject, ydbtopics.Display(source.GetSchema().GetNormalized(), source.GetName().GetNormalized())))
 	}
 	return nil
+}
+
+// keepsSource reports whether the plan leaves source, a topic of this
+// database a declared transfer reads: a declared topic, a stream of a
+// declared table that is one of its declared changefeeds, any stream of such
+// a table where the host does not send the declared changefeeds, or a topic
+// or a changefeed set the read recorded without describing it (see
+// [undeclaredDependencies]).
+func keepsSource(request *protocol.CompareModelsRequest, source *protocol.ComparisonIdentity) (bool, error) {
+	if declaresTopic(request, source) || recordsTopic(request, source) {
+		return true, nil
+	}
+	if !declaresTable(request, source.GetSchema().GetNormalized()) {
+		return false, nil
+	}
+	if !slices.Contains(request.GetTargetFeatures(), provider.DeclaredFacetsFeature) || recordsChangefeeds(request, source) {
+		return true, nil
+	}
+	return declaresChangefeed(request, source)
 }
 
 // readTopic is the identity of the topic of this database the declared
@@ -184,6 +206,39 @@ func declaresChangefeed(request *protocol.CompareModelsRequest, topic *protocol.
 		return slices.Contains(names, topic.GetName().GetNormalized()), nil
 	}
 	return false, nil
+}
+
+// recordsTopic reports whether the current context the host sent
+// (models.current-context) records topic as one the read listed and did not
+// describe: its coverage names the topic uninspected or unrepresentable.
+func recordsTopic(request *protocol.CompareModelsRequest, topic *protocol.ComparisonIdentity) bool {
+	return recorded(request, schema.TopicProperties, topic.GetSchema().GetNormalized(), topic.GetName().GetNormalized())
+}
+
+// recordsChangefeeds reports whether the current context the host sent
+// (models.current-context) records the changefeeds of the table at topic's
+// path as ones the read could not describe: its coverage names the table's
+// changefeed set unrepresentable or uninspected. The read leaves such a set
+// out whole, so the comparison cannot tell a stream the table holds from one
+// it does not, and takes the stream for one of them; a plan neither drops nor
+// changes a changefeed of that table. A coverage that leaves the changefeeds
+// of every table unknown, as a source that cannot describe them does, names
+// no table, and proves no stream is there.
+func recordsChangefeeds(request *protocol.CompareModelsRequest, topic *protocol.ComparisonIdentity) bool {
+	directory, name := path.Split(topic.GetSchema().GetNormalized())
+	return recorded(request, schema.ChangefeedProperties, strings.TrimSuffix(directory, "/"), name)
+}
+
+// recorded reports whether the coverage of the current context names the
+// subject of kind at directory and name uninspected or unrepresentable: one
+// the read listed and did not describe. A changefeed set's subject is its
+// table.
+func recorded(request *protocol.CompareModelsRequest, kind, directory, name string) bool {
+	return slices.ContainsFunc(request.GetCurrentContext().GetCoverage().GetSubjects(), func(record *protocol.ComparisonSubjectCoverage) bool {
+		state := record.GetKnowledge().GetState()
+		return record.GetKind() == kind && (state == protocol.ModelKnowledge_UNINSPECTED || state == protocol.ModelKnowledge_UNREPRESENTABLE) &&
+			record.GetSubject().GetSchema().GetNormalized() == directory && record.GetSubject().GetName().GetNormalized() == name
+	})
 }
 
 // declaresTable reports whether the request's declared relations hold the

@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.8.0
-	github.com/stokaro/ptah/provider-sdk v0.36.0
+	github.com/stokaro/ptah/provider-sdk v0.37.1-0.20261108102047-0734fa5a7fb0
 	github.com/ydb-platform/ydb-go-genproto v0.0.0-20260810123728-f0c151ab31b9
 	github.com/ydb-platform/ydb-go-sdk-auth-environ v0.5.3
 	github.com/ydb-platform/ydb-go-sdk/v3 v3.155.1
