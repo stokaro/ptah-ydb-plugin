@@ -34,8 +34,24 @@ func TestDescriptionReportsTheCountedModels(t *testing.T) {
 	c := testcheck.New(t)
 	description := backend.Description()
 	c.Assert(description.Features, qt.Contains, provider.ReportCountsFeature)
+	c.Assert(description.Features, qt.Contains, provider.OmissionCountsFeature)
+	c.Assert(description.Engines[0].Features, qt.Contains, provider.OmissionCountsFeature)
 	c.Assert(description.Engines[0].Reports, qt.HasLen, len(schema.Reports()))
 	negotiated := provider.NegotiatedDescription(description, []string{provider.ReportCountsFeature})
+	for _, report := range negotiated.Engines[0].Reports {
+		c.Assert(report.GetOmissionLabel(), qt.Equals, "")
+		c.Assert(report.GetOmissionCountMetric(), qt.Equals, "")
+	}
+	withOmissionCounts := provider.NegotiatedDescription(description, []string{provider.ReportCountsFeature, provider.OmissionCountsFeature})
+	reportsByKind := make(map[string][]*protocol.ModelReport)
+	for _, report := range withOmissionCounts.Engines[0].Reports {
+		reportsByKind[report.GetKind()] = append(reportsByKind[report.GetKind()], report)
+	}
+	c.Assert(reportsByKind[schema.ChangefeedProperties], qt.HasLen, 2)
+	for _, report := range reportsByKind[schema.ChangefeedProperties] {
+		c.Assert(report.GetOmissionLabel(), qt.Equals, "changefeeds")
+		c.Assert(report.GetOmissionCountMetric(), qt.Equals, "changefeeds")
+	}
 	request := &protocol.ReportValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.ReportCountsFeature},
 		Values: []*protocol.ValueInput{{Id: "0", Representation: protocol.ValueInput_OBSERVED, Value: reportedTopic(c)}}}
 	c.Assert(provider.ValidateReportValuesRequest(negotiated, request), qt.IsNil)
