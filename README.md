@@ -2591,7 +2591,8 @@ assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
 replication with `CASCADE` names them as dropped, so each step is ordered
-against the common steps at those paths. A replication of this database also
+against the common steps at those paths, and a creation comes before a view
+the plan creates over one of its replicas. A replication of this database also
 reads its source tables, so it is created after a table the plan creates and
 dropped before one the plan drops: a replication created before its source
 creates no replica. A transfer reads its table and, at a local source, the
@@ -2612,7 +2613,14 @@ object's access list with it and a REVOKE after the drop would name a path that
 is gone. A change in place, such as a new lambda, keeps the entries.
 
 Execution reads the object before the statement and refuses one that changed
-since the plan read it, runs the statement once, and reads the object back. The
+since the plan read it, runs the statement once, and reads the object back.
+YDB creates a replication's replica tables some time after the statement
+returns, and refuses a view over a table that is not there yet. So a creation
+whose replica a later step of the plan reads, such as a view over it, then
+waits until each of its replica tables in this database exists, at most two
+minutes. A table still missing then stops the run after the replication, with
+the diagnostic `ydb.replica-tables-not-created`. A replication nothing in the
+plan reads goes on at once. The
 statement names the object, the replica targets, the transfer's table and a
 secret path absolutely; a transfer's topic keeps its relative spelling, because
 25.1.4.7 cannot find a topic of its own database named absolutely (`Discovery
