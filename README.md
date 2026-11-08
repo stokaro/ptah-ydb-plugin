@@ -2672,6 +2672,16 @@ sends the transfer comparison the declared changefeeds of the tables
 declared table accepted only when it is one of the table's declared
 changefeeds, as the host's embedded engine did. A host that does not send them
 leaves the comparison to take any stream of a declared table for a changefeed.
+A topic or a changefeed the read recorded without describing it is one the plan
+neither drops nor changes, so a transfer that reads it is compared, as the
+embedded engine compared it: a topic the read lists and does not read, such as a
+queue of the older persistent queue kind, and a stream of a declared table that
+holds a changefeed no declaration can describe, such as one whose topic has a
+consumer with a codec Ptah does not declare. The read leaves out the whole
+changefeed set of such a table, so the comparison takes any stream of it for
+one of its changefeeds. Only a host that sends the transfer comparison what the
+read holds (`models.current-context`, contract 25.40, ADR 0122 in Ptah) says
+so; without it such a transfer is refused like one of a missing topic.
 A target without transfers refuses the transfer by the capability first, as the
 embedded engine did.
 
