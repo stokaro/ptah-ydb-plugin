@@ -16,6 +16,7 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -526,6 +527,20 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	feeds, err := t.source.readChangefeeds(ctx, t.database, path.Join(t.database, selected, name), description)
 	if err != nil {
 		return err
+	}
+	for _, feed := range feeds.GetChangefeeds() {
+		if _, err := changefeeds.FromObserved(feed); err != nil {
+			// One unreadable feed makes the table's changefeed set incomplete.
+			// Leave its value out so the read limit can be carried in HCL and
+			// no declaration can replace a set the provider did not establish.
+			t.result.Coverage.Subjects = append(t.result.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+				Kind: schema.ChangefeedProperties, Subject: proto.CloneOf(table.Identity), NormalizedSubject: proto.CloneOf(table.Identity),
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE,
+					Reason: fmt.Sprintf("changefeed %q has settings this provider cannot represent, so the current changefeed was not established: %v", feed.GetDescription().GetName(), err)},
+			})
+			t.addTable(table)
+			return nil
+		}
 	}
 	feedFacet, err := schema.CaptureChangefeeds(table.Identity, feeds)
 	if err != nil {

@@ -68,6 +68,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 		return nil, err
 	}
 	undescribedProperties(request, result)
+	undescribedChangefeeds(request, result)
 	if err := compareUnstatedParts(ctx, request, result, held); err != nil {
 		return nil, err
 	}
@@ -150,6 +151,17 @@ func compareDeclared(ctx context.Context, request *protocol.CompareModelsRequest
 		if !compared(request, want) || observed == nil || !compared(request, observed) || !both[recordKey("", want.GetSubject())] {
 			continue
 		}
+		// A concrete platform block can coexist with a captured loss for the
+		// same table. Its value is partial, so the limit below must decide the
+		// whole model before a change can be returned to the host.
+		if want.GetKind() == schema.TableProperties {
+			if _, limited := unrepresentableClaim(request.GetDesired(), schema.TableProperties, want.GetSubject()); limited {
+				continue
+			}
+			if _, limited := unrepresentableClaim(request.GetCurrent(), schema.TableProperties, want.GetSubject()); limited {
+				continue
+			}
+		}
 		if err := compareRecord(result, want, observed); err != nil {
 			return err
 		}
@@ -201,7 +213,7 @@ func undescribedProperties(request *protocol.CompareModelsRequest, result *proto
 		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() {
 			continue
 		}
-		reason, found := unrepresentableClaim(request.GetDesired(), parent.GetSubject())
+		reason, found := unrepresentableClaim(request.GetDesired(), schema.TableProperties, parent.GetSubject())
 		if found {
 			result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: schema.TableProperties, Subject: proto.CloneOf(parent.GetSubject()),
 				Reason: "The desired source could not describe the table's TTL, column families or partitioning: " + reason})
@@ -211,18 +223,36 @@ func undescribedProperties(request *protocol.CompareModelsRequest, result *proto
 			slices.ContainsFunc(request.GetDesired().GetRecords(), func(record *protocol.ComparisonRecord) bool {
 				return record.GetKind() == schema.TableProperties && provider.CompareIdentities(record.GetSubject(), parent.GetSubject()) == 0
 			})
-		if reason, found = unrepresentableClaim(request.GetCurrent(), parent.GetSubject()); found && parent.GetCurrent() && stated {
+		if reason, found = unrepresentableClaim(request.GetCurrent(), schema.TableProperties, parent.GetSubject()); found && parent.GetCurrent() && stated {
 			result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: schema.TableProperties, Subject: proto.CloneOf(parent.GetSubject()),
 				Reason: "The read found a TTL, a column family or a partitioning setting of the table it could not describe: " + reason})
 		}
 	}
 }
 
-// unrepresentableClaim is the reason side gives for claiming the table
-// properties of subject unrepresentable, and whether it claims so.
-func unrepresentableClaim(side *protocol.ComparisonState, subject *protocol.ComparisonIdentity) (string, bool) {
+// undescribedChangefeeds keeps a table's changefeeds when the read could not
+// establish their complete set. A source may omit or name a feed, but neither
+// declaration can safely replace what the provider did not read.
+func undescribedChangefeeds(request *protocol.CompareModelsRequest, result *protocol.ComparedModels) {
+	if !slices.Contains(request.GetKinds(), schema.ChangefeedProperties) {
+		return
+	}
+	for _, parent := range request.GetParents() {
+		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() || !parent.GetCurrent() {
+			continue
+		}
+		if reason, found := unrepresentableClaim(request.GetCurrent(), schema.ChangefeedProperties, parent.GetSubject()); found {
+			result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: schema.ChangefeedProperties,
+				Subject: proto.CloneOf(parent.GetSubject()), Reason: reason})
+		}
+	}
+}
+
+// unrepresentableClaim is the reason side gives for claiming kind of subject
+// unrepresentable, and whether it claims so.
+func unrepresentableClaim(side *protocol.ComparisonState, kind string, subject *protocol.ComparisonIdentity) (string, bool) {
 	for _, claim := range side.GetCoverage().GetSubjects() {
-		if claim.GetKind() == schema.TableProperties && claim.GetKnowledge().GetState() == protocol.ModelKnowledge_UNREPRESENTABLE &&
+		if claim.GetKind() == kind && claim.GetKnowledge().GetState() == protocol.ModelKnowledge_UNREPRESENTABLE &&
 			provider.CompareIdentities(claim.GetSubject(), subject) == 0 && forYDB(claim.GetTargets()) {
 			return cmp.Or(claim.GetKnowledge().GetReason(), "it gives no reason"), true
 		}
