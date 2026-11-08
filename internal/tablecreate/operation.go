@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path"
 	"slices"
 
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
@@ -59,6 +60,9 @@ func buildOperationModel() *protocol.ValueModel {
 		"type_modifiers": "an optional typeModifiers member beside the request's fields: each created column whose declared type YDB keeps only in part, " +
 			"once, with property \"type modifier\" and the declared type and what YDB does not keep of it as its detail; a render reports each as an " +
 			"omission, and execution ignores them",
+		"plan_database": "an optional database member beside the request's fields: the clean absolute path of the database the plan read, carried by " +
+			"a creation whose Serial sequence gets a start or an increment, so the TEXT form names the sequence's absolute path in its ALTER SEQUENCE; " +
+			"execution ignores it",
 		"execution": "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
 		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence " +
 			"when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root " +
@@ -122,7 +126,11 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	if err := validateOwner(value.Owner); err != nil {
 		return nil, err
 	}
-	fields, omissions, err := splitTypeModifiers(value.Payload)
+	fields, database, err := splitDatabase(value.Payload)
+	if err != nil {
+		return nil, err
+	}
+	fields, omissions, err := splitTypeModifiers(fields)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +146,9 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 		return nil, err
 	}
 	if payload, err = withTypeModifiers(payload, omissions); err != nil {
+		return nil, err
+	}
+	if payload, err = withDatabase(payload, database); err != nil {
 		return nil, err
 	}
 	payload, err = modeljson.Canonical(payload)
@@ -159,11 +170,95 @@ func Request(value *protocol.Envelope) (*Ydb_Table.CreateTableRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	fields, _, err := splitTypeModifiers(normalized.Value.Payload)
+	fields, _, err := splitDatabase(normalized.Value.Payload)
+	if err != nil {
+		return nil, err
+	}
+	fields, _, err = splitTypeModifiers(fields)
 	if err != nil {
 		return nil, err
 	}
 	return decodeRequest(fields)
+}
+
+// CreationDatabase is the database a valid row-table creation names as the
+// one its plan read, or "" for one that names none.
+func CreationDatabase(value *protocol.Envelope) (string, error) {
+	if value.GetKind() != OperationKind {
+		return "", nil
+	}
+	_, database, err := splitDatabase(value.GetPayload())
+	return database, err
+}
+
+// CreationInDatabase is the row-table creation operation with the database at
+// database, the path of the database the plan read, when its request gives a
+// Serial's sequence a start or an increment, and the operation unchanged
+// otherwise. The host names a table it plans by no database, so the owner
+// names none, and the TEXT form, whose ALTER SEQUENCE names the sequence by its
+// absolute path, takes the database from here. Without it a migration file
+// creates the sequence with YDB's start and increment of 1 (see
+// createdSequenceStatements).
+func CreationInDatabase(operation *protocol.NormalizedValue, database string) (*protocol.NormalizedValue, error) {
+	value := operation.GetValue()
+	if database == "" || value.GetKind() != OperationKind || value.GetOwner().GetDatabase() != "" {
+		return operation, nil
+	}
+	request, err := Request(value)
+	if err != nil {
+		return nil, err
+	}
+	if !slices.ContainsFunc(request.GetColumns(), func(column *Ydb_Table.ColumnMeta) bool {
+		return column.GetFromSequence() != nil && !requestedSettings(column.GetFromSequence()).IsDefault()
+	}) {
+		return operation, nil
+	}
+	payload, err := withDatabase(value.GetPayload(), database)
+	if err != nil {
+		return nil, err
+	}
+	envelope := proto.CloneOf(value)
+	envelope.Payload = payload
+	return Normalize(&protocol.ValueInput{Id: operation.GetId(), Representation: protocol.ValueInput_OPERATION, Value: envelope})
+}
+
+// withDatabase adds database, a clean absolute path, to a creation payload
+// under [databaseKey]; an empty one adds nothing.
+func withDatabase(payload []byte, database string) ([]byte, error) {
+	if database == "" {
+		return payload, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(database)
+	if err != nil {
+		return nil, err
+	}
+	fields[databaseKey] = encoded
+	return json.Marshal(fields)
+}
+
+// splitDatabase takes the database out of a creation payload and returns the
+// rest and the database, "" for a payload that names none. A database is a
+// clean absolute path.
+func splitDatabase(payload []byte) ([]byte, string, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, "", err
+	}
+	raw, found := fields[databaseKey]
+	if !found {
+		return payload, "", nil
+	}
+	var database string
+	if err := json.Unmarshal(raw, &database); err != nil || !path.IsAbs(database) || path.Clean(database) != database {
+		return nil, "", fmt.Errorf("a YDB table creation names its database by a clean absolute path")
+	}
+	delete(fields, databaseKey)
+	rest, err := json.Marshal(fields)
+	return rest, database, err
 }
 
 // columnSet is the set of the names of columns.
