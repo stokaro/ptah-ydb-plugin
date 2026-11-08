@@ -335,19 +335,7 @@ func TestHostKeepsAChangefeedItCannotModel_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	h := newHostChangefeeds(c)
 	h.apply("the table", h.events(""), "Schema apply completed successfully")
-	client := Ydb_Table_V1.NewTableServiceClient(ydb.GRPCConn(h.opened.Driver))
-	opened, err := client.CreateSession(c.Context(), &Ydb_Table.CreateSessionRequest{})
-	c.Assert(err, qt.IsNil)
-	var created Ydb_Table.CreateSessionResult
-	c.Assert(opened.GetOperation().GetResult().UnmarshalTo(&created), qt.IsNil)
-	c.Cleanup(func() {
-		_, _ = client.DeleteSession(context.Background(), &Ydb_Table.DeleteSessionRequest{SessionId: created.GetSessionId()})
-	})
-	altered, err := client.AlterTable(c.Context(), &Ydb_Table.AlterTableRequest{SessionId: created.GetSessionId(), Path: path.Join(h.database, h.directory, "events"),
-		AddChangefeeds: []*Ydb_Table.Changefeed{{Name: "tagged", Mode: Ydb_Table.ChangefeedMode_MODE_UPDATES, Format: Ydb_Table.ChangefeedFormat_FORMAT_JSON,
-			Attributes: map[string]string{"owner": "team"}}}})
-	c.Assert(err, qt.IsNil)
-	c.Assert(altered.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS)
+	addUnsupportedChangefeed(c, h.opened, path.Join(h.database, h.directory, "events"))
 	const limit = `changefeed "tagged" has settings this provider cannot represent, so the current changefeed was not established: it holds attributes, which Ptah does not model`
 
 	omitted := h.apply("a schema without it", h.events(""), "No changes planned, but 1 comparison limit remains unresolved.")
@@ -356,6 +344,48 @@ func TestHostKeepsAChangefeedItCannotModel_HappyPath(t *testing.T) {
 
 	c.Assert(omitted, qt.Contains, limit)
 	c.Assert(named, qt.Contains, limit)
+	shapes, found := describedChangefeeds(c, h.opened, path.Join(h.database, h.directory, "events"))
+	c.Assert(found, qt.IsTrue)
+	c.Assert(shapes, qt.DeepEquals, map[string]feedShape{"tagged": {Mode: options.ChangefeedModeUpdates, Retention: 24 * time.Hour}})
+}
+
+// addUnsupportedChangefeed gives a table a changefeed with native attributes
+// that the provider cannot declare.
+func addUnsupportedChangefeed(c *qt.C, opened *connection.Connection, absolute string) {
+	c.Helper()
+	client := Ydb_Table_V1.NewTableServiceClient(ydb.GRPCConn(opened.Driver))
+	sessionReply, err := client.CreateSession(c.Context(), &Ydb_Table.CreateSessionRequest{})
+	c.Assert(err, qt.IsNil)
+	var created Ydb_Table.CreateSessionResult
+	c.Assert(sessionReply.GetOperation().GetResult().UnmarshalTo(&created), qt.IsNil)
+	c.Cleanup(func() {
+		_, _ = client.DeleteSession(context.Background(), &Ydb_Table.DeleteSessionRequest{SessionId: created.GetSessionId()})
+	})
+	altered, err := client.AlterTable(c.Context(), &Ydb_Table.AlterTableRequest{SessionId: created.GetSessionId(), Path: absolute,
+		AddChangefeeds: []*Ydb_Table.Changefeed{{Name: "tagged", Mode: Ydb_Table.ChangefeedMode_MODE_UPDATES, Format: Ydb_Table.ChangefeedFormat_FORMAT_JSON,
+			Attributes: map[string]string{"owner": "team"}}}})
+	c.Assert(err, qt.IsNil)
+	c.Assert(altered.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS)
+}
+
+// Ported from TestSchemaInspectHCLKeepsAnOwnersLimitInTheHeader: an HCL export
+// from either host surface keeps a changefeed it cannot declare. The current
+// HCL contract leaves changefeeds unclaimed without their platform block, so
+// applying either export keeps the feed and its unsupported attributes.
+func TestHostHCLInspectKeepsUnsupportedChangefeed_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	h := newHostChangefeeds(c)
+	h.apply("the table", h.events(""), "Schema apply completed successfully")
+	addUnsupportedChangefeed(c, h.opened, path.Join(h.database, h.directory, "events"))
+
+	native, nativeNotes := hostExport(c, "schema", "inspect", "--schemas", h.directory, "--format", "hcl")
+	compat, compatNotes, compatExit := runCompat(c, nil, "schema", "inspect", "--url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema", h.directory)
+	c.Assert(compatExit, qt.Equals, 0, qt.Commentf("%s\n%s", compat, compatNotes))
+	for _, exported := range []struct{ name, document, notes string }{{"native", native, nativeNotes}, {"atlas", compat, compatNotes}} {
+		c.Assert(exported.document, qt.Contains, `table "events"`, qt.Commentf("%s: %s", exported.name, exported.document))
+		c.Assert(exported.notes, qt.Contains, "cannot be represented in HCL", qt.Commentf("%s: %s", exported.name, exported.notes))
+		c.Assert(hostPlanned(c, h.directory, "hcl", exported.document), qt.HasLen, 0, qt.Commentf("%s: %s", exported.name, exported.document))
+	}
 	shapes, found := describedChangefeeds(c, h.opened, path.Join(h.database, h.directory, "events"))
 	c.Assert(found, qt.IsTrue)
 	c.Assert(shapes, qt.DeepEquals, map[string]feedShape{"tagged": {Mode: options.ChangefeedModeUpdates, Retention: 24 * time.Hour}})
