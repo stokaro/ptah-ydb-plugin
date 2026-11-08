@@ -48,11 +48,14 @@ type declaredFacet struct{ Kind, Owner, Payload string }
 var tableSettingKinds = []string{schema.TableProperties, schema.ColumnProperties, schema.ColumnStorageProperties}
 
 func declaredFacets(envelopes []*protocol.Envelope) []declaredFacet {
+	return slices.DeleteFunc(declaredFacetsOf(envelopes), func(facet declaredFacet) bool { return !slices.Contains(tableSettingKinds, facet.Kind) })
+}
+
+// declaredFacetsOf are envelopes as the formats are compared on them, by
+// model and owner.
+func declaredFacetsOf(envelopes []*protocol.Envelope) []declaredFacet {
 	var facets []declaredFacet
 	for _, envelope := range envelopes {
-		if !slices.Contains(tableSettingKinds, envelope.GetKind()) {
-			continue
-		}
 		owner := envelope.GetOwner()
 		parts := append(append([]string{owner.GetSchema()}, owner.GetPath()...), owner.GetName())
 		facets = append(facets, declaredFacet{Kind: envelope.GetKind(), Owner: owner.GetKind() + " " + path.Join(parts...), Payload: string(envelope.GetPayload())})
@@ -74,11 +77,12 @@ func yqlFacets(c *qt.C, text string) []declaredFacet {
 	return declaredFacets(reply.GetFacets())
 }
 
-// sourceFacets decodes a YAML or Go source as the source service does and
+// sourceFacets decodes a YAML or Go source as the source service does for a
+// host that negotiates source.index-kinds, as the reading's host does, and
 // returns the facets it declares.
 func sourceFacets(c *qt.C, request *protocol.DecodeSourceRequest) []declaredFacet {
 	c.Helper()
-	decoded, err := backend.New().DecodeSource(c.Context(), request)
+	decoded, err := backend.New().DecodeSource(provider.ContextWithHostFeatures(c.Context(), []string{provider.IndexKindsFeature}), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateDecodedSource(backend.Description(), request, decoded), qt.IsNil)
 	var envelopes []*protocol.Envelope

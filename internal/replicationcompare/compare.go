@@ -58,6 +58,13 @@ func TransferDeclaredKinds() []string {
 	return []string{schema.TopicProperties}
 }
 
+// TransferDeclaredFacetKinds are the facet models whose declared facets the
+// transfer comparison reads (models.declared-facets): the changefeeds of the
+// tables, which the row-table comparison owns.
+func TransferDeclaredFacetKinds() []string {
+	return []string{schema.ChangefeedProperties}
+}
+
 // undeclaredDependencies refuses a declared transfer whose table or topic
 // would not be there once the plan has run, in the words of the host's
 // embedded engine, which refused both for each transfer in turn.
@@ -72,10 +79,12 @@ func TransferDeclaredKinds() []string {
 // the host also sends the declared topics (models.declared-objects), or be a
 // changefeed of a declared table: YDB accepts a transfer of a missing topic
 // and then stops it (`Discovery error`), and a topic the schema leaves out is
-// one the plan drops or never creates. The comparison does not see a table's
-// changefeeds, a facet of the table another comparison owns, so it takes a
-// stream of a declared table for one of its changefeeds. A topic of another
-// database is not this plan's to keep.
+// one the plan drops or never creates. A table's changefeeds are a facet of
+// the table another comparison owns: where the host sends them
+// (models.declared-facets), a stream of a declared table has to be one of its
+// declared changefeeds; a host that does not leaves the comparison to take
+// any stream of a declared table for one of its changefeeds. A topic of
+// another database is not this plan's to keep.
 //
 // A target without transfers is left to the comparison, which refuses a
 // declared transfer by the capability first, as the embedded engine did.
@@ -83,6 +92,7 @@ func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
 	features := request.GetTargetFeatures()
 	tables := slices.Contains(features, provider.DeclaredRelationsFeature)
 	declaredTopics := tables && slices.Contains(features, provider.DeclaredObjectsFeature)
+	declaredChangefeeds := tables && slices.Contains(features, provider.DeclaredFacetsFeature)
 	if !tables || !request.GetCapabilities()[replication.CapabilityTransfers] {
 		return nil
 	}
@@ -109,8 +119,20 @@ func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
 		if err != nil {
 			return err
 		}
-		if source == nil || declaresTopic(request, source) || declaresTable(request, source.GetSchema().GetNormalized()) {
+		if source == nil || declaresTopic(request, source) {
 			continue
+		}
+		if declaresTable(request, source.GetSchema().GetNormalized()) {
+			if !declaredChangefeeds {
+				continue
+			}
+			changefeed, err := declaresChangefeed(request, source)
+			if err != nil {
+				return err
+			}
+			if changefeed {
+				continue
+			}
 		}
 		return authored.New(fmt.Sprintf("%s: it reads topic %s, which the schema declares neither as a topic nor as a changefeed, so the "+
 			"plan leaves no such topic, and YDB accepts such a transfer and then stops it (`Discovery error`); declare the topic or the "+
@@ -141,6 +163,27 @@ func declaresTopic(request *protocol.CompareModelsRequest, topic *protocol.Compa
 		return object.GetKind() == schema.TopicProperties && object.GetSchema().GetNormalized() == topic.GetSchema().GetNormalized() &&
 			object.GetName().GetNormalized() == topic.GetName().GetNormalized()
 	})
+}
+
+// declaresChangefeed reports whether the declared changefeeds the host sent
+// (models.declared-facets) give the table at topic's path a changefeed of
+// topic's name, the stream YDB keeps for it.
+func declaresChangefeed(request *protocol.CompareModelsRequest, topic *protocol.ComparisonIdentity) (bool, error) {
+	directory, name := path.Split(topic.GetSchema().GetNormalized())
+	directory = strings.TrimSuffix(directory, "/")
+	for _, facet := range request.GetDeclaredFacets() {
+		subject := facet.GetSubject()
+		if facet.GetKind() != schema.ChangefeedProperties || subject.GetKind() != "table" || subject.GetSchema().GetNormalized() != directory ||
+			subject.GetName().GetNormalized() != name {
+			continue
+		}
+		names, err := schema.DeclaredChangefeedNames(facet.GetValue().GetValue())
+		if err != nil {
+			return false, err
+		}
+		return slices.Contains(names, topic.GetName().GetNormalized()), nil
+	}
+	return false, nil
 }
 
 // declaresTable reports whether the request's declared relations hold the

@@ -26,6 +26,7 @@ func indexPairingSource(indexes string) string {
 func TestHostPairsEquivalentIndexRenamesInNameOrder_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.IndexRenamesFeature)
+	requireHostChange(c, documentIndexRenameChange)
 	realm := newCLIRealm(c)
 	files := writeFiles(c, c.TempDir(), map[string]string{
 		"from.yaml": indexPairingSource("      old_2: {fields: [a]}\n      old_1: {fields: [a]}\n"),
