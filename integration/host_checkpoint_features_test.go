@@ -65,3 +65,17 @@ func TestHostGenerateStandaloneYDBFeaturesUsesSelectedOwners_HappyPath(t *testin
 	c.Assert(down, qt.Contains, "DROP STREAMING QUERY `"+directory+"/copy`")
 	c.Assert(down, qt.Contains, "DROP COORDINATION NODE `"+directory+"/locks`")
 }
+
+// A checkpoint replays a standalone coordination node in its shadow database,
+// then selects that node's owner in both cumulative files. The empty baseline
+// must retain the shadow database path to bind the observed native object.
+func TestHostCheckpointStandaloneCoordinationUsesSelectedOwner_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostChange(c, "stokaro/ptah#5788, which binds an empty checkpoint baseline to its database")
+	up, down := checkpointFeaturePair(c, map[string]string{
+		"0000000001_create.up.sql":   "CREATE COORDINATION NODE `locks`;\n",
+		"0000000001_create.down.sql": "DROP COORDINATION NODE `locks`;\n",
+	})
+	c.Assert(up, qt.Contains, "CREATE COORDINATION NODE `locks`")
+	c.Assert(down, qt.Contains, "DROP COORDINATION NODE `locks`")
+}
