@@ -19,7 +19,7 @@ import (
 func TestHostDBMLReportsYDBFeatureLossWithoutATarget_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
-	requireHostChange(c, "provider-defined export omission counts")
+	requireHostOmissionCounts(c)
 	source := writeSource(c, "schema.yaml", `tables:
   plain:
     columns:
