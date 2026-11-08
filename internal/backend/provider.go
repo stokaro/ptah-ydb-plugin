@@ -604,6 +604,7 @@ func buildDescription() *protocol.Description {
 					{
 						Id:             replicationplan.TransferServiceID,
 						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+						ContextKinds:   []string{schema.TransferProperties},
 						ChangeKinds:    []string{schema.TransferChange},
 						OperationKinds: []string{schema.TransferOperation},
 					},
