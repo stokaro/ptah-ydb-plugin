@@ -23,10 +23,10 @@ type reportedMetric struct {
 func one([]byte, protocol.ValueInput_Representation) (uint64, error) { return 1, nil }
 
 // reportedKinds are the models whose values `ptah schema stats` counts, with
-// the metric names and help texts of the host's built-in YDB engine, so a
-// scrape through this provider has the lines a scrape through that engine
-// has. Each metric counts what a value holds: a topic is one topic and its
-// consumers, a table's changefeed set its feeds and the consumers across them,
+// the built-in YDB engine's metric names and help texts where they exist,
+// plus explicit export omission metrics. A scrape through this provider keeps
+// the built-in's lines. Each metric counts what a value holds: a topic is one
+// topic and its consumers, a table's changefeed set its feeds and consumers,
 // a row table's properties its TTL, its column families and its settings, a
 // column table's storage the table and its TTL, a table's index set the global
 // indexes it holds with settings and its vector indexes, and a global index's
@@ -52,7 +52,9 @@ var reportedKinds = []struct {
 	{ResourcePoolClassifierProperties, []reportedMetric{{"resource_pool_classifiers", "Resource pool classifiers", one}}},
 	{TableProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, ttlTable},
 		{"ydb_column_families", "YDB column families a table states, without a default family that states nothing", statedFamilies},
-		{"ydb_table_partitioning", "YDB row tables stating partitioning, read replicas or a key bloom filter", tablePartitioning}}},
+		{"ydb_table_partitioning", "YDB row tables stating partitioning, read replicas or a key bloom filter", tablePartitioning},
+		{"ydb_row_table_omissions", "YDB row tables with native settings an export omits", rowTableOmission}}},
+	{ColumnProperties, []reportedMetric{{"ydb_column_property_omissions", "YDB columns with native settings an export omits", columnPropertyOmission}}},
 	{IndexSettingsProperties, []reportedMetric{{"ydb_index_partitioning", "YDB global indexes stating partitioning or read replicas", indexSettingsStated}}},
 	{ColumnStorageProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, columnTTLTable},
 		{"ydb_column_tables", "YDB tables stored by column", one},
@@ -85,11 +87,20 @@ func Reports() []*protocol.ModelReport {
 		}
 		for _, representation := range []protocol.ValueInput_Representation{protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED} {
 			report := &protocol.ModelReport{Kind: reported.kind, Representation: representation, Metrics: metrics}
-			if reported.kind == ChangefeedProperties {
+			switch reported.kind {
+			case ChangefeedProperties:
 				// One value holds every changefeed of a table. Export warnings
 				// count the feeds, including none for an empty set.
 				report.OmissionLabel = "changefeeds"
 				report.OmissionCountMetric = "changefeeds"
+			case TableProperties:
+				report.OmissionCountMetric = "ydb_row_table_omissions"
+			case ColumnProperties:
+				report.OmissionCountMetric = "ydb_column_property_omissions"
+			case IndexProperties:
+				report.OmissionCountMetric = "indexes"
+			case IndexSettingsProperties:
+				report.OmissionCountMetric = "ydb_index_partitioning"
 			}
 			result = append(result, report)
 		}
