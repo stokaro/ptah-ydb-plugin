@@ -4169,6 +4169,17 @@ dotted limit that names an object the database holds is read as written.
 A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
 whole: a schema file can hold a secret in a string literal.
 
+A statement that changes an object no document of the load declares is refused
+in Ptah's words: an `ALTER TABLE ... ADD CHANGEFEED` of a table, a `COMMENT ON`
+an object, an `ALTER TOPIC ... ADD CONSUMER` of a topic, an `ALTER USER` of a
+user, or an `ALTER SEQUENCE` of a Serial the load does not declare. Under
+`schema.read-sql-undeclared` (contract 25.38, ADR 0120 in Ptah) the refusal is
+an `UNDECLARED` error, which the host reads as its own reader's refusal, so a
+YQL file beside an HCL file that declares the table is told that the YQL files
+change only what the YQL files declare, as the host's embedded engine said. A
+host that does not list the feature gets an `INVALID` error with the same
+words.
+
 A load that declares something no reply field or model of this provider can
 carry is refused by name, with no partial reading:
 
