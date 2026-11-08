@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.31.0, which speaks provider contract 25.33.
+The module pins `provider-sdk` v0.35.0, which speaks provider contract 25.37.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -2659,12 +2659,15 @@ YDB creates no transfer into a missing table (`Path does not exist`). A topic of
 the transfer's own database has to be declared as a topic, where the host also
 sends the transfer comparison the declared topics (`models.declared-objects`,
 contract 25.33, ADR 0109 in Ptah), or be a changefeed of a declared table: YDB
-accepts a transfer of a missing topic and then stops it (`Discovery error`). The
-comparison does not see a table's changefeeds, a facet of the table that the
-row-table comparison owns, so it takes any stream of a declared table for one of
-its changefeeds, where the host's embedded engine also refused a changefeed the
-table does not declare. A target without transfers refuses the transfer by the
-capability first, as the embedded engine did.
+accepts a transfer of a missing topic and then stops it (`Discovery error`). A
+table's changefeeds are a facet the row-table comparison owns; a host that
+sends the transfer comparison the declared changefeeds of the tables
+(`models.declared-facets`, contract 25.37, ADR 0119 in Ptah) has a stream of a
+declared table accepted only when it is one of the table's declared
+changefeeds, as the host's embedded engine did. A host that does not send them
+leaves the comparison to take any stream of a declared table for a changefeed.
+A target without transfers refuses the transfer by the capability first, as the
+embedded engine did.
 
 Not modeled yet: HCL blocks.
 
