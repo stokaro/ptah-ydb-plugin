@@ -58,7 +58,7 @@ func bind(request *protocol.CompareModelsRequest, kinds []string, session string
 			subject.Database = part(subject.Database)
 		}
 	}
-	for _, state := range []*protocol.ComparisonState{bound.Desired, bound.Current} {
+	for _, state := range []*protocol.ComparisonState{bound.Desired, bound.Current, bound.CurrentContext} {
 		for _, record := range state.GetRecords() {
 			identity(record.Subject)
 		}
@@ -160,6 +160,24 @@ func nestedRoot(coverage *protocol.ComparisonCoverage, kind string, subject *pro
 		}
 	}
 	return "", false
+}
+
+// ContextKnowledge is what the current context of request establishes about
+// subject, an object or a facet owner of kind, a model another comparison owns
+// (models.current-context). The coverage and the subject are both read with
+// the session's database named as the host names it: not at all. A request
+// without a current context establishes nothing: every subject is
+// uninspected.
+func ContextKnowledge(request *protocol.CompareModelsRequest, kind string, subject *protocol.ComparisonIdentity) (*protocol.ModelKnowledge, error) {
+	session, err := SessionDatabase(request)
+	if err != nil {
+		return nil, err
+	}
+	bound := proto.CloneOf(subject)
+	if session != "" && bound.GetDatabase().GetNormalized() == session {
+		bound.Database = &protocol.ComparisonPart{}
+	}
+	return knowledge(bind(request, []string{kind}, session).GetCurrentContext().GetCoverage(), kind, bound), nil
 }
 
 // knowledge is what the coverage establishes about one subject. Each

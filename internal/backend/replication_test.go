@@ -1354,6 +1354,88 @@ func TestTransferComparisonAcceptsARecordedSource_FailurePath(t *testing.T) {
 	})
 }
 
+// selectedRead is transferCurrentRequest from a host whose read selected the
+// directory app alone, as a run with a schema selection reads it: the
+// topics and the tables' changefeeds of app are complete, and everything
+// outside it is uninspected. The changefeed region names the database, as
+// the host sends it, and the topic region does not.
+func selectedRead(c *qt.C, spec replication.TransferSpec) *protocol.CompareModelsRequest {
+	c.Helper()
+	request := transferCurrentRequest(c, spec, nil, nil)
+	region := func(kind string, database *protocol.ComparisonPart) *protocol.ComparisonKindCoverage {
+		return &protocol.ComparisonKindCoverage{Model: observedModel(kind), Sources: []*protocol.ComparisonKnowledgeSource{{
+			Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Knowledge is limited to returned subjects and fully listed directories"},
+			Regions: []*protocol.ComparisonRegion{{
+				Scope: &protocol.ComparisonNamespace{Targets: []string{"ydb"}, SubjectKinds: []string{kind}, Database: database,
+					Catalog: &protocol.ComparisonPart{}, Schema: testcomparison.Part("app"), Parent: &protocol.ComparisonPart{}},
+				Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_COMPLETE),
+			}},
+		}}}
+	}
+	request.CurrentContext.Coverage.Kinds = []*protocol.ComparisonKindCoverage{
+		region(schema.ChangefeedProperties, testcomparison.Part("/local")),
+		region(schema.TopicProperties, &protocol.ComparisonPart{}),
+	}
+	return request
+}
+
+// A transfer of a topic in a directory the read did not inspect, such as one
+// a run's schema selection leaves out, is refused: the plan neither creates
+// nor drops the topic, and the comparison cannot say whether it is there.
+// The reason says so, rather than that the plan leaves no such topic, and
+// asks for the directory to be selected. The topic stays refused: YDB
+// accepts a transfer of a missing topic and then stops it. Measured on
+// 26.2.1.14 with a master host: the topic outside the selected directory
+// existed, and the read's coverage left its directory uninspected.
+func TestTransferComparisonRefusesASourceTheReadDidNotInspect_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		source string
+	}{
+		{name: "a topic in another directory", source: "ext/events"},
+		{name: "a topic at the database root", source: "events"},
+		{name: "a stream of a table in another directory", source: "ext/orders/feed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().CompareModels(c.Context(), selectedRead(c, withSource(test.source)))
+
+			c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it reads topic "+test.source+", which the schema "+
+				"declares neither as a topic nor as a changefeed, and which is in a directory this run does not read, so the plan cannot tell whether "+
+				"it is there, and YDB accepts a transfer of a missing topic and then stops it \\(`Discovery error`\\); select the topic's directory, "+
+				"or declare the topic or the changefeed")
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// A source in the directory the read selected is one the read knows: a topic
+// there that the schema does not declare is absent or dropped, and so is a
+// stream of a table there that the schema does not declare, whose table's
+// changefeeds the read covered though no topic region names the table's path.
+// Each is refused as a topic the plan leaves out.
+func TestTransferComparisonRefusesASourceTheReadInspected_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		source string
+	}{
+		{name: "a topic in the selected directory", source: "app/events"},
+		{name: "a stream of an undeclared table in the selected directory", source: "app/orders/feed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().CompareModels(c.Context(), selectedRead(c, withSource(test.source)))
+
+			c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it reads topic "+test.source+", which the schema "+
+				"declares neither as a topic nor as a changefeed, so the plan leaves no such topic, and YDB accepts such a transfer and then stops it "+
+				"\\(`Discovery error`\\); declare the topic or the changefeed")
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
 // A host that does not send the declared topics cannot say a topic is
 // undeclared, so a transfer of a topic is compared as before.
 func TestTransferComparisonWithoutDeclaredTopics_HappyPath(t *testing.T) {

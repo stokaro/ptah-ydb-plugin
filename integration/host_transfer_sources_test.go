@@ -52,6 +52,24 @@ func TestHostRestoresTheChangefeedAKeptTransferReads_HappyPath(t *testing.T) {
 	c.Assert(found, qt.IsTrue)
 }
 
+// outOfScopeTransfer creates the topic events in a directory beside the
+// transfer's, which a run that selects the transfer's directory does not
+// read, and returns that directory and the schema of a transfer that reads
+// the topic into a declared table.
+func outOfScopeTransfer(c *qt.C, h *hostTransfer) (directory, declared string) {
+	c.Helper()
+	_, directory, _ = inspectionFixture(c)
+	topic := path.Join(h.database, directory, "events")
+	c.Assert(execFixtureSchema(c.Context(), h.opened.DB, "CREATE TOPIC `"+topic+"`"), qt.IsNil)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = execFixtureSchema(ctx, h.opened.DB, "DROP TOPIC `"+topic+"`")
+	})
+	return directory, h.orderLog() + "transfers:\n  ingest:\n    schema: " + h.directory + "\n    source: " + path.Join(directory, "events") +
+		"\n    target: " + path.Join(h.directory, "order_log") + "\n    using: " + strconv.Quote(lambdaWriting("a:")) + "\n"
+}
+
 // A transfer whose topic is outside the directories a run selects is refused:
 // the read covers only the selected directory, so it knows nothing of the
 // topic, and the comparison does not assume a topic it did not read exists.
@@ -61,21 +79,32 @@ func TestHostRefusesATransferOfATopicOutsideTheScope_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.DeclaredObjectsFeature)
 	h := newHostTransfer(c)
-	_, other, _ := inspectionFixture(c)
-	topic := path.Join(h.database, other, "events")
-	c.Assert(execFixtureSchema(c.Context(), h.opened.DB, "CREATE TOPIC `"+topic+"`"), qt.IsNil)
-	c.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		_ = execFixtureSchema(ctx, h.opened.DB, "DROP TOPIC `"+topic+"`")
-	})
-	declared := h.orderLog() + "transfers:\n  ingest:\n    schema: " + h.directory + "\n    source: " + path.Join(other, "events") +
-		"\n    target: " + path.Join(h.directory, "order_log") + "\n    using: " + strconv.Quote(lambdaWriting("a:")) + "\n"
+	other, declared := outOfScopeTransfer(c, h)
 
 	refused, err := h.apply(declared)
 
 	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", refused))
 	c.Assert(refused, qt.Contains, "transfer "+h.directory+"/ingest: it reads topic "+other+"/events, which the schema declares neither as a "+
 		"topic nor as a changefeed")
+	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.HasLen, 0)
+}
+
+// A host that sends the current context (models.current-context) says which
+// directories the read covered, so the refusal of a transfer whose topic is
+// outside them says the topic is in a directory the run does not read and
+// asks for it to be selected, rather than saying the plan leaves no such
+// topic: the topic is there, and the plan would not touch it.
+func TestHostRefusesATransferOfATopicOutsideTheScopeAsUnread_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.CurrentContextFeature)
+	h := newHostTransfer(c)
+	other, declared := outOfScopeTransfer(c, h)
+
+	refused, err := h.apply(declared)
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", refused))
+	c.Assert(refused, qt.Contains, "transfer "+h.directory+"/ingest: it reads topic "+other+"/events, which the schema declares neither as a "+
+		"topic nor as a changefeed, and which is in a directory this run does not read, so the plan cannot tell whether it is there")
+	c.Assert(refused, qt.Not(qt.Contains), "the plan leaves no such topic")
 	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.HasLen, 0)
 }
