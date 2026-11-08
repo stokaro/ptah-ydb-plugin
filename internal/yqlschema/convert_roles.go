@@ -59,7 +59,7 @@ func (c *converter) createRole(node *createRole) error {
 func (c *converter) alterUser(node *alterUser) error {
 	role := c.role(node.name)
 	if role == nil || role.Group {
-		return fmt.Errorf("%w: ALTER USER requires a user declared earlier in this desired schema", errUnmodeled)
+		return fmt.Errorf("%w: ALTER USER requires a user declared earlier in this desired schema", errUndeclared)
 	}
 	for _, option := range node.options {
 		if option.login != nil {

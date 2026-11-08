@@ -34,6 +34,14 @@ func (e unsupportedRefusal) Unwrap() error { return errUnsupported }
 // place for, spelled as the host spells it.
 var errUnmodeled = errors.New("the schema model has no place for this statement")
 
+// errUndeclared is the class of a statement that changes an object no
+// document of the load declares, such as an ALTER TABLE of a table no CREATE
+// TABLE of the load creates. It is an errUnmodeled, in its words, so the
+// refusal reads as the host's embedded engine wrote it; the reply reports it
+// as UNDECLARED where the host negotiated provider.SQLUndeclaredFeature (see
+// diagnosticCode).
+var errUndeclared = fmt.Errorf("%w", errUnmodeled)
+
 // Document is one document of a load.
 type Document struct {
 	// Path names the document in a refusal.
@@ -71,6 +79,9 @@ const (
 	// Unsupported is a statement or a declared value the host's reader reads
 	// and this provider has no home for in a SQL schema reading.
 	Unsupported
+	// Undeclared is a statement that changes an object no document of the
+	// load declares.
+	Undeclared
 )
 
 // Read reads the documents of one load in order, as one script: each
@@ -95,8 +106,11 @@ func Read(documents []Document, databasePath string) (*Reading, *Refusal) {
 			if err := c.convert(statement); err != nil {
 				text := statement.at()
 				code := Invalid
-				if errors.Is(err, errUnsupported) {
+				switch {
+				case errors.Is(err, errUnsupported):
 					code = Unsupported
+				case errors.Is(err, errUndeclared):
+					code = Undeclared
 				}
 				return nil, &Refusal{Document: index, Start: text.start, End: text.end, Code: code, Message: err.Error()}
 			}
@@ -360,7 +374,7 @@ func (c *converter) addChangefeed(node *addChangefeed) error {
 }
 
 func undeclaredChangefeed(written, name string) error {
-	return fmt.Errorf("%w: ALTER TABLE %s ADD CHANGEFEED %s names a table this schema does not declare", errUnmodeled, written, name)
+	return fmt.Errorf("%w: ALTER TABLE %s ADD CHANGEFEED %s names a table this schema does not declare", errUndeclared, written, name)
 }
 
 // object returns the object of the kind, directory, parent and name of
@@ -392,7 +406,7 @@ func (c *converter) comment(text string) error {
 	}
 	target := c.commentTarget(query.Statement)
 	if target == nil {
-		return fmt.Errorf("%w: COMMENT ON %s %s names an object this schema does not declare", errUnmodeled, query.Object.Keyword(), query.Path)
+		return fmt.Errorf("%w: COMMENT ON %s %s names an object this schema does not declare", errUndeclared, query.Object.Keyword(), query.Path)
 	}
 	*target = query.Comment
 	return nil
@@ -460,7 +474,7 @@ func (c *converter) alterSequence(node *alterSequence) error {
 	}
 	field := c.serialField(relative)
 	if field == nil {
-		return fmt.Errorf("%w: ALTER SEQUENCE must name the sequence of a Serial column declared earlier in this desired schema", errUnmodeled)
+		return fmt.Errorf("%w: ALTER SEQUENCE must name the sequence of a Serial column declared earlier in this desired schema", errUndeclared)
 	}
 	start, increment := field.IdentityStart, field.IdentityIncrement
 	if node.start != nil {

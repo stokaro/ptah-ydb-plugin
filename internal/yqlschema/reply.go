@@ -133,22 +133,30 @@ func refused(request *protocol.ReadSQLSchemaRequest, refusals []*Refusal) *proto
 		return a.Start - b.Start
 	})
 	reply := &protocol.SQLSchema{}
+	undeclared := slices.Contains(request.GetTargetFeatures(), provider.SQLUndeclaredFeature)
 	for _, refusal := range refusals {
 		document := request.GetDocuments()[refusal.Document]
 		reply.Diagnostics = append(reply.Diagnostics, &protocol.SQLDiagnostic{
-			Code: diagnosticCode(refusal.Code), Severity: protocol.SQLDiagnostic_ERROR, DocumentId: document.GetId(),
+			Code: diagnosticCode(refusal.Code, undeclared), Severity: protocol.SQLDiagnostic_ERROR, DocumentId: document.GetId(),
 			Span: sourceSpan(document.GetText(), refusal.Start, refusal.End), Message: boundMessage(refusal.Message),
 		})
 	}
 	return reply
 }
 
-func diagnosticCode(code RefusalCode) protocol.SQLDiagnostic_Code {
-	switch code {
-	case Syntax:
+// diagnosticCode is the code a refusal of code is reported with. An
+// undeclared statement is UNDECLARED where the host negotiated
+// provider.SQLUndeclaredFeature, so the host reads it as its own reader's
+// refusal and says why a load beside a source in another format cannot
+// change what that source declares, and INVALID otherwise.
+func diagnosticCode(code RefusalCode, undeclared bool) protocol.SQLDiagnostic_Code {
+	switch {
+	case code == Syntax:
 		return protocol.SQLDiagnostic_SYNTAX
-	case Unsupported:
+	case code == Unsupported:
 		return protocol.SQLDiagnostic_UNSUPPORTED
+	case code == Undeclared && undeclared:
+		return protocol.SQLDiagnostic_UNDECLARED
 	default:
 		return protocol.SQLDiagnostic_INVALID
 	}

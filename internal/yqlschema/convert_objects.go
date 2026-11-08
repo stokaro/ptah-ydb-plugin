@@ -101,7 +101,7 @@ func (c *converter) addConsumer(node *addConsumer) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%w: ALTER TOPIC %s ADD CONSUMER names no topic or changefeed this schema declares", errUnmodeled, display)
+	return fmt.Errorf("%w: ALTER TOPIC %s ADD CONSUMER names no topic or changefeed this schema declares", errUndeclared, display)
 }
 
 func withConsumer(consumers []ydbdecl.Consumer, consumer ydbdecl.Consumer, topic string) ([]ydbdecl.Consumer, error) {
