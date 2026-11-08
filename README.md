@@ -4131,8 +4131,14 @@ statement, and claims complete coverage of the
 row-table, column, column-storage, coordination, topic, external data source,
 external table, streaming query, secret, async replication and transfer models,
 of the changefeed model under that feature, so a table a load declares
-without a changefeed is one with none, and of the index settings model where
-the host also lists `schema.observed-index-facets`. A
+without a changefeed is one with none, of the index settings model where
+the host also lists `schema.observed-index-facets`, and of the native index
+model where it also lists `source.index-kinds`, so a table a load declares
+without a vector or full-text index is one with none. A vector or full-text
+index of a CREATE TABLE is no common index then: it reaches the host in the
+native index set of its table, and a local index in the storage of its column
+table, the values a YAML or Go source of the same index declares, so a YQL
+schema renders, plans and applies them as the host's embedded engine did. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -4169,8 +4175,12 @@ carry is refused by name, with no partial reading:
   both `schema.sql-facets` and `schema.observed-index-facets`: without the
   second the comparison could not see what an index holds, as for a YAML or Go
   source;
-- the settings of a vector index, its partitioning among them: its index set
-  is no model a SQL schema reading carries;
+- a vector, full-text or local index, for a host that does not list both
+  `schema.sql-facets` and `source.index-kinds`;
+- a local index of a row table, a vector or full-text index of a column table,
+  and a comment on one of them, with the words a YAML or Go source of the same
+  index is refused with, and a vector index's partitioning, which the native
+  index set does not hold;
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;

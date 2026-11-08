@@ -323,7 +323,7 @@ func (c *converter) createTable(node *createTable) error {
 			Name: identifierPart(declared.name), Fields: identifierParts(declared.columns), Unique: declared.unique, Type: declared.kind,
 			IncludeColumns: identifierParts(declared.include), StorageParams: maps.Clone(declared.storage),
 			TableName: canonicalReference(indexSchema, indexTable), Partitioning: declared.partitioning, Vector: declared.vector,
-			span: c.statement, document: c.document,
+			Options: maps.Clone(declared.options), span: c.statement, document: c.document,
 		}
 		c.file.Indexes = append(c.file.Indexes, index)
 	}
