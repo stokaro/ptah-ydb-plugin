@@ -76,7 +76,7 @@ func TestHostDropsATableWithItsIndexComment_HappyPath(t *testing.T) {
 func TestHostRenamesAnIndexIntoAComment_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.IndexRenamesFeature)
-	requireHostChange(c, "the pairing of an index renamed between two SQL documents, which Ptah v0.23.0 plans as a drop and an add")
+	requireHostChange(c, documentIndexRenameChange)
 	realm := newCLIRealm(c)
 	from := indexCommentDocument(", INDEX old GLOBAL ON (a)", "")
 	to := indexCommentDocument(", INDEX new GLOBAL ON (a)", indexCommentClause("new", "New"))

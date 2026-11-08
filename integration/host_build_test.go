@@ -13,11 +13,15 @@ import (
 const sdkModule = "github.com/stokaro/ptah/provider-sdk"
 
 // releaseHostSDK is the provider SDK version Ptah v0.23.0 is built with. Each
-// host change that requireHostChange names merged on Ptah master while master
-// still pinned this version, and master's next pin came after all of them. A
-// host built with this version or an older one can lack them; a host built
-// with a later one has them all.
+// host change that requireHostChange names merged on Ptah master after
+// v0.23.0 and before the next release, which pins a later SDK. A host built
+// with this version or an older one can lack them; a host built with a later
+// one, a master build or a later release, has them all.
 const releaseHostSDK = "v0.30.0"
+
+// documentIndexRenameChange is the host change that pairs an index renamed
+// between two SQL documents, which Ptah v0.23.0 plans as a drop and an add.
+const documentIndexRenameChange = "the pairing of an index renamed between two SQL documents, which Ptah v0.23.0 plans as a drop and an add"
 
 // requireHostChange skips a test of host behavior that change gives on a host
 // built with provider SDK releaseHostSDK or an older one, such as Ptah
