@@ -122,12 +122,17 @@ func undeclaredDependencies(request *protocol.CompareModelsRequest) error {
 		if source == nil || declaresTopic(request, source) {
 			continue
 		}
-		changefeed, err := declaresChangefeed(request, source, declaredChangefeeds)
-		if err != nil {
-			return err
-		}
-		if changefeed {
-			continue
+		if declaresTable(request, source.GetSchema().GetNormalized()) {
+			if !declaredChangefeeds {
+				continue
+			}
+			changefeed, err := declaresChangefeed(request, source)
+			if err != nil {
+				return err
+			}
+			if changefeed {
+				continue
+			}
 		}
 		return authored.New(fmt.Sprintf("%s: it reads topic %s, which the schema declares neither as a topic nor as a changefeed, so the "+
 			"plan leaves no such topic, and YDB accepts such a transfer and then stops it (`Discovery error`); declare the topic or the "+
@@ -160,20 +165,11 @@ func declaresTopic(request *protocol.CompareModelsRequest, topic *protocol.Compa
 	})
 }
 
-// declaresChangefeed reports whether topic is a changefeed of a declared
-// table: the stream named as a changefeed under the table's path. With facets
-// (the host sends the declared changefeeds) the table has to declare a
-// changefeed of the stream's name; without, any stream of a declared table
-// counts.
-func declaresChangefeed(request *protocol.CompareModelsRequest, topic *protocol.ComparisonIdentity, facets bool) (bool, error) {
-	tablePath := topic.GetSchema().GetNormalized()
-	if !declaresTable(request, tablePath) {
-		return false, nil
-	}
-	if !facets {
-		return true, nil
-	}
-	directory, name := path.Split(tablePath)
+// declaresChangefeed reports whether the declared changefeeds the host sent
+// (models.declared-facets) give the table at topic's path a changefeed of
+// topic's name, the stream YDB keeps for it.
+func declaresChangefeed(request *protocol.CompareModelsRequest, topic *protocol.ComparisonIdentity) (bool, error) {
+	directory, name := path.Split(topic.GetSchema().GetNormalized())
 	directory = strings.TrimSuffix(directory, "/")
 	for _, facet := range request.GetDeclaredFacets() {
 		subject := facet.GetSubject()
