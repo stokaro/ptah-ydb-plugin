@@ -33,8 +33,9 @@ import (
 // its own with the directives of its children: a coordination node, a topic
 // and its consumers, a secret by the variable its value comes from, an
 // external data source and an external table, a resource pool and a
-// classifier, and a streaming query. HCL declares a coordination node, in a
-// coordination_node block, and no other object. The facets of one table are
+// classifier, a streaming query, an async replication and its items, and a
+// transfer. HCL declares a coordination node in a coordination_node block,
+// and no other object. The facets of one table are
 // written together as the table declaration the table decoders read (see
 // sourceencode.EncodeTable); HCL spells a table's TTL alone, in the table's
 // platform "ydb" block where the host reads it, writes there the empty
@@ -272,6 +273,8 @@ func encodeNative(format protocol.SourceDocument_Format, value *protocol.Normali
 		schema.ResourcePoolProperties:           sourceencode.ResourcePool,
 		schema.ResourcePoolClassifierProperties: sourceencode.ResourcePoolClassifier,
 		schema.StreamingQueryProperties:         sourceencode.StreamingQuery,
+		schema.ReplicationProperties:            sourceencode.Replication,
+		schema.TransferProperties:               sourceencode.Transfer,
 	}
 	encode, known := encoders[value.GetValue().GetKind()]
 	if !known {

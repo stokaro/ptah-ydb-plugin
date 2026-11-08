@@ -119,6 +119,10 @@ func Noun(kind string) string {
 		return "resource pool classifier"
 	case schema.StreamingQueryProperties:
 		return "streaming query"
+	case schema.ReplicationProperties:
+		return "async replication"
+	case schema.TransferProperties:
+		return "transfer"
 	case schema.CoordinationProperties:
 		return "coordination node"
 	case schema.ViewProperties:
