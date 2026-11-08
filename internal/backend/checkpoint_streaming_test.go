@@ -48,11 +48,13 @@ func TestCheckpointEmptyBaselineSelectsStreamingQuery(t *testing.T) {
 			planned, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(planned.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, planned), qt.IsNil)
 			rendering := testplanning.RenderRequest(backend.Description(), planned, request.Capabilities)
 			rendering.Form = protocol.RenderRequest_TEXT
 			rendering.TargetFeatures = []string{provider.TextUnitsFeature}
 			rendered, err := backend.New().Render(c.Context(), rendering)
 			c.Assert(err, qt.IsNil)
+			c.Assert(rendered.Complete, qt.IsTrue)
 			c.Assert(rendered.Units, qt.HasLen, 1)
 			c.Assert(rendered.Units[0].GetSql(), qt.Contains, side.statement)
 		})
