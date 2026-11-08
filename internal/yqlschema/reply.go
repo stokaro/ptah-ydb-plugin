@@ -299,8 +299,7 @@ func (w *wiring) tables(reading *Reading) {
 	}
 }
 
-// grants writes the grants of the reading, then its revocations. A grant on a
-// resource pool whose name the host would rename is refused.
+// grants writes the grants of the reading, then its revocations.
 func (w *wiring) grants(reading *Reading) {
 	for _, revoked := range []bool{false, true} {
 		grants := reading.Grants
@@ -308,10 +307,6 @@ func (w *wiring) grants(reading *Reading) {
 			grants = reading.RevokedGrants
 		}
 		for _, grant := range grants {
-			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
-				w.gaps = append(w.gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
-					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
-			}
 			w.trace(protocol.SQLObjectTrace_GRANTS, len(w.reply.Grants), grant.document, grant.span)
 			w.reply.Grants = append(w.reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
 				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})
@@ -664,7 +659,7 @@ var limitedKinds = map[string]struct {
 }{
 	"secret":                   {schema.SecretProperties, topicLimit, "the source leaves secrets unmanaged"},
 	"coordination_node":        {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
-	"streaming_query":          {schema.StreamingQueryProperties, topicLimit, "the source leaves streaming queries unmanaged"},
+	"streaming_query":          {schema.StreamingQueryProperties, coordinationLimit, "the source leaves streaming queries unmanaged"},
 	"topic":                    {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
 	"external_data_source":     {schema.ExternalSourceProperties, externalLimit, "the source leaves external data sources unmanaged"},
 	"external_table":           {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},
@@ -754,8 +749,8 @@ func externalLimit(written string) (directory, name string) {
 	return path.Schema, path.Name
 }
 
-// coordinationLimit is the directory and the name of the node a header
-// names: a path, or a name qualified by its directory with a dot.
+// coordinationLimit is the directory and name of a coordination node or
+// streaming query named by a path or a dot-qualified directory.
 func coordinationLimit(written string) (directory, name string) {
 	physical := written
 	if !strings.Contains(written, "/") {

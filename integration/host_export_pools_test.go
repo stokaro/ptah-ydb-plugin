@@ -6,6 +6,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -55,4 +57,38 @@ func TestHostIntrospectOfADirectoryWritesTheDatabasePools_HappyPath(t *testing.T
 	c.Assert(source, qt.Contains, `//ptah:schema:resourcepool name="default"`, qt.Commentf("%s", source))
 	c.Assert(source, qt.Not(qt.Contains), `kind="resource_pool`, qt.Commentf("%s", source))
 	c.Assert(source, qt.Contains, `name="items"`, qt.Commentf("%s", source))
+}
+
+// Ported from TestRender_ResourcePool_AloneKeepsItsStruct. A Go export of
+// an otherwise empty directory still needs the struct that owns standalone
+// annotations. First the database's default pool, then a classifier on that
+// pool, must be attached to that struct without a table declaration. A live
+// YDB read always includes the default pool, so the classifier is not its
+// only global object as it was in the old synthetic host test.
+func TestHostGoExportKeepsTheStructForOnlyWorkloadObjects_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.DatabaseKindsFeature)
+	opened, directory, _ := lockFixture(c)
+	enableResourcePools(c, opened)
+	assertWorkloadOnly := func(source string, annotations ...string) {
+		c.Helper()
+		c.Assert(source, qt.Contains, "type PtahSchemaObjects struct{}", qt.Commentf("%s", source))
+		c.Assert(source, qt.Not(qt.Contains), "//ptah:schema:table", qt.Commentf("%s", source))
+		for _, annotation := range annotations {
+			c.Assert(source, qt.Contains, annotation, qt.Commentf("%s", source))
+			c.Assert(strings.Index(source, annotation) < strings.Index(source, "type PtahSchemaObjects struct{}"), qt.IsTrue)
+		}
+	}
+
+	poolOnly := introspectDirectory(c, directory)
+	assertWorkloadOnly(poolOnly, `//ptah:schema:resourcepool name="default"`)
+
+	classifier := directory + "_route"
+	rank, _ := workloadRanks(directory)
+	createSchemaObject(c, opened,
+		"CREATE RESOURCE POOL CLASSIFIER `"+classifier+"` WITH (RESOURCE_POOL = 'default', MEMBER_NAME = '"+workloadMember(directory)+"', RANK = "+strconv.FormatInt(rank, 10)+")",
+		"DROP RESOURCE POOL CLASSIFIER `"+classifier+"`")
+	withClassifier := introspectDirectory(c, directory)
+	assertWorkloadOnly(withClassifier, `//ptah:schema:resourcepool name="default"`,
+		`//ptah:schema:resourcepool:classifier name="`+classifier+`"`)
 }

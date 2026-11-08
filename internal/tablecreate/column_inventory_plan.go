@@ -12,6 +12,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -105,7 +106,11 @@ func bindInventorySources(table *protocol.PlanningTable, result []inventoryStep,
 // carries none for the column describes a column with no native setting of
 // its own, no family and a default the common column states whole, and
 // heldColumnFacet returns that observation: the one a declaration of the
-// column with its common default as the native literal converts to. The host
+// column with its common default as the native literal converts to, or, for
+// a Serial column, with the sequence of the start and the increment the
+// common column states. The host's reverse plan reads a column a forward
+// plan changed that way, so the rollback of a sequence change finds the
+// sequence the forward change leaves (stokaro/ptah#5735). The host
 // builds such a side from a schema file for a diff of two files, where only a
 // column whose declaration states a native setting carries a facet; the
 // host's embedded engine planned a change of such a column offline. A read
@@ -119,7 +124,15 @@ func heldColumnFacet(owner *protocol.Reference, table *protocol.PlanningTable, o
 		return nil, nil
 	}
 	intent := &native.ColumnIntent{}
-	if text := common.GetDefaultExpression(); text != "" {
+	switch text := common.GetDefaultExpression(); {
+	case common.GetAutoIncrement():
+		settings, err := ydbsequence.Parse(common.GetIdentityStart(), common.GetIdentityIncrement())
+		if err != nil {
+			return nil, nil
+		}
+		intent.DefaultValue = &native.ColumnIntent_Sequence{Sequence: &native.SequenceIntent{Name: new(ydbsequence.Name(common.GetName())),
+			StartValue: new(settings.Start), Increment: new(settings.Increment)}}
+	case text != "":
 		value, ok := ydbtype.LiteralValue(text)
 		if !ok {
 			return nil, nil
