@@ -26,6 +26,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // feedShape is what the server holds of one changefeed: its mode, its topic's
@@ -369,9 +370,9 @@ func addUnsupportedChangefeed(c *qt.C, opened *connection.Connection, absolute s
 }
 
 // Ported from TestSchemaInspectHCLKeepsAnOwnersLimitInTheHeader: an HCL export
-// from either host surface keeps a changefeed it cannot declare. The current
-// HCL contract leaves changefeeds unclaimed without their platform block, so
-// applying either export keeps the feed and its unsupported attributes.
+// from either host surface records a changefeed it cannot declare in the
+// captured coverage header. Applying either export keeps the feed and its
+// unsupported attributes.
 func TestHostHCLInspectKeepsUnsupportedChangefeed_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	h := newHostChangefeeds(c)
@@ -383,6 +384,9 @@ func TestHostHCLInspectKeepsUnsupportedChangefeed_HappyPath(t *testing.T) {
 	c.Assert(compatExit, qt.Equals, 0, qt.Commentf("%s\n%s", compat, compatNotes))
 	for _, exported := range []struct{ name, document, notes string }{{"native", native, nativeNotes}, {"atlas", compat, compatNotes}} {
 		c.Assert(exported.document, qt.Contains, `table "events"`, qt.Commentf("%s: %s", exported.name, exported.document))
+		c.Assert(exported.document, qt.Contains, "// ptah:feature-coverage ", qt.Commentf("%s: %s", exported.name, exported.document))
+		c.Assert(exported.document, qt.Contains, schema.ChangefeedProperties, qt.Commentf("%s: %s", exported.name, exported.document))
+		c.Assert(exported.document, qt.Contains, "changefeed tagged is not represented in HCL", qt.Commentf("%s: %s", exported.name, exported.document))
 		c.Assert(exported.notes, qt.Contains, "cannot be represented in HCL", qt.Commentf("%s: %s", exported.name, exported.notes))
 		c.Assert(hostPlanned(c, h.directory, "hcl", exported.document), qt.HasLen, 0, qt.Commentf("%s: %s", exported.name, exported.document))
 	}

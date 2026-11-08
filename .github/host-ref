@@ -1,0 +1,3 @@
+# The HCL changefeed coverage assertion needs the host loss-coverage fix in
+# stokaro/ptah#5795. Remove this file after that PR merges.
+fix/issue206-hcl-incomplete-platform-coverage
