@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"

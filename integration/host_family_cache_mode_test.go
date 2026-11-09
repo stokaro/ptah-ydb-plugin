@@ -10,12 +10,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protowire"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"

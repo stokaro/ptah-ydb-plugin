@@ -12,7 +12,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah/provider-sdk/provider"
+	"ptah.run/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"

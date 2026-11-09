@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // alteredAccess is the access reason of a change to a table that exists: YDB

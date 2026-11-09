@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Operation_V1"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"

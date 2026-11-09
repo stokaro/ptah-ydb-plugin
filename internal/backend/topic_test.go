@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
+	"ptah.run/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"

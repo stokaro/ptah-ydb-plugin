@@ -11,13 +11,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
+	"ptah.run/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"

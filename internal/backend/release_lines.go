@@ -3,7 +3,7 @@ package backend
 import (
 	"strings"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // unprobedReason is why four of the six lines run no job in the plugin's own

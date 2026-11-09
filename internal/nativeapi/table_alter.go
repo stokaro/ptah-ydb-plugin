@@ -9,11 +9,11 @@ import (
 	"slices"
 	"time"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"

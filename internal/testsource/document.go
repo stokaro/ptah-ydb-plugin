@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // YAMLDocument captures one document-level mapping under its declared model.

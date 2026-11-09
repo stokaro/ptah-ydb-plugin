@@ -7,7 +7,6 @@ import (
 	"path"
 	"strings"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -16,6 +15,7 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"

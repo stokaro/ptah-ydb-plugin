@@ -59,7 +59,7 @@ jobs:
             -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 
       - name: Check the built provider against the contract
-        run: go run github.com/stokaro/ptah/provider-sdk/cmd/ptah-provider-conformance -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
+        run: go run ptah.run/provider-sdk/cmd/ptah-provider-conformance -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
 
       - name: Test the built provider
         env:
@@ -163,7 +163,7 @@ jobs:
             -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 
       - name: Check the built provider against the contract
-        run: go run github.com/stokaro/ptah/provider-sdk/cmd/ptah-provider-conformance -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
+        run: go run ptah.run/provider-sdk/cmd/ptah-provider-conformance -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
 
       - name: Test the built provider
         env:

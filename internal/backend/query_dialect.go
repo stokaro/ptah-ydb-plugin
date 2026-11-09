@@ -1,6 +1,6 @@
 package backend
 
-import protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+import protocol "ptah.run/provider-sdk/protocol/experimental"
 
 // queryDialect is the spelling the host's query builder reads for YDB, the
 // values of the host's YDB dialect descriptor (internal/builtindialects):

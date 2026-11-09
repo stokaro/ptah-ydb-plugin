@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // The functions in this file answer the SDK's lint.migrations requests. The

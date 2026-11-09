@@ -10,7 +10,7 @@ import (
 )
 
 // sdkModule is the module of the provider SDK a host binary is built with.
-const sdkModule = "github.com/stokaro/ptah/provider-sdk"
+const sdkModule = "ptah.run/provider-sdk"
 
 // releaseHostSDK is the provider SDK version Ptah v0.23.0 is built with. Each
 // host change that requireHostChange names merged on Ptah master after

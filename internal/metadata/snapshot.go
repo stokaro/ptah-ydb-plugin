@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+	"ptah.run/provider-sdk/provider"
 )
 
 // Snapshot owns a private immutable spool. Memory is bounded by a record and

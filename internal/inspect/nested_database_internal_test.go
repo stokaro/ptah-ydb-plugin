@@ -14,13 +14,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/anypb"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"

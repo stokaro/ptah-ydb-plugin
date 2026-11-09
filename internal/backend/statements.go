@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"time"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
+	"ptah.run/provider-sdk/provider"
+	"ptah.run/provider-sdk/runtime"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"

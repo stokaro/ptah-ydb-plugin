@@ -3,7 +3,7 @@ package inspect
 import (
 	"slices"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // primaryKey gives table the record of its primary key, the columns key

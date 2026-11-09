@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	wire "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
+	"ptah.run/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"

@@ -4,7 +4,7 @@ package streamingcompare
 import (
 	"context"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"

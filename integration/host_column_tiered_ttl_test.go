@@ -13,8 +13,8 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"

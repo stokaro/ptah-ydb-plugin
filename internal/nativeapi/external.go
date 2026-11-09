@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah/provider-sdk/modeljson"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -16,6 +14,8 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"ptah.run/provider-sdk/modeljson"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"

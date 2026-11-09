@@ -9,10 +9,10 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/stokaro/ptah/provider-sdk/modeljson"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"ptah.run/provider-sdk/modeljson"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // objectChanges describes the change and operation models of one kind of

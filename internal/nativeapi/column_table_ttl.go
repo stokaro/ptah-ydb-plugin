@@ -7,9 +7,9 @@ import (
 	"path"
 	"slices"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"

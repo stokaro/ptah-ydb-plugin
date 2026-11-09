@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strconv"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // Runner is the exact SQL connection or transaction selected by the session.

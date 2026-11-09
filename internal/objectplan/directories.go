@@ -3,7 +3,7 @@ package objectplan
 import (
 	"strings"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // directoryKind identifies a directory of the session's database as the

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 func convertedEnvelope(source *protocol.Envelope, definition *protocol.ValueModel, payload proto.Message, normalize func(*protocol.Envelope) (*protocol.Envelope, error)) (*protocol.Envelope, error) {

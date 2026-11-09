@@ -12,7 +12,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"

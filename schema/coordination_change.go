@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/stokaro/ptah/provider-sdk/modeljson"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"ptah.run/provider-sdk/modeljson"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // CoordinationChange identifies a complete native before/desired after change.

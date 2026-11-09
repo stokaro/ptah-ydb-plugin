@@ -15,13 +15,13 @@ import (
 	"unicode"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_DynamicConfig_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_DynamicConfig"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
+	"ptah.run/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"

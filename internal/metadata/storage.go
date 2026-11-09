@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // Runner is a pinned SQL transaction; the caller owns its commit or rollback.
