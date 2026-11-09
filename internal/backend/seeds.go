@@ -11,14 +11,14 @@ import (
 	"time"
 	"unicode/utf8"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
+	"ptah.run/provider-sdk/runtime"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"

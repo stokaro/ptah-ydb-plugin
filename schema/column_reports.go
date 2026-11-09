@@ -1,7 +1,7 @@
 package schema
 
 import (
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )

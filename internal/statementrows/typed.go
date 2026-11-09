@@ -5,8 +5,8 @@ import (
 	"math"
 	"math/big"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-sdk/v3/types"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // maxTimestampSeconds is the first second a YDB Timestamp cannot hold:

@@ -3,7 +3,7 @@ package tablecreate
 import (
 	"fmt"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // Preparation, CREATE prediction, and planning interpret the same captured

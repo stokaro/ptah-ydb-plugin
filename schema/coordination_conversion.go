@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"slices"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // ConvertCoordination preserves timing, modes, and access constraints offline.

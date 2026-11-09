@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
@@ -16,6 +15,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"

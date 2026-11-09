@@ -8,7 +8,6 @@ import (
 	"path"
 	"time"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_Replication_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_Replication"
@@ -19,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/schema"

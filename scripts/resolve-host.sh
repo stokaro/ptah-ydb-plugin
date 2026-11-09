@@ -59,13 +59,20 @@ tags=$(gh api 'repos/stokaro/ptah/releases?per_page=30' \
 while read -r tag; do
 	[[ -n "$tag" ]] || continue
 	gomod=$(gh api "repos/stokaro/ptah/contents/go.mod?ref=$tag" --jq '.content' | base64 -d)
-	sdk=$(awk '$1 == "github.com/stokaro/ptah/provider-sdk" { print $2; exit }' <<<"$gomod")
+	# A release requires the SDK as ptah.run/provider-sdk. Releases up to Ptah
+	# v0.25.0 require it under the path SDK releases up to v0.39.0 declare.
+	sdk_module=ptah.run/provider-sdk
+	sdk=$(awk -v module="$sdk_module" '$1 == module { print $2; exit }' <<<"$gomod")
+	if [[ -z "$sdk" ]]; then
+		sdk_module=github.com/stokaro/ptah/provider-sdk
+		sdk=$(awk -v module="$sdk_module" '$1 == module { print $2; exit }' <<<"$gomod")
+	fi
 	if [[ -z "$sdk" ]]; then
 		# Older releases predate executable providers.
 		printf 'release %s pins no provider-sdk\n' "$tag" >&2
 		break
 	fi
-	dir=$(cd "$work" && GOFLAGS=-mod=mod go mod download -json "github.com/stokaro/ptah/provider-sdk@$sdk" | jq -r '.Dir')
+	dir=$(cd "$work" && GOFLAGS=-mod=mod go mod download -json "$sdk_module@$sdk" | jq -r '.Dir')
 	major=$(grep -hoE 'const Revision uint32 = [0-9]+' "$dir"/provider/*.go | grep -oE '[0-9]+$' | head -1)
 	minor=$(grep -hoE 'const ContractMinor uint32 = [0-9]+' "$dir"/provider/*.go | grep -oE '[0-9]+$' | head -1 || true)
 	minor=${minor:-0}

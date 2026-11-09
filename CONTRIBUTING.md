@@ -54,9 +54,9 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-At this revision, [`go.mod`](go.mod) pins `provider-sdk` v0.38.0, whose
-[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.38.0/provider-sdk/provider/contract.go)
-speak 25.40. The provider's [description](internal/backend/provider.go)
+At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.40.0, whose
+[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.40.0/provider-sdk/provider/contract.go)
+speak 25.41. The provider's [description](internal/backend/provider.go)
 requires only 25.7 to start; later features are negotiated with the host.
 Check those source files when changing a dependency or capability. Builds
 require neither the Ptah application source nor a local SDK checkout.
@@ -132,7 +132,7 @@ the suite's canary. A release records its model identities there with the
 suite's command:
 
 ```sh
-GOWORK=off go run github.com/stokaro/ptah/provider-sdk/cmd/ptah-provider-conformance \
+GOWORK=off go run ptah.run/provider-sdk/cmd/ptah-provider-conformance \
   models -executable bin/ptah-plugin-ydb -provider-id github.com/stokaro/ptah-ydb-plugin
 ```
 

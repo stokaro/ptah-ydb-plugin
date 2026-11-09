@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 // distanceOrder is the ORDER BY a nearest-neighbor search sorts by: the Knn

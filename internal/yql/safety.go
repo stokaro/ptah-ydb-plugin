@@ -3,7 +3,7 @@ package yql
 import (
 	"slices"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 )
 
 func prefix(words []string, wanted ...string) bool {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	protocol "ptah.run/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
