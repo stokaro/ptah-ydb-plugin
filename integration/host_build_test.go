@@ -4,13 +4,17 @@ package integration_test
 
 import (
 	"debug/buildinfo"
+	"slices"
 
 	qt "github.com/frankban/quicktest"
 	"golang.org/x/mod/semver"
 )
 
-// sdkModule is the module of the provider SDK a host binary is built with.
-const sdkModule = "ptah.run/provider-sdk"
+// providerSDKModules are the module paths a host binary links the provider SDK
+// under: ptah.run/provider-sdk, or, for Ptah releases up to v0.25.0, the GitHub
+// path that SDK releases up to v0.39.0 declare. The SDK kept one version
+// sequence across both, so a version read under either compares with the other.
+var providerSDKModules = []string{"ptah.run/provider-sdk", "github.com/stokaro/ptah/provider-sdk"}
 
 // releaseHostSDK is the provider SDK version Ptah v0.23.0 is built with. Each
 // host change that requireHostChange names merged on Ptah master after
@@ -38,7 +42,7 @@ func requireHostChange(c *qt.C, change string) {
 	c.Helper()
 	version := hostSDKVersion(c)
 	if semver.Compare(version, releaseHostSDK) <= 0 {
-		c.Skipf("the selected host is built with %s %s and lacks %s", sdkModule, version, change)
+		c.Skipf("the selected host is built with provider SDK %s and lacks %s", version, change)
 	}
 }
 
@@ -49,7 +53,7 @@ func requireHostOmissionCounts(c *qt.C) {
 	c.Helper()
 	version := hostSDKVersion(c)
 	if semver.Compare(version, omissionCountsHostSDK) < 0 {
-		c.Skipf("the selected host is built with %s %s, before omission counts in %s", sdkModule, version, omissionCountsHostSDK)
+		c.Skipf("the selected host is built with provider SDK %s, before omission counts in %s", version, omissionCountsHostSDK)
 	}
 }
 
@@ -61,16 +65,16 @@ func hostSDKVersion(c *qt.C) string {
 	info, err := buildinfo.ReadFile(pinnedHost(c))
 	c.Assert(err, qt.IsNil)
 	for _, module := range info.Deps {
-		if module.Path != sdkModule {
+		if !slices.Contains(providerSDKModules, module.Path) {
 			continue
 		}
 		if module.Replace != nil {
 			module = module.Replace
 		}
 		c.Assert(semver.IsValid(module.Version), qt.IsTrue,
-			qt.Commentf("the host binary names %s at %q, which is no module version", sdkModule, module.Version))
+			qt.Commentf("the host binary names %s at %q, which is no module version", module.Path, module.Version))
 		return module.Version
 	}
-	c.Fatalf("the host binary names no %s module", sdkModule)
+	c.Fatalf("the host binary names no provider SDK module (%v)", providerSDKModules)
 	return ""
 }
