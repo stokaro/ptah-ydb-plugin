@@ -109,7 +109,9 @@ type session struct {
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
+	return []string{
+		"security.vulnerability-scan",
+		provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
 		// A read reports each table's primary key in key order, and the
 		// planner of a row table plans the change of it the host hands over
 		// as an alteration of the table; see inspect.Common.PrimaryKeys and

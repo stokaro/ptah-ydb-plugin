@@ -29,6 +29,12 @@ The provider handles row and column tables, indexes, topics, changefeeds, coordi
 
 YDB schema changes are not transactional. An inspection or export can report incomplete catalog coverage or a format-specific loss; read those diagnostics before treating a file as a complete copy of a database. The provider's declared release lines are [in source](https://github.com/stokaro/ptah-ydb-plugin/blob/master/internal/backend/release_lines.go): CI exercises YDB 25.1 and 26.2, while the intermediate declared lines are best effort. Server features can further limit an operation.
 
+## Server vulnerability scans
+
+The provider advertises `security.vulnerability-scan` at provider and YDB engine scope. Ptah reads `SELECT Version()` during connection setup and matches that server version against its pinned YDB server advisories. The provider does not download advisories or inspect application dependencies.
+
+For a self-managed YDB server, run `ptah db vulnerabilities --db-url "$DATABASE_URL"`. The default deployment is `self-managed`. If the service operator controls server patching, pass `--deployment managed`; Ptah then reports `not_applicable` and does not match server CVEs. The endpoint alone does not establish who patches the server. See the [vulnerability scan guide](https://docs.ptah.run/edge/operate/vulnerability-scan/) for source coverage and CI policy.
+
 ## Current status
 
 The built-in YDB implementation was [removed from Ptah](https://github.com/stokaro/ptah/pull/5298). Official providers are [installed separately](https://github.com/stokaro/ptah/blob/master/docs/adr/0031-official-providers-are-installed-separately-and-ptah-pins-no-provider-release.md); they are not bundled with a Ptah release. The [parity tracker](https://github.com/stokaro/ptah-ydb-plugin/issues/206) is closed, and release archives and verification workflows are in use. Limits are described by operation in the reference pages, rather than as an unfinished extraction checklist.
