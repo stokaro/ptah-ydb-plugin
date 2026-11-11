@@ -11,6 +11,8 @@ sourceOfTruth:
   - internal/devdatabase
   - internal/devclean
   - cmd/ptah-plugin-ydb
+  - internal/vulnerability
+  - .github/workflows/security-snapshots.yml
   - stokaro/ptah#4204
 generated: false
 searchAliases:
@@ -66,6 +68,27 @@ The provider owns the grammar of the address: the database path, the credential
 parameters, the balancer settings and the `monitoring` endpoint it reads the
 cluster's feature flags from. See
 [Connection addresses](connections-and-execution.md#connection-addresses).
+
+## Server vulnerability scans
+
+Run `ptah db vulnerabilities --db-url "$DATABASE_URL"` against a self-managed
+YDB server. The provider sends its [reviewed server advisory
+snapshot](../internal/vulnerability/ydb.json) to Ptah when the two negotiate
+`security.advisory-snapshot`. Ptah matches the server version read during
+connection setup. A provider without a reviewed snapshot produces an
+`unassessed` result unless you select a local advisory file.
+
+The [daily source check](../.github/workflows/security-snapshots.yml) reads
+YDB's security changelog and opens a draft pull request for a changed advisory
+body. Review the CVE scope and version ranges, update the snapshot, and remove
+the `review/ydb.json` report before merging. The source also names a Go SDK
+CVE, which does not affect the YDB server. A changed documentation revision
+outside the advisory body creates no review report.
+
+For a managed service, pass `--deployment managed`. Ptah reports
+`not_applicable` because the service operator controls server patching. See the
+[vulnerability scan guide](https://docs.ptah.run/edge/operate/vulnerability-scan/)
+for coverage and CI failure policy.
 
 ## Dev, shadow and scratch databases
 

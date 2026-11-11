@@ -1,0 +1,111 @@
+name: YDB server advisory snapshot
+
+on:
+  schedule:
+    - cron: '31 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: ydb-security-snapshots
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Check YDB server advisories
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Select review branch
+        id: branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr list --state open --limit 200 --json number,headRefName >"$RUNNER_TEMP/security-prs.json"
+          count="$(jq '[.[] | select(.headRefName | startswith("automation/ydb-cve-refresh-"))] | length' "$RUNNER_TEMP/security-prs.json")"
+          if [ "$count" -gt 1 ]; then
+            echo 'More than one YDB advisory refresh pull request is open' >&2
+            exit 1
+          fi
+          if [ "$count" -eq 1 ]; then
+            branch="$(jq -r '.[] | select(.headRefName | startswith("automation/ydb-cve-refresh-")) | .headRefName' "$RUNNER_TEMP/security-prs.json")"
+            number="$(jq -r '.[] | select(.headRefName | startswith("automation/ydb-cve-refresh-")) | .number' "$RUNNER_TEMP/security-prs.json")"
+            git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            git checkout -q -B "$branch" "origin/$branch"
+            git merge --no-edit -q origin/master
+            echo "number=$number" >>"$GITHUB_OUTPUT"
+          else
+            branch="automation/ydb-cve-refresh-$(date -u +%Y%m%d)-${GITHUB_RUN_ID}"
+            git checkout -q -b "$branch" origin/master
+            echo 'number=' >>"$GITHUB_OUTPUT"
+          fi
+          echo "name=$branch" >>"$GITHUB_OUTPUT"
+
+      - name: Check source and prepare snapshot changes
+        id: update
+        run: |
+          set -euo pipefail
+          go run ./internal/cmd/securitysnapshots | tee "$RUNNER_TEMP/security-snapshots.log"
+          git add -A -- internal/vulnerability/
+          if git diff --cached --quiet; then
+            echo 'changed=false' >>"$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >>"$GITHUB_OUTPUT"
+            git diff --cached --stat
+          fi
+
+      - name: Summarize source check
+        run: |
+          {
+            printf '## YDB server advisory source check\n\n'
+            printf 'The released provider uses only its reviewed, bundled snapshot.\n\n'
+            sed 's/^/- /' "$RUNNER_TEMP/security-snapshots.log"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Publish review pull request
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+          NUMBER: ${{ steps.branch.outputs.number }}
+        run: |
+          set -euo pipefail
+          git config user.name 'ydb-provider-automation'
+          git config user.email 'ydb-provider-automation@users.noreply.github.com'
+          git commit -m 'chore(security): refresh reviewed YDB server advisories'
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+          cat >"$RUNNER_TEMP/security-body.md" <<'BODY'
+          The daily task checked the official YDB security changelog.
+
+          If this PR contains `internal/vulnerability/review/ydb.json`, review each changed server CVE and its affected and fixed versions against the vendor source. The report lists observed IDs; it does not establish version ranges. Update the reviewed snapshot and remove the review file before merging. The source also names a Go SDK CVE that is outside server scope.
+
+          If only the retrieval time changed, verify that the advisory body is unchanged. The provider bundles the snapshot after this PR is merged and released. Scans make no network request.
+
+          Supports stokaro/ptah#5828.
+          BODY
+          if [ -n "$NUMBER" ]; then
+            gh pr edit "$NUMBER" --body-file "$RUNNER_TEMP/security-body.md"
+          else
+            gh pr create --draft --base master --head "$BRANCH" \
+              --title 'chore(security): refresh YDB server advisories' \
+              --body-file "$RUNNER_TEMP/security-body.md"
+          fi
+          # A GITHUB_TOKEN push does not trigger ordinary push checks. A
+          # workflow_dispatch run is attached to the same commit.
+          gh workflow run ci.yml --ref "$BRANCH"

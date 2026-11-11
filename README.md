@@ -31,7 +31,7 @@ YDB schema changes are not transactional. An inspection or export can report inc
 
 ## Server vulnerability scans
 
-The provider advertises `security.vulnerability-scan` at provider and YDB engine scope. Ptah reads `SELECT Version()` during connection setup and matches that server version against its pinned YDB server advisories. The provider does not download advisories or inspect application dependencies.
+The provider advertises `security.vulnerability-scan` and `security.advisory-snapshot` at provider and YDB engine scope. It [bundles the reviewed YDB server advisories](internal/vulnerability/ydb.json) and sends them to Ptah with its engine description. Ptah reads `SELECT Version()` during connection setup and matches that version against the provider's snapshot. Neither process downloads advisories during a scan or inspects application dependencies. The [daily source check](.github/workflows/security-snapshots.yml) updates the snapshot through a review pull request.
 
 For a self-managed YDB server, run `ptah db vulnerabilities --db-url "$DATABASE_URL"`. The default deployment is `self-managed`. If the service operator controls server patching, pass `--deployment managed`; Ptah then reports `not_applicable` and does not match server CVEs. The endpoint alone does not establish who patches the server. See the [vulnerability scan guide](https://docs.ptah.run/edge/operate/vulnerability-scan/) for source coverage and CI policy.
 
