@@ -52,6 +52,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/vulnerability"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
@@ -110,7 +111,8 @@ type session struct {
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
 	return []string{
-		"security.vulnerability-scan",
+		provider.VulnerabilityScanFeature,
+		provider.SecurityAdvisorySnapshotFeature,
 		provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
 		// A read reports each table's primary key in key order, and the
 		// planner of a row table plans the change of it the host hands over
@@ -749,6 +751,7 @@ func buildDescription() *protocol.Description {
 				ConnectionCapabilitySource: connectionCapabilitySource,
 				SqlSchema:                  sqlSchemaDeclaration(),
 				Features:                   engineFeatures(),
+				AdvisorySnapshotJson:       vulnerability.Snapshot(),
 				Embeddings:                 &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes},
 				CommonObjects:              commonobject.Support(),
 				ScopeSelections:            scopeSelections(),
