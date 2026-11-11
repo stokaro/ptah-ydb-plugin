@@ -18,7 +18,7 @@ require (
 	google.golang.org/grpc v1.86.0-dev
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
-	ptah.run/provider-sdk v0.40.0
+	ptah.run/provider-sdk v0.41.0
 )
 
 require (
