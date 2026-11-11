@@ -6,9 +6,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: ydb-security-snapshots
@@ -30,6 +29,15 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+
+      - name: Create repository-scoped automation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.CAPABILITY_MATRIX_APP_ID }}
+          private-key: ${{ secrets.CAPABILITY_MATRIX_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Select review branch
         id: branch
@@ -81,7 +89,7 @@ jobs:
       - name: Publish review pull request
         if: steps.update.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ steps.branch.outputs.name }}
           NUMBER: ${{ steps.branch.outputs.number }}
         run: |
@@ -106,6 +114,4 @@ jobs:
               --title 'chore(security): refresh YDB server advisories' \
               --body-file "$RUNNER_TEMP/security-body.md"
           fi
-          # A GITHUB_TOKEN push does not trigger ordinary push checks. A
-          # workflow_dispatch run is attached to the same commit.
-          gh workflow run ci.yml --ref "$BRANCH"
+          # App-token pushes and pull requests trigger the ordinary CI checks.
