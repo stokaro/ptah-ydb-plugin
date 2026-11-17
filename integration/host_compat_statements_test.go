@@ -31,10 +31,12 @@ func compatStatementFiles(directory string) map[string]string {
 
 // `ptah-compat migrate apply --format '{{ json . }}'` reports the statements
 // each file ran, cut where a statement of YQL ends, as the built-in YDB engine
-// at host 74de0b65b reported them on 25.1.4.7 and 26.2.1.14: a semicolon
-// inside a string or a DO BEGIN block ends none. Read with the shared rules,
-// the report listed `... VALUES (1, @@a` and `b@@)` as two statements, and the
-// block as three. The migrations run in a directory of the database rather
+// at host 74de0b65b cut them on 25.1.4.7 and 26.2.1.14: a semicolon inside a
+// string or a DO BEGIN block ends none. Read with the shared rules, the report
+// listed `... VALUES (1, @@a` and `b@@)` as two statements, and the block as
+// three. Since stokaro/ptah#6043 the report spells each statement as the file
+// does, through the semicolon that ends it, as the community Atlas binary
+// lists them. The migrations run in a directory of the database rather
 // than in a dev realm, which refuses a DO BEGIN block whose effects it cannot
 // confine.
 func TestHostCompatMigrateApplyReportsTheStatementsOfAFile_HappyPath(t *testing.T) {
@@ -69,11 +71,11 @@ func TestHostCompatMigrateApplyReportsTheStatementsOfAFile_HappyPath(t *testing.
 	}
 	c.Assert(json.Unmarshal([]byte(reported), &report), qt.IsNil, qt.Commentf("%s", reported))
 	c.Assert(report.Applied, qt.HasLen, 2)
-	c.Assert(report.Applied[0].Applied, qt.DeepEquals, []string{"CREATE TABLE " + table + " (id Int64 NOT NULL, s Utf8, PRIMARY KEY (id))"})
+	c.Assert(report.Applied[0].Applied, qt.DeepEquals, []string{"CREATE TABLE " + table + " (id Int64 NOT NULL, s Utf8, PRIMARY KEY (id));"})
 	c.Assert(report.Applied[1].Applied, qt.DeepEquals, []string{
-		"UPSERT INTO " + table + " (id, s) VALUES (1, @@a;b@@)",
-		"UPSERT INTO " + table + " (id, s) VALUES (2, \"c;d\")",
-		"DO BEGIN UPSERT INTO " + table + " (id, s) VALUES (3, 'e'); UPSERT INTO " + table + " (id, s) VALUES (4, 'f'); END DO",
+		"UPSERT INTO " + table + " (id, s) VALUES (1, @@a;b@@);",
+		"UPSERT INTO " + table + " (id, s) VALUES (2, \"c;d\");",
+		"DO BEGIN UPSERT INTO " + table + " (id, s) VALUES (3, 'e'); UPSERT INTO " + table + " (id, s) VALUES (4, 'f'); END DO;",
 	})
 	c.Assert(rowCount(c, opened, path.Join(database, directory, "s"), ""), qt.Equals, int64(4))
 }
