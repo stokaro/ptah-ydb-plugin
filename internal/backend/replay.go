@@ -16,13 +16,24 @@ import (
 // anything on it but what reaches past it. Every other scope, the user
 // databases of a server named as a whole and a pinned replay session
 // included, confines a statement to the dev database the session selected.
+//
+// A trusted scope lifts the refusals whose only reason is the scope, and
+// keeps the ones that protect the session and its cleanup; see
+// yql.GuardTrustedReplay. Trust never stands for a server the run owns: the
+// scope's server field alone selects the owned server's guard.
 func (p *Provider) GuardReplay(ctx context.Context, request *protocol.GuardReplayRequest) (*protocol.GuardedReplay, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
+	scope := request.GetScope()
 	guard := yql.GuardReplay
-	if request.GetScope().GetServer() {
+	switch {
+	case scope.GetServer() && scope.GetTrustedSql():
+		guard = yql.GuardTrustedServerReplay
+	case scope.GetServer():
 		guard = yql.GuardServerReplay
+	case scope.GetTrustedSql():
+		guard = yql.GuardTrustedReplay
 	}
 	result := &protocol.GuardedReplay{Verdicts: make([]*protocol.ReplayVerdict, len(request.GetStatements()))}
 	for i, statement := range request.GetStatements() {

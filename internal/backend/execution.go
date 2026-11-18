@@ -191,7 +191,7 @@ func (s *session) refuseUnits(request *protocol.ExecuteRequest) *protocol.Execut
 	}
 	if s.realm {
 		for _, unit := range request.Units {
-			if err := confineToRealm(unit); err != nil {
+			if err := s.confineUnit(unit); err != nil {
 				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.realm-escape", Message: err.Error()}
 			}
 		}
@@ -520,20 +520,33 @@ func (s *session) runPiece(ctx context.Context, runner sqlExecutor, piece sqlPie
 	return true, err
 }
 
-// confineToRealm refuses a unit whose effects a dev realm cannot confine: a
-// SQL statement the realm guard refuses, and an external data source or
-// external table operation, which reads past the server as such a statement
-// does.
-func confineToRealm(unit *protocol.Unit) error {
+// confine refuses a statement of the session's dev realm whose effects the
+// realm cannot confine: what yql.ConfineToRealm refuses, or, on a session
+// opened for trusted SQL, only what yql.ConfineTrustedToRealm keeps. The
+// realm and its cleanup are the same either way.
+func (s *session) confine(source string) error {
+	if s.trustedSQL {
+		return yql.ConfineTrustedToRealm(source)
+	}
+	return yql.ConfineToRealm(source)
+}
+
+// confineUnit refuses a unit whose effects a dev realm cannot confine: a SQL
+// statement the session's confine refuses, and an external data source,
+// external table, async replication or transfer operation, which reaches past
+// the server as such a statement does. A session opened for trusted SQL runs
+// those operations, as it runs the statements that create them, and still
+// judges each statement of a streaming query.
+func (s *session) confineUnit(unit *protocol.Unit) error {
 	switch unit.GetNative().GetKind() {
 	case schema.ExternalSourceOperation:
-		return &yql.RealmRefusal{Operation: "an external data source"}
+		return s.beyondTheServer("an external data source")
 	case schema.ExternalTableOperation:
-		return &yql.RealmRefusal{Operation: "an external table"}
+		return s.beyondTheServer("an external table")
 	case schema.ReplicationOperation:
-		return &yql.RealmRefusal{Operation: "an async replication"}
+		return s.beyondTheServer("an async replication")
 	case schema.TransferOperation:
-		return &yql.RealmRefusal{Operation: "a transfer"}
+		return s.beyondTheServer("a transfer")
 	case schema.StreamingQueryOperation:
 		change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(unit.GetNative()))
 		if err != nil {
@@ -544,12 +557,21 @@ func confineToRealm(unit *protocol.Unit) error {
 			return err
 		}
 		for _, statement := range statements {
-			if err := yql.ConfineToRealm(statement); err != nil {
+			if err := s.confine(statement); err != nil {
 				return err
 			}
 		}
 	}
-	return yql.ConfineToRealm(unit.GetSql())
+	return s.confine(unit.GetSql())
+}
+
+// beyondTheServer is the refusal of a native operation that reaches past the
+// server, or nil on a session opened for trusted SQL.
+func (s *session) beyondTheServer(operation string) error {
+	if s.trustedSQL {
+		return nil
+	}
+	return &yql.RealmRefusal{Operation: operation}
 }
 
 // executeSchema runs one schema statement on a connection of its own, once.
