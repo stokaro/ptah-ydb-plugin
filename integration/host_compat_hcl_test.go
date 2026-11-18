@@ -218,10 +218,11 @@ table "cf" {
 // table's creation, each change to cf and the old table's drop, and nothing
 // above the copy or the two renames. ptah-compat writes the comments of a
 // migration file on schema apply too, as the community binary does; the
-// embedded engine's schema apply wrote none, on every engine.
+// embedded engine's schema apply wrote none, on every engine. The heading is
+// the community binary's, `-- Planned Changes:`, since stokaro/ptah#6206.
 func compatChangefeedRebuildPlan(directory string) string {
 	// A raw string cannot hold a backquote, so ~ stands for one.
-	plan := `Planned schema changes:
+	plan := `-- Planned Changes:
 -- Rebuild of table DIR/cf: YDB cannot make this change in place, so the table is created anew, the rows are copied, and the two tables are swapped.
 -- The steps are not atomic. Rows written to DIR/cf between the copy and the swap are lost, and YDB has no lock to stop them: stop writing to the table until the last step has run.
 -- The copy is one query. YDB refuses one that carries more than about 48 MiB on 25.1 or 64 MiB on 26.2; nothing is then copied, and the old table keeps serving.
