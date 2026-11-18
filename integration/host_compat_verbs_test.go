@@ -159,7 +159,7 @@ func TestHostCompatRunsTheAtlasVerbs_HappyPath(t *testing.T) {
 	c.Assert(reapplyExit, qt.Equals, 0, qt.Commentf("schema apply of the inspected document:\n%s", reapplied))
 	c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
 	c.Assert(yqlExit, qt.Equals, 0, qt.Commentf("schema inspect --format sql:\n%s", yqlNotes))
-	c.Assert(yql, qt.Contains, "CREATE TABLE `"+compatDirectory+"/orders` (\n    `id` Uint64 NOT NULL,\n")
+	c.Assert(yql, qt.Contains, "CREATE TABLE `"+compatDirectory+"/orders` (`id` Uint64 NOT NULL, ")
 	c.Assert(diffExit, qt.Equals, 0, qt.Commentf("schema diff:\n%s\n%s", diffed, diffNotes))
 	c.Assert(diffed, qt.Equals, "Schemas are synced, no changes to be made.\n")
 	c.Assert(hashExit, qt.Equals, 0, qt.Commentf("migrate hash:\n%s\n%s", hashed, hashNotes))

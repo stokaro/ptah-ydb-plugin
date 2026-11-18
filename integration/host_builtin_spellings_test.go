@@ -99,31 +99,16 @@ table "t" {
 
 // builtInSpellingSQL is the CREATE TABLE statements of the YQL
 // `ptah-compat schema inspect --format '{{ sql . }}'` writes for
-// builtInSpellingTables in directory, as the host's embedded engine at
-// 74de0b65b wrote them on 25.1.4.7 and 26.2.1.14: a WITH clause only for the
-// settings YDB does not give every new table.
+// builtInSpellingTables in directory, with the settings and index types the
+// host's embedded engine at 74de0b65b wrote on 25.1.4.7 and 26.2.1.14: a WITH
+// clause only for the settings YDB does not give every new table. Since
+// stokaro/ptah#6206 the template writes the plan that creates the inspected
+// schema, as the community binary does, so each statement is on one line.
 func builtInSpellingSQL(directory string) string {
 	// A raw string cannot hold a backquote, so ~ stands for one.
-	statements := `CREATE TABLE ~DIR/plain~ (
-    ~id~ Uint64 NOT NULL,
-    ~n~ Int32,
-    PRIMARY KEY (~id~),
-    FAMILY ~default~ (COMPRESSION = 'off')
-);
-CREATE TABLE ~DIR/s~ (
-    ~id~ Uint64 NOT NULL,
-    PRIMARY KEY (~id~),
-    FAMILY ~default~ (COMPRESSION = 'off')
-) WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4);
-CREATE TABLE ~DIR/t~ (
-    ~id~ Uint64 NOT NULL,
-    ~a~ Utf8,
-    ~b~ Utf8,
-    PRIMARY KEY (~id~),
-    INDEX ~i_async~ GLOBAL ASYNC ON (~b~),
-    INDEX ~i_sync~ GLOBAL SYNC ON (~a~),
-    FAMILY ~default~ (COMPRESSION = 'off')
-);
+	statements := `CREATE TABLE ~DIR/plain~ (~id~ Uint64 NOT NULL, ~n~ Int32, PRIMARY KEY (~id~), FAMILY ~default~ (COMPRESSION = 'off'));
+CREATE TABLE ~DIR/s~ (~id~ Uint64 NOT NULL, PRIMARY KEY (~id~), FAMILY ~default~ (COMPRESSION = 'off')) WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4);
+CREATE TABLE ~DIR/t~ (~id~ Uint64 NOT NULL, ~a~ Utf8, ~b~ Utf8, PRIMARY KEY (~id~), INDEX ~i_async~ GLOBAL ASYNC ON (~b~), INDEX ~i_sync~ GLOBAL SYNC ON (~a~), FAMILY ~default~ (COMPRESSION = 'off'));
 `
 	return strings.ReplaceAll(strings.ReplaceAll(statements, "~", "`"), "DIR", directory)
 }
@@ -140,12 +125,13 @@ func withoutCoverageHeader(document string) string {
 }
 
 // createStatements is the CREATE TABLE statements of an inspected YQL
-// document, each with its line end, in the document's order.
+// document, each with its line end, in the document's order, without the
+// change comment a creation plan writes above each.
 func createStatements(document string) string {
 	var statements []string
-	for statement := range strings.SplitAfterSeq(document, ";\n") {
-		if strings.HasPrefix(statement, "CREATE TABLE ") {
-			statements = append(statements, statement)
+	for line := range strings.SplitAfterSeq(document, "\n") {
+		if strings.HasPrefix(line, "CREATE TABLE ") {
+			statements = append(statements, line)
 		}
 	}
 	return strings.Join(statements, "")
