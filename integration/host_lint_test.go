@@ -115,8 +115,9 @@ func TestHostLintsYQLByTheStatementFacts_HappyPath(t *testing.T) {
 // The host words what the provider's facts name: the table, and the part of
 // the statement a capability belongs to. A statement that starts with no word
 // is one the linter does not lint, and the first statement of a file that
-// opens with a byte order mark is linted, where the built-in reading skips
-// both.
+// opens with a byte order mark is linted. Since stokaro/ptah#6223 the host
+// removes the mark before the provider reads the file, so that statement
+// starts at column 1.
 func TestHostWordsTheStatementFacts_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, file, version string
@@ -143,7 +144,7 @@ func TestHostWordsTheStatementFacts_HappyPath(t *testing.T) {
 			"3:1 SQL002 ptah sql lint does not lint expression statements yet",
 		}},
 		{name: "a byte order mark", file: "stricter/bom.yql", version: "26.2.1.14", code: 1, want: []string{
-			`1:2 DDL001 table "bom" has no primary key`,
+			`1:1 DDL001 table "bom" has no primary key`,
 			"2:1 SQL002 ptah sql lint does not lint UPSERT statements yet",
 		}},
 	} {
