@@ -2,6 +2,14 @@
 
 This page collects build, test, conformance, and release details. The [repository README](README.md) is the user entry point; [YDB provider documentation](docs/README.md) holds behavior and operational reference material.
 
+## Pull requests
+
+Use the [PR template](.github/pull_request_template.md) and follow the
+[description requirements](AGENTS.md#pull-request-descriptions), including
+[provider-specific details](AGENTS.md#provider-specific-pr-details).
+Explain the affected workflow, delivered behavior, material risks, and
+actual verification results. Keep the description proportional to the change.
+
 ## Releases
 
 A tag that starts with `v` runs `.github/workflows/release.yml`, which
