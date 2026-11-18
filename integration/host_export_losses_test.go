@@ -58,7 +58,9 @@ func familyWarnings(warnings []string) []string {
 }
 
 // jsonFormats are the templates that write the whole inspection as JSON.
-var jsonFormats = []string{`{{ json . }}`, `{{ json .Realm }}`, `{{ json .Schema "  " }}`}
+// The host's `.Schema`, an alias of `.Realm`, is not one of them: since
+// stokaro/ptah#6194 ptah-compat refuses it, as the community binary does.
+var jsonFormats = []string{`{{ json . }}`, `{{ json .Realm }}`, `{{ json .Realm "  " }}`}
 
 // Ported from the host's TestSchemaInspectJSON_ReportsOmittedYDBFamilies
 // (internal/atlasreport), for the families both YDB lines serve: a JSON
