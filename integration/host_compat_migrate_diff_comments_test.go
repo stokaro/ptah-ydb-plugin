@@ -88,30 +88,19 @@ table "lines" {
 // 74de0b65b wrote for diffCommentsFirst and then diffCommentsSecond through
 // ptah-compat migrate diff, on 25.1.4.7 and 26.2.1.14, by name suffix. Each
 // statement carries the change the community binary names it with, an index
-// added to a table its index's creation.
+// added to a table its index's creation. Since stokaro/ptah#6190 the default
+// format writes each CREATE TABLE and ALTER TABLE on one line, as the
+// community binary does, so the files hold them that way.
 func diffCommentsFiles() map[string]string {
 	// A raw string cannot hold a backquote, so ~ stands for one.
 	files := map[string]string{
 		"_first.sql": `-- Create "orders" table
-CREATE TABLE ~DIR/orders~ (
-    ~id~ Uint64 NOT NULL,
-    ~total~ Decimal(22,9) NOT NULL,
-    PRIMARY KEY (~id~),
-    INDEX ~orders_total_ix~ GLOBAL SYNC ON (~total~)
-);
+CREATE TABLE ~DIR/orders~ (~id~ Uint64 NOT NULL, ~total~ Decimal(22,9) NOT NULL, PRIMARY KEY (~id~), INDEX ~orders_total_ix~ GLOBAL SYNC ON (~total~));
 -- Create "root_t" table
-CREATE TABLE ~root_t~ (
-    ~id~ Int64 NOT NULL,
-    ~note~ Utf8,
-    PRIMARY KEY (~id~)
-);
+CREATE TABLE ~root_t~ (~id~ Int64 NOT NULL, ~note~ Utf8, PRIMARY KEY (~id~));
 `,
 		"_second.sql": `-- Create "lines" table
-CREATE TABLE ~DIR/lines~ (
-    ~id~ Uint64 NOT NULL,
-    ~qty~ Int32,
-    PRIMARY KEY (~id~)
-);
+CREATE TABLE ~DIR/lines~ (~id~ Uint64 NOT NULL, ~qty~ Int32, PRIMARY KEY (~id~));
 -- Modify "orders" table
 ALTER TABLE ~DIR/orders~ ADD COLUMN ~note~ Utf8;
 -- Create index "orders_note_ix" to table: "orders"
@@ -207,7 +196,9 @@ table "t" {
 // 74de0b65b wrote through ptah-compat migrate diff for the rebuild of t that
 // diffRebuildWidened asks for, on 25.1.4.7 and 26.2.1.14: a change comment
 // above the new table's creation, above each change to t and above the old
-// table's drop, and none above the copy or the two renames.
+// table's drop, and none above the copy or the two renames. The new table's
+// creation is on one line, as the default format writes it since
+// stokaro/ptah#6190.
 func diffRebuildFile() string {
 	// A raw string cannot hold a backquote, so ~ stands for one.
 	file := `-- Rebuild of table DIR/t: YDB cannot make this change in place, so the table is created anew, the rows are copied, and the two tables are swapped.
@@ -215,12 +206,7 @@ func diffRebuildFile() string {
 -- The copy is one query. YDB refuses one that carries more than about 48 MiB on 25.1 or 64 MiB on 26.2; nothing is then copied, and the old table keeps serving.
 -- Changefeed feed of table DIR/t is dropped before the swap and added again after it, because YDB moves no table that carries a changefeed. Its stream restarts: the records nobody read are lost, and its consumers start again from the beginning of the new stream.
 -- Create "__ptah_rebuild_t" table
-CREATE TABLE ~DIR/__ptah_rebuild_t~ (
-    ~id~ Int64 NOT NULL,
-    ~v~ Int64,
-    PRIMARY KEY (~id~),
-    FAMILY ~default~ (COMPRESSION = 'off')
-) WITH (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, KEY_BLOOM_FILTER = DISABLED);
+CREATE TABLE ~DIR/__ptah_rebuild_t~ (~id~ Int64 NOT NULL, ~v~ Int64, PRIMARY KEY (~id~), FAMILY ~default~ (COMPRESSION = 'off')) WITH (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, KEY_BLOOM_FILTER = DISABLED);
 INSERT INTO ~DIR/__ptah_rebuild_t~ (~id~, ~v~) SELECT Unwrap(~id~, 'rebuilding table DIR.t: column id holds NULL, and the new table declares it NOT NULL'u) AS ~id~, IF(~v~ IS NULL, NULL, Unwrap(CAST(~v~ AS Int64), 'rebuilding table DIR.t: column v holds a value that does not convert to its new type'u)) AS ~v~ FROM ~DIR/t~;
 -- Modify "t" table
 ALTER TABLE ~DIR/t~ DROP CHANGEFEED ~feed~;
