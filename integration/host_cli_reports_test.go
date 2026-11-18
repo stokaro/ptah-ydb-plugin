@@ -52,9 +52,11 @@ func rebuiltColumnFiles(c *qt.C) (from, to string) {
 	return from, to
 }
 
-// devOnlyURL names the dialect alone: a diff between two files connects to
-// nothing, so the server it names is never dialed.
-const devOnlyURL = "ydb://127.0.0.1:1/local"
+// devOnlyURL names the dialect alone. The host reads a docker:// dev URL for
+// its engine and starts no container for a diff between two files. Since
+// stokaro/ptah#6208 it opens a server address it is given, so a placeholder
+// address fails the run after the connect timeout.
+const devOnlyURL = "docker://ydb/26.2.1.14"
 
 // The native surface asks for a rebuild with --allow-table-rebuild, and a
 // diff that needs one names that flag. Ported from the host's
