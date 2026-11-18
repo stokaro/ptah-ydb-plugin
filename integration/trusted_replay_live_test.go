@@ -192,3 +192,40 @@ func TestTrustedRealmCleanupSubprocess(t *testing.T) {
 	assertRowCount(c, realm.opened, outside, 0)
 	assertRowCount(c, realm.opened, unrelated, 0)
 }
+
+// Trust lifts the code a statement computes and still reads each statement of
+// its body. A pragma that moves the prefix inside a DO block, an action or an
+// EVALUATE is refused on the trusted session and by the trusted replay guard,
+// and the table the body would have written through the moved prefix stays
+// empty. The same DO block without the pragma runs on the trusted session,
+// which shows that trust lifts the block itself.
+func TestTrustedRealmBodiesSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	realm := newTrustedRealm(c)
+	outside := realm.outsideTable(c, "ptah_trust_body_")
+	c.Assert(executeSQL(c, realm.client, realm.trusted, "", createTableStatement(outside)).GetOutcome(), qt.Equals, protocol.Execution_APPLIED)
+	moved := "PRAGMA TablePathPrefix = \"" + realm.base.Database() + "\"; UPSERT INTO `" + path.Base(outside) + "` (id) VALUES (1);"
+	bodies := []string{
+		"DO BEGIN " + moved + " END DO",
+		"DEFINE ACTION $a() AS " + moved + " END DEFINE; DO $a()",
+		"EVALUATE FOR $i IN AsList(1) DO BEGIN " + moved + " END DO",
+	}
+
+	guarded, err := realm.client.GuardReplay(c.Context(), &protocol.GuardReplayRequest{Engine: "ydb", Statements: bodies,
+		Scope: &protocol.ReplayScope{Database: realm.base.Database(), TrustedSql: true}})
+	c.Assert(err, qt.IsNil)
+	for index, body := range bodies {
+		executed := executeSQL(c, realm.client, realm.trusted, "", body)
+
+		c.Assert(executed.GetOutcome(), qt.Equals, protocol.Execution_NOT_STARTED, qt.Commentf("%s", body))
+		c.Assert(executed.GetDiagnosticCode(), qt.Equals, "ydb.realm-escape")
+		c.Assert(executed.GetMessage(), qt.Contains, "PRAGMA TablePathPrefix")
+		c.Assert(guarded.GetVerdicts()[index].GetOperation(), qt.Equals, "PRAGMA TablePathPrefix", qt.Commentf("%s", body))
+	}
+	assertRowCount(c, realm.opened, outside, 0)
+
+	plain := executeSQL(c, realm.client, realm.trusted, "", "DO BEGIN UPSERT INTO `"+outside+"` (id) VALUES (2); END DO")
+
+	c.Assert(plain.GetOutcome(), qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", plain.GetMessage()))
+	assertRowCount(c, realm.opened, outside, 1)
+}

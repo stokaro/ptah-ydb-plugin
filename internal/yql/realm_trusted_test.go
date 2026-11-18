@@ -23,6 +23,8 @@ var liftedByTrust = []struct{ name, source string }{
 	{"a permission change", "GRANT SELECT ON `t` TO u1"},
 	{"an action", "DEFINE ACTION $a() AS DROP TABLE `/local/a`; END DEFINE; DO $a()"},
 	{"an evaluated statement", "EVALUATE FOR $i IN AsList(1) DO EMPTY_ACTION()"},
+	{"a body that writes outside the realm", "DO BEGIN UPSERT INTO `/local/outside` (id) VALUES (1); END DO"},
+	{"an action with a lambda body", "DEFINE ACTION $a() AS $f = ($x) -> { $y = $x + 1; RETURN $y; }; INSERT INTO `/local/a` (id) SELECT $f(1); END DEFINE; DO $a()"},
 	{"a backup collection", "CREATE BACKUP COLLECTION `c` (TABLE `t`) WITH (STORAGE = 'cluster')"},
 	{"an external data source", "CREATE EXTERNAL DATA SOURCE s WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://example.org/', AUTH_METHOD = 'NONE')"},
 	{"an async replication", "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://example.org:2135/?database=/remote')"},
@@ -43,6 +45,12 @@ var keptUnderTrust = []struct{ name, source, operation string }{
 	{"an unrecognized statement", "FROBNICATE t", "unrecognized statement FROBNICATE"},
 	{"an unrecognized object", "CREATE WIDGET w", "unrecognized object CREATE WIDGET"},
 	{"a kept refusal after a lifted one", "CREATE USER u1; USE ydb", "USE"},
+	{"a pragma that moves the prefix in DO", "DO BEGIN PRAGMA TablePathPrefix('/o'); UPSERT INTO t (id) VALUES (1); END DO;", "PRAGMA TablePathPrefix"},
+	{"a pragma that moves the prefix in an action", "DEFINE ACTION $a() AS PRAGMA TablePathPrefix('/other'); INSERT INTO t (id) VALUES (1); END DEFINE; DO $a();", "PRAGMA TablePathPrefix"},
+	{"a pragma that moves the prefix in EVALUATE", "EVALUATE FOR $i IN AsList(1) DO BEGIN PRAGMA TablePathPrefix('/o'); END DO;", "PRAGMA TablePathPrefix"},
+	{"a namespaced pragma ending a body", "DO BEGIN UPSERT INTO t (id) VALUES (1); PRAGMA ydb.TablePathPrefix = '/o' END DO", "PRAGMA TablePathPrefix"},
+	{"USE in a nested body", "DEFINE ACTION $a($x) AS EVALUATE IF $x DO BEGIN USE ydb; END DO; END DEFINE", "USE"},
+	{"a temporary table in an action", "DEFINE ACTION $a() AS CREATE TEMPORARY TABLE t (id Int64 NOT NULL, PRIMARY KEY (id)); END DEFINE", "temporary table"},
 }
 
 func TestTrustedRealm_HappyPath(t *testing.T) {

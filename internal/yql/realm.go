@@ -43,6 +43,9 @@ import (
 // temporary table, a resource pool, an object of the database's metadata
 // service, a change to the whole database, and a statement or an object kind
 // the guard does not recognize, since it cannot tell what that one changes.
+// Trust lifts the code a statement computes and still reads each statement of
+// a DO, DEFINE ACTION or DEFINE SUBQUERY body, so a refusal it keeps stays
+// refused there too.
 
 // RealmRefusal reports a statement whose effects cannot be confined to a dev
 // realm.
@@ -106,12 +109,13 @@ func ConfineTrustedToRealm(source string) error {
 func confineSource(source string, policy func(error) error) error {
 	stream := reader{input: source}
 	var tokens []Token
+	var cuts []int
 	var bodies Bodies
 	for {
 		token := stream.NextToken()
 		switch token.Type {
 		case TokenEOF:
-			return policy(confineStatement(tokens))
+			return policy(confineWithBodies(tokens, cuts, confineStatement))
 		case TokenWhitespace, TokenComment:
 			continue
 		case TokenUnknown:
@@ -123,12 +127,13 @@ func confineSource(source string, policy func(error) error) error {
 		case TokenSemicolon:
 			bodies.Separate()
 			if bodies.Inside() {
+				cuts = append(cuts, len(tokens))
 				continue
 			}
-			if err := policy(confineStatement(tokens)); err != nil {
+			if err := policy(confineWithBodies(tokens, cuts, confineStatement)); err != nil {
 				return err
 			}
-			tokens = nil
+			tokens, cuts = nil, nil
 			continue
 		case TokenIdentifier:
 			bodies.Word(strings.ToUpper(token.Value))
@@ -139,6 +144,124 @@ func confineSource(source string, policy func(error) error) error {
 		}
 		tokens = append(tokens, token)
 	}
+}
+
+// confineWithBodies is judge(tokens), unless that verdict is one trust lifts
+// and a statement inside one of the statement's DO, DEFINE ACTION or DEFINE
+// SUBQUERY bodies is refused in a way trust keeps. Trust lifts the code a
+// statement computes, not what each statement of that code would keep
+// refused on its own: without this, DO BEGIN PRAGMA TablePathPrefix(...); ...
+// END DO moves the prefix under trust although the pragma alone stays
+// refused. cuts are the indexes in tokens where a semicolon inside a body
+// ended a statement.
+func confineWithBodies(tokens []Token, cuts []int, judge func([]Token) error) error {
+	verdict := judge(tokens)
+	if refusal, ok := errors.AsType[*RealmRefusal](verdict); ok && refusal.Kept {
+		return verdict
+	}
+	if kept := keptInBodies(tokens, cuts, judge); kept != nil {
+		return kept
+	}
+	return verdict
+}
+
+// keptInBodies returns the first refusal trust keeps among the statements of
+// the DO, DEFINE ACTION and DEFINE SUBQUERY bodies in one statement's tokens,
+// as judge reads each, or nil. cuts are the indexes in tokens where a
+// semicolon inside a body ended a statement.
+func keptInBodies(tokens []Token, cuts []int, judge func([]Token) error) error {
+	reader := bodyStatements{tokens: tokens, judge: judge}
+	next := 0
+	for index := range tokens {
+		for ; next < len(cuts) && cuts[next] == index; next++ {
+			if err := reader.separate(index); err != nil {
+				return err
+			}
+		}
+		if err := reader.read(index); err != nil {
+			return err
+		}
+	}
+	// A body the text never closes ends with the text.
+	for ; len(reader.starts) > 0; reader.starts = reader.starts[:len(reader.starts)-1] {
+		if err := reader.kept(len(tokens)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// bodyStatements reads one statement's tokens again to find the statements of
+// its bodies. A body statement starts after DO BEGIN, after the AS that ends a
+// DEFINE header, and after a semicolon in the body, and ends at the next such
+// semicolon or at the END that closes the body. A lambda's braces hold
+// expressions and a RETURN, which no statement judgment reads, so a semicolon
+// between them ends nothing here.
+type bodyStatements struct {
+	tokens []Token
+	judge  func([]Token) error
+	bodies Bodies
+	// starts holds, for each open body, the index where its current statement
+	// began, or -1 while a DEFINE header has not reached its AS yet.
+	starts []int
+}
+
+// kept returns the refusal trust keeps of the innermost body's statement that
+// ends before end, or nil.
+func (r *bodyStatements) kept(end int) error {
+	if len(r.starts) == 0 {
+		return nil
+	}
+	start := r.starts[len(r.starts)-1]
+	if start < 0 || start >= end {
+		return nil
+	}
+	if refusal, ok := errors.AsType[*RealmRefusal](r.judge(r.tokens[start:end])); ok && refusal.Kept {
+		return refusal
+	}
+	return nil
+}
+
+// separate reads a semicolon in a body, right before tokens[index].
+func (r *bodyStatements) separate(index int) error {
+	r.bodies.Separate()
+	if len(r.starts) == 0 || r.bodies.braces > 0 {
+		return nil
+	}
+	if err := r.kept(index); err != nil {
+		return err
+	}
+	r.starts[len(r.starts)-1] = index
+	return nil
+}
+
+// read reads tokens[index], which opens a body, closes one, ends a DEFINE
+// header, or continues the statement being read.
+func (r *bodyStatements) read(index int) error {
+	token := r.tokens[index]
+	blocks, word := r.bodies.blocks, keyword(token)
+	switch token.Type {
+	case TokenIdentifier:
+		r.bodies.Word(strings.ToUpper(token.Value))
+	case TokenOperator:
+		r.bodies.Symbol(token.Value)
+	default:
+		r.bodies.Separate()
+	}
+	switch {
+	case r.bodies.blocks > blocks && word == "BEGIN":
+		r.starts = append(r.starts, index+1)
+	case r.bodies.blocks > blocks:
+		r.starts = append(r.starts, -1)
+	case r.bodies.blocks < blocks && len(r.starts) > 0:
+		// The END before this DO or DEFINE closes the body.
+		err := r.kept(index - 1)
+		r.starts = r.starts[:len(r.starts)-1]
+		return err
+	case word == "AS" && len(r.starts) > 0 && r.starts[len(r.starts)-1] < 0:
+		r.starts[len(r.starts)-1] = index + 1
+	}
+	return nil
 }
 
 // confineStatement judges one statement.
@@ -466,7 +589,14 @@ func ownedServer([]Token) error { return nil }
 func guardReplay(source string, confine func([]Token) error, policy func(error) error) error {
 	stream := reader{input: source}
 	var tokens []Token
+	var cuts []int
 	var bodies Bodies
+	statement := func(tokens []Token) error {
+		if operation := beyondTheServer(tokens); operation != "" {
+			return refuse(operation)
+		}
+		return confine(tokens)
+	}
 	judge := func() error {
 		if len(tokens) == 0 {
 			return nil
@@ -474,10 +604,7 @@ func guardReplay(source string, confine func([]Token) error, policy func(error) 
 		if tokens[0].Type == TokenUnknown && strings.HasPrefix(tokens[0].Value, "--!") {
 			return keep("translation setting " + tokens[0].Value)
 		}
-		if operation := beyondTheServer(tokens); operation != "" {
-			return policy(refuse(operation))
-		}
-		return policy(confine(tokens))
+		return policy(confineWithBodies(tokens, cuts, statement))
 	}
 	for {
 		token := stream.NextToken()
@@ -489,12 +616,13 @@ func guardReplay(source string, confine func([]Token) error, policy func(error) 
 		case TokenSemicolon:
 			bodies.Separate()
 			if bodies.Inside() {
+				cuts = append(cuts, len(tokens))
 				continue
 			}
 			if err := judge(); err != nil {
 				return err
 			}
-			tokens = nil
+			tokens, cuts = nil, nil
 			continue
 		case TokenIdentifier:
 			bodies.Word(strings.ToUpper(token.Value))

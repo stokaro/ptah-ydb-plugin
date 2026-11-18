@@ -196,6 +196,9 @@ else. Trust keeps every refusal that protects the session or its cleanup: a
 translation setting, a pragma that moves the prefix, `USE`, a temporary table, a
 resource pool, an object of the database's metadata service, a change to the
 whole database, and a statement or an object kind the guard does not recognize.
+Trust lifts `DO`, `EVALUATE` and `DEFINE ACTION` but still reads each statement
+of their bodies, so a pragma that moves the prefix or `USE` inside a body is
+refused as it is outside one.
 Trust is not ownership of the server: it never selects the guard of a server
 the run owns and never changes what the cleanup removes. A host that does not
 list the feature cannot send trust, and one that lists it refuses an opt-in
