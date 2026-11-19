@@ -24,8 +24,8 @@ sidebar:
 `ptah migrations up`, `down` and `baseline` run a YDB migration through this
 provider. Ptah's [apply reference](https://docs.ptah.run/edge/versioned/apply/)
 describes the run for every engine; this page says what is particular to YDB:
-how a migration is split into the queries YDB runs, the migration lock, and the
-statement and lock timeouts.
+how a migration is split into the queries YDB runs, repeatable migrations, the
+migration lock, and the statement and lock timeouts.
 
 ## Queries
 
@@ -116,6 +116,15 @@ a table rebuild, and only when `migrations generate` is given
 [Native table rebuild](table-creation-and-rebuild.md#native-table-rebuild).
 Each step of the rebuild is a query of its own, so a run interrupted between two
 of them resumes at the next with `up --allow-dirty`.
+
+## Repeatable migrations
+
+A repeatable migration (`R__<name>.sql`) runs through this provider, and the
+record of a data body's completion commits in the body's own transaction. The
+provider keeps the record beside the revision table, so `migrations status`, `log`,
+`repair --repeatable`, `lint` and `up --check-drift` read it as they read any
+engine's. [Repeatable migrations](migration-state.md#repeatable-migrations)
+describes the table and what each write guarantees.
 
 ## Statement timeouts
 

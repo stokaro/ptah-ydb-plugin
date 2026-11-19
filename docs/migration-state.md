@@ -1,6 +1,6 @@
 ---
 title: YDB migration state and common objects
-description: Reverse migrations, common objects, history, journals, tags, and coordination locks.
+description: Reverse migrations, common objects, history, repeatable migrations, journals, tags, and coordination locks.
 type: reference
 audience:
   - database-engineer
@@ -296,6 +296,46 @@ exceeding either returns no partial history. An unreadable history snapshot or
 failed dispatched history mutation makes its caller transaction rollback-only.
 History storage alone does not establish the whole migration workflow.
 [Host-driven tests](../CONTRIBUTING.md#host-driven-integration-checks) separately exercise planning, application, and migration status.
+
+## Repeatable migrations
+
+The repeatable record service keeps the host's record of repeatable migrations
+(`sessions.repeatable-record`, contract 25.44, ADR 0125 in Ptah) in a table
+beside the revision table. The host names it and owns what it means: which
+content applied, which run holds a claim, and when a changed file runs again.
+Each row holds the migration's identity, the exact SDK row record and the bytes
+of the content that last applied, which a drift check replays.
+
+Creation installs the table layout and a `ptah.repeatable` ownership attribute
+in one native request, with the marker `stokaro/ptah-ydb-plugin/repeatable-v1`.
+Reads and writes verify the marker, column types, primary key and the absence
+of automatic behavior, and refuse an unmarked table, an altered layout and a
+row this build did not write. The record has no layout of the built-in YDB
+engine to continue, because that engine had no repeatable migrations.
+
+A read returns every row or none: a record over 10,000 rows, or a body over
+2 MiB, is refused rather than cut short. Each write compares the row it
+expects with the row it finds in one serializable transaction. A claim held by
+another run is a conflict that names the holder, and a completion of content
+other than the claimed one is refused. A completion runs in the transaction
+that ran the body, so the record says the content applied exactly when the
+content committed. Every other write runs in a private transaction, and a
+write YDB aborts for a conflicting transaction runs again, at most eight times:
+the abort says nothing was written. A lost commit acknowledgment and a lost
+lock are UNKNOWN, and the host does not replay them.
+
+A schema read reports the record as storage the engine keeps for itself, with
+the `REPEATABLE` purpose, to a host that lists
+`schema.reserved-repeatable-record` (contract 25.45). Such a host leaves it
+out of every comparison, so a plan never drops it, and refuses a declared table
+of its name. A host that does not list the feature never reads the record as a
+table of the schema: the read names it as an unread table where the host takes
+those, and leaves it out otherwise.
+
+The built-in engine's `schema_migrations_log` has no column for a repeatable
+migration's identity, so the provider refuses a log entry about one there
+rather than write it as an entry about version 0. The host reports each such
+entry in the run's `migration_log.lost`, and the migration itself runs.
 
 ## Migration journals and tags
 

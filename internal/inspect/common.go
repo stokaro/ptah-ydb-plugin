@@ -48,6 +48,12 @@ type Common struct {
 	// describes writes as a table the read does not describe; see
 	// unreadReplicas. Without it such a table is left out silently.
 	UnreadTables bool
+	// RepeatableRecord reports the record of repeatable migrations as
+	// storage the engine keeps for itself
+	// (schema.reserved-repeatable-record). Without it the record is named
+	// as an unread table when UnreadTables is set and left out otherwise,
+	// never read as a table of the schema, which a plan would drop.
+	RepeatableRecord bool
 }
 
 // coverage is the common-object part of a reply before anything is read: one

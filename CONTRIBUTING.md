@@ -66,9 +66,9 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.42.0, whose
-[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.42.0/provider-sdk/provider/contract.go)
-speak 25.43. The provider's [description](internal/backend/provider.go)
+At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.44.0, whose
+[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.44.0/provider-sdk/provider/contract.go)
+speak 25.45. The provider's [description](internal/backend/provider.go)
 requires only 25.7 to start; later features are negotiated with the host.
 Check those source files when changing a dependency or capability. Builds
 require neither the Ptah application source nor a local SDK checkout.

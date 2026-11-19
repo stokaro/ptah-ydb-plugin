@@ -59,6 +59,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	common.PrimaryKeys = slices.Contains(negotiatedFeatures(ctx), provider.ObservedPrimaryKeysFeature)
 	common.IndexMethods = slices.Contains(negotiatedFeatures(ctx), provider.IndexMethodsFeature)
 	common.UnreadTables = slices.Contains(negotiatedFeatures(ctx), provider.UnreadTablesFeature)
+	common.RepeatableRecord = slices.Contains(negotiatedFeatures(ctx), provider.ReservedRepeatableRecordFeature)
 	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
 	if err != nil {
 		return nil, inspectError(ctx, err)

@@ -473,8 +473,14 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	if err != nil {
 		return err
 	}
+	reference := &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name}
+	if description.reservation == protocol.ReservedObject_REPEATABLE && !t.common.RepeatableRecord {
+		t.unmodeled = append(t.unmodeled, &protocol.UnreadTable{Table: reference, Diagnostic: &protocol.ProviderDiagnostic{
+			Reason: fmt.Sprintf("%s is the record of repeatable migrations, which this host does not read as reserved storage", path.Join(selected, name))}})
+		return nil
+	}
 	if description.reservation != protocol.ReservedObject_PURPOSE_UNSPECIFIED {
-		t.common.reserve(t.result, &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name}, description.reservation)
+		t.common.reserve(t.result, reference, description.reservation)
 		return nil
 	}
 	// A table an async replication writes, or wrote without

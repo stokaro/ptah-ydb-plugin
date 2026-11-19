@@ -197,6 +197,11 @@ func providerFeatures() []string {
 		// reaches the replay guard and the dev session, which lift the same
 		// refusals; see GuardReplay and session.confine.
 		provider.ReplayTrustFeature,
+		// The record of repeatable migrations sits beside the revision table
+		// the history service keeps; see MutateRepeatable. A read reports it
+		// as reserved storage, so a plan never drops it.
+		provider.RepeatableRecordFeature,
+		provider.ReservedRepeatableRecordFeature,
 		provider.StatementTimeoutFeature,
 		provider.EmbeddingStoreFeature,
 		provider.ReadSQLSchemaFeature,
