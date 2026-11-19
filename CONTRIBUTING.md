@@ -114,7 +114,10 @@ dependencies.
 
 Live checks require an isolated test database. Schema tests create uniquely
 named directories, tables, and topics and remove them afterward. Session tests only
-read server metadata.
+read server metadata. The tests that take the provider's lock, the host-driven
+ones among them, refuse to run when the coordination node `ptah_locks` already
+exists at the database root, so a manual `ptah migrations up` against the same
+server, which leaves that node behind, breaks them until the node is dropped.
 
 ```sh
 PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
