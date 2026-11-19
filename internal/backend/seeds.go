@@ -25,7 +25,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/seeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 )
 
@@ -113,7 +112,7 @@ func (p *Provider) ApplySeed(ctx context.Context, request *protocol.ApplySeedReq
 		return refuseSeed(result, seed.GetText(), offset, reason), nil
 	}
 	if s.realm {
-		if err := yql.ConfineToRealm(seed.GetText()); err != nil {
+		if err := s.confine(seed.GetText()); err != nil {
 			return refuseSeed(result, seed.GetText(), 0, err.Error()), nil
 		}
 	}

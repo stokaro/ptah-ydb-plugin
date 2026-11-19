@@ -152,7 +152,7 @@ func readStatement(ctx context.Context, request *protocol.RunStatementRequest) (
 // that is not the active one, or none named while one is active.
 func (s *session) statementRefusal(request *protocol.RunStatementRequest) string {
 	if s.realm {
-		if err := yql.ConfineToRealm(request.Sql); err != nil {
+		if err := s.confine(request.Sql); err != nil {
 			return err.Error()
 		}
 	}

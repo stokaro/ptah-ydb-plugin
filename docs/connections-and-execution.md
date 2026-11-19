@@ -181,6 +181,42 @@ to the dev database, with the rules above, and refuses `--!syntax_v1` as the
 host does. `testdata/realm/scopes.json` holds the host's verdict on each
 statement under every scope.
 
+An operator who trusts the SQL a run executes on its dev database, with the
+privileges of the dev connection, says so with `--trust-replay-sql` or
+`PTAH_TRUST_REPLAY_SQL=1`. The provider and the ydb engine list
+`database.dev-replay-trust` (contract 25.43, ADR 0124 in Ptah). A host that
+lists the feature sends the answer with the replay guard's scope and with each
+dev session it opens, and the provider lifts the same refusals in both.
+
+Trust lifts these refusals:
+
+- a write outside the realm or to a target the guard cannot read;
+- code a statement computes: `DO`, `EVALUATE` and `DEFINE ACTION`;
+- a user, a group or a permission;
+- a backup, a restore or a backup collection;
+- an external data source or table, an async replication, a transfer or a
+  streaming query.
+
+An object the trusted SQL creates outside the realm stays there, because the
+cleanup removes the realm's contents and nothing else.
+
+Trust keeps every refusal that protects the session or its cleanup:
+
+- a translation setting;
+- a pragma that moves the prefix, and `USE`;
+- a temporary table, a resource pool, an object of the database's metadata
+  service and a change to the whole database;
+- a statement or an object kind the guard does not recognize.
+
+Trust lifts `DO`, `EVALUATE` and `DEFINE ACTION` but still reads each statement
+of their bodies, so a refusal it keeps, such as a pragma that moves the prefix
+or `USE`, stays refused inside a body as it is outside one.
+
+Trust is not ownership of the server: it never selects the guard of a server
+the run owns and never changes what the cleanup removes. A host that does not
+list the feature cannot send trust, and one that lists it refuses an opt-in
+before the replay when the provider does not declare it.
+
 ## Dev database cleanup
 
 The provider lists and empties the dev database a session selected

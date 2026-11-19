@@ -79,7 +79,10 @@ type session struct {
 	// directory when the address names one.
 	database string
 	// realm reports a session on a dev realm, whose statements are confined to it.
-	realm        bool
+	realm bool
+	// trustedSQL reports a session the host opened for a run whose operator
+	// trusts the SQL it executes there; see session.confine.
+	trustedSQL   bool
 	closed       bool
 	closeErr     error
 	cleanupErr   error
@@ -190,6 +193,10 @@ func providerFeatures() []string {
 		provider.SeedsFeature,
 		provider.DevCleanupFeature,
 		provider.ReplayGuardFeature,
+		// The operator's trust in the SQL a run executes on its dev database
+		// reaches the replay guard and the dev session, which lift the same
+		// refusals; see GuardReplay and session.confine.
+		provider.ReplayTrustFeature,
 		provider.StatementTimeoutFeature,
 		provider.EmbeddingStoreFeature,
 		provider.ReadSQLSchemaFeature,
@@ -875,7 +882,8 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	}
 	id := rand.Text()
 	p.mu.Lock()
-	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version, capabilities: maps.Clone(capabilities)}
+	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", trustedSQL: request.GetTrustedSql(), version: version,
+		capabilities: maps.Clone(capabilities)}
 	p.mu.Unlock()
 	result := &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: negotiatedRules(ctx), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}
 	if slices.Contains(result.Features, provider.DatabaseContextFeature) {
