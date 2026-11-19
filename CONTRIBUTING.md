@@ -2,6 +2,10 @@
 
 This page collects build, test, conformance, and release details. The [repository README](README.md) is the user entry point; [YDB provider documentation](docs/README.md) holds behavior and operational reference material.
 
+For PR and issue titles and opening paragraphs, follow
+[PR and issue writing](AGENTS.md#pr-and-issue-writing). Explain the problem
+and why it matters in plain English before giving technical details.
+
 ## Pull requests
 
 Use the [PR template](.github/pull_request_template.md) and follow the
