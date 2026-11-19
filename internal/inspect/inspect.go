@@ -465,6 +465,26 @@ func (t *traversal) readStreamingQuery(ctx context.Context, selected, name strin
 	return nil
 }
 
+// reserved records the row table name of the directory selected as the
+// storage purpose holds it, and reports whether the table is reserved storage
+// rather than a table of the schema. The record of repeatable migrations is
+// reserved only for a host that reads it as reserved storage; for any other
+// host it is an unread table, which a host that takes unread tables is told
+// of, and in neither case a table a plan could drop.
+func (t *traversal) reserved(selected, name string, purpose protocol.ReservedObject_Purpose) bool {
+	if purpose == protocol.ReservedObject_PURPOSE_UNSPECIFIED {
+		return false
+	}
+	reference := &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name}
+	if purpose == protocol.ReservedObject_REPEATABLE && !t.common.RepeatableRecord {
+		t.unmodeled = append(t.unmodeled, &protocol.UnreadTable{Table: reference, Diagnostic: &protocol.ProviderDiagnostic{
+			Reason: fmt.Sprintf("%s is the record of repeatable migrations, which this host does not read as reserved storage", path.Join(selected, name))}})
+		return true
+	}
+	t.common.reserve(t.result, reference, purpose)
+	return true
+}
+
 // readRowTable reads a listed row table with its indexes and changefeeds. A
 // reserved table is recorded as reserved, and a replica is left to the
 // replication that writes it.
@@ -473,8 +493,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	if err != nil {
 		return err
 	}
-	if description.reservation != protocol.ReservedObject_PURPOSE_UNSPECIFIED {
-		t.common.reserve(t.result, &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name}, description.reservation)
+	if t.reserved(selected, name, description.reservation) {
 		return nil
 	}
 	// A table an async replication writes, or wrote without

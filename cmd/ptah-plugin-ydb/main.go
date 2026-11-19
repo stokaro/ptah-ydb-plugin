@@ -47,6 +47,7 @@ func main() {
 		Transactions:    owner,
 		Statements:      owner,
 		History:         owner,
+		Repeatables:     owner,
 		Locks:           owner,
 		Metadata:        owner,
 		SQLAnalyzer:     owner,

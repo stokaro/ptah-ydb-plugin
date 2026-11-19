@@ -244,6 +244,12 @@ func (s Store) appendBuiltinLog(ctx context.Context, runner Runner, row *protoco
 	if _, err := s.Encode(row); err != nil {
 		return protocol.MetadataResult_REJECTED, false, err
 	}
+	// The engine's layout has no column for the identity of a repeatable
+	// migration, and writing the entry without it would report the attempt
+	// as one of version 0.
+	if row.GetRepeatable() != "" {
+		return protocol.MetadataResult_REJECTED, false, errors.New("the built-in YDB engine's log layout holds no repeatable migration identity")
+	}
 	stored := LogRowOf(row)
 	at, err := timestamp(stored.LoggedAt)
 	if err != nil {

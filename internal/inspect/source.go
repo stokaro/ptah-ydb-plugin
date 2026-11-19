@@ -21,6 +21,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/repeatables"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -99,9 +100,15 @@ func classifyTable(absolute string, result *native.DescribeTableResult) (*descri
 	if err != nil {
 		return nil, err
 	}
+	record, err := repeatables.Owned(path.Base(absolute), result)
+	if err != nil {
+		return nil, err
+	}
 	switch {
 	case owned || history.BuiltinOwned(path.Base(absolute), result):
 		purpose = protocol.ReservedObject_HISTORY
+	case record:
+		purpose = protocol.ReservedObject_REPEATABLE
 	case purpose == protocol.ReservedObject_PURPOSE_UNSPECIFIED:
 		// Ptah's built-in YDB engine left its revision, log and tag tables
 		// out of every read by name; one in its layout is still the

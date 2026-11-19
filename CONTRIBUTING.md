@@ -66,9 +66,9 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.42.0, whose
-[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.42.0/provider-sdk/provider/contract.go)
-speak 25.43. The provider's [description](internal/backend/provider.go)
+At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.44.0, whose
+[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.44.0/provider-sdk/provider/contract.go)
+speak 25.45. The provider's [description](internal/backend/provider.go)
 requires only 25.7 to start; later features are negotiated with the host.
 Check those source files when changing a dependency or capability. Builds
 require neither the Ptah application source nor a local SDK checkout.
@@ -114,7 +114,10 @@ dependencies.
 
 Live checks require an isolated test database. Schema tests create uniquely
 named directories, tables, and topics and remove them afterward. Session tests only
-read server metadata.
+read server metadata. The tests that take the provider's lock, the host-driven
+ones among them, refuse to run when the coordination node `ptah_locks` already
+exists at the database root, so a manual `ptah migrations up` against the same
+server, which leaves that node behind, breaks them until the node is dropped.
 
 ```sh
 PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
