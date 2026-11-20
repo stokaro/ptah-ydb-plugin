@@ -60,7 +60,7 @@ func historyRules(h history) []rule {
 func ydbDropUsedColumnRule(h history) rule {
 	return rule{
 		published: published{
-			Code:     "YD104",
+			Code:     "dependency/drop-indexed-column",
 			Title:    "column dropped while an index or the TTL uses it",
 			Severity: protocol.LintRule_ERROR,
 		},
@@ -133,7 +133,7 @@ func (t ydbTable) dropRefusal(column string) (string, bool) {
 // where the directory's own history says so (see [ydbTable.minPartitions]),
 // and warns where it does not know.
 func ydbPartitionMinimumResetRule(h history) rule {
-	return ydbTableResetRule(h, "YD105", "partitioning change resets the minimum partition count", partitionMinimumReset)
+	return ydbTableResetRule(h, "side-effect/reset-min-partition-count", "partitioning change resets the minimum partition count", partitionMinimumReset)
 }
 
 // ydbTableResetRule is a warning about an ALTER TABLE that resets a setting of
@@ -206,10 +206,10 @@ func partitionMinimumReset(read yqlddl.Statement, table ydbTable) (string, bool)
 //
 // A table that splits at 2048 MB already, or does not split by size at all,
 // loses nothing, so the rule stays silent where the directory's own history
-// says so (see [ydbTable.sizeMB]), and warns where it does not know. YD105
+// says so (see [ydbTable.sizeMB]), and warns where it does not know. side-effect/reset-min-partition-count
 // reports the minimum the same statement resets.
 func ydbPartitionSizeResetRule(h history) rule {
-	return ydbTableResetRule(h, "YD118", "partitioning change resets the partition size", partitionSizeReset)
+	return ydbTableResetRule(h, "side-effect/reset-partition-size", "partitioning change resets the partition size", partitionSizeReset)
 }
 
 // partitionSizeReset says why an ALTER TABLE of table resets its partition
@@ -253,7 +253,7 @@ func partitionSizeReset(read yqlddl.Statement, table ydbTable) (string, bool) {
 func ydbViewOrphanedRule(h history) rule {
 	return rule{
 		published: published{
-			Code:     "YD106",
+			Code:     "dependency/drop-table-read-by-view",
 			Title:    "table dropped or renamed while a view reads it",
 			Severity: protocol.LintRule_ERROR,
 		},
@@ -328,11 +328,11 @@ func pronounFor(views []string) string {
 //
 // with one changefeed or several, and after DROP CHANGEFEED of each the same
 // rename is accepted. The table's changefeeds are read from the directory's
-// own migrations, as YD104 reads its indexes.
+// own migrations, as dependency/drop-indexed-column reads its indexes.
 func ydbMovedTableWithChangefeedRule(h history) rule {
 	return rule{
 		published: published{
-			Code:     "YD109",
+			Code:     "dependency/rename-table-with-changefeed",
 			Title:    "table renamed while it carries a changefeed",
 			Severity: protocol.LintRule_ERROR,
 		},
@@ -392,7 +392,7 @@ func changefeedList(changefeeds []string) string {
 func ydbNarrowSerialSequenceRule(h history) rule {
 	return rule{
 		published: published{
-			Code:          "YD107",
+			Code:          "side-effect/widen-serial-sequence",
 			Title:         "ALTER SEQUENCE widens a 16-bit or 32-bit Serial",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -437,7 +437,7 @@ func ydbNarrowSerialSequenceRule(h history) rule {
 func ydbReplayedRestartRule(h history) rule {
 	return rule{
 		published: published{
-			Code:          "YD108",
+			Code:          "side-effect/replay-sequence-restart",
 			Title:         "ALTER SEQUENCE replays an earlier RESTART",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -483,12 +483,13 @@ func ydbReplayedRestartRule(h history) rule {
 // while DROP TABLE takes it. A replication failed over first with `ALTER ASYNC
 // REPLICATION ... SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE')` leaves
 // ordinary writable tables behind a plain DROP, and CASCADE drops them, which
-// DS107 judges. The failover is read from the directory: the up migrations
-// before the analyzed version, then the file's statements before the drop.
+// destructive/drop-object judges. The failover is read from the directory: the
+// up migrations before the analyzed version, then the file's statements before
+// the drop.
 func ydbReplicationDroppedWithoutFailoverRule(h history) rule {
 	return rule{
 		published: published{
-			Code:          "YD115",
+			Code:          "side-effect/drop-replication-without-failover",
 			Title:         "async replication dropped without failover",
 			Severity:      protocol.LintRule_WARNING,
 			AppliesToDown: true,
@@ -532,12 +533,12 @@ func ydbReplicationDroppedWithoutFailoverRule(h history) rule {
 // declared, and YQL has no DROP FAMILY to take it back. A CREATE TABLE that
 // names an undeclared family is refused (`Unknown family nope`), and ADD
 // FAMILY in the same statement declares one, so neither is reported. The
-// table's families are read from the directory's own migrations, as YD104
+// table's families are read from the directory's own migrations, as dependency/drop-indexed-column
 // reads its indexes, and a table the directory did not create is not judged.
 func ydbUndeclaredColumnFamilyRule(h history) rule {
 	return rule{
 		published: published{
-			Code:     "YD119",
+			Code:     "side-effect/implicit-column-family",
 			Title:    "column family the table does not have",
 			Severity: protocol.LintRule_WARNING,
 		},
@@ -600,14 +601,14 @@ func (t ydbTable) undeclaredFamily(action yqlddl.Action) (string, bool) {
 // a search through the index answers as the table stood when the index was
 // built. 25.3.1.25 and later answer each write through the index.
 //
-// The index is known from the directory itself, as YD104 knows a table's
+// The index is known from the directory itself, as dependency/drop-indexed-column knows a table's
 // indexes; a table created outside it reports nothing. The rule reads the up
 // migrations only: a down migration's writes meet the same index, and the
 // state before one is not the state the directory's own history builds.
 func ydbVectorIndexStaleRule(h history) rule {
 	return rule{
 		published: published{
-			Code:     "YD131",
+			Code:     "side-effect/vector-index-misses-writes",
 			Title:    "rows written past a vector index that does not take them",
 			Severity: protocol.LintRule_WARNING,
 		},
@@ -653,7 +654,7 @@ func ydbVectorIndexStaleRule(h history) rule {
 func ydbCommentLeftBehindRule(h history) rule {
 	return rule{
 		published: published{
-			Code:     "YD150",
+			Code:     "side-effect/orphaned-comment",
 			Title:    "comment left behind by a drop or a rename",
 			Severity: protocol.LintRule_WARNING,
 		},

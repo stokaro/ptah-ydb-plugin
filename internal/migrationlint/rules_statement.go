@@ -48,16 +48,17 @@ func statementRules() []rule {
 // on an empty table and on one holding rows, while the same index declared in
 // CREATE TABLE is accepted on both. With EnableAddUniqueIndex on, 26.2.1.14
 // builds it over an empty table and fails on a duplicate (`Duplicate key
-// found`), which is MF101's and MF102's question rather than this rule's. On a
-// target that refuses the index, this rule replaces theirs.
+// found`), which is the question of the host's data-dependent/add-unique-index
+// and data-dependent/rebuild-index-as-unique rules rather than this rule's. On
+// a target that refuses the index, this rule replaces theirs.
 func ydbUniqueIndexOnExistingTableRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD101",
+			Code:          "capability/unique-index-on-existing-table",
 			Title:         "unique index added to an existing table",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
-			Subsumes:      []string{"MF101", "MF102"},
+			Subsumes:      []string{"data-dependent/add-unique-index", "data-dependent/rebuild-index-as-unique"},
 		},
 		Statement: func(file checkedFile, stmt *Statement) (bool, string) {
 			read := yqlddl.Read(stmt.SQL)
@@ -99,15 +100,15 @@ func missingRequirement(read yqlddl.Statement, target Target, key yqlddl.Capabil
 // The first is refused on every line, the second where the target lacks
 // [yqlddl.AddColumnWithDefault]. Neither depends on the rows, so a table
 // this migration created is no exception, which is where it differs from
-// DD101; it replaces DD101 on the statement.
+// data-dependent/add-not-null-column; it replaces data-dependent/add-not-null-column on the statement.
 func ydbAddColumnRefusedRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD103",
+			Code:          "ydb/add-column-form",
 			Title:         "column added in a form YDB refuses",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
-			Subsumes:      []string{"DD101"},
+			Subsumes:      []string{"data-dependent/add-not-null-column"},
 		},
 		Statement: func(file checkedFile, stmt *Statement) (bool, string) {
 			read := yqlddl.Read(stmt.SQL)
@@ -154,7 +155,7 @@ func ydbAddColumnRefusedRule() rule {
 func ydbGrantOptionRevokeRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD110",
+			Code:          "side-effect/revoke-grant-option",
 			Title:         "REVOKE GRANT OPTION FOR revokes the permission too",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -173,12 +174,12 @@ func ydbGrantOptionRevokeRule() rule {
 // ydbPrincipalDropRule reports DROP USER and DROP GROUP, which leave every
 // permission entry of the principal behind. Measured on 25.1.4.7 and
 // 26.2.1.14: after `DROP USER u`, .sys/auth_permissions still lists u's
-// entries, and a user created later under the same name holds them. DS107
+// entries, and a user created later under the same name holds them. destructive/drop-object
 // reports the drop itself; this rule says what it leaves.
 func ydbPrincipalDropRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD111",
+			Code:          "side-effect/dropped-principal-keeps-permissions",
 			Title:         "dropped user or group keeps its permissions",
 			Severity:      protocol.LintRule_WARNING,
 			AppliesToDown: true,
@@ -213,7 +214,7 @@ func ydbPrincipalDropRule() rule {
 func ydbTopicResetRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD113",
+			Code:          "side-effect/reset-topic-setting",
 			Title:         "topic setting reset",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -280,7 +281,7 @@ func resetNames(action yqlddl.Action) []string {
 func ydbTopicSettingIgnoredRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD114",
+			Code:          "side-effect/ignored-topic-setting",
 			Title:         "topic setting YDB keeps as nothing",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -389,7 +390,7 @@ func unknownCodec(list string) string {
 func ydbSecretInClearRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD116",
+			Code:          "security/secret-in-clear",
 			Title:         "secret written in clear",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -428,7 +429,7 @@ func ydbSecretInClearRule() rule {
 func ydbDefaultPoolDropRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD120",
+			Code:          "destructive/drop-default-resource-pool",
 			Title:         "the resource pool default dropped",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -456,7 +457,7 @@ func ydbDefaultPoolDropRule() rule {
 func ydbBackupCollectionDropRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD121",
+			Code:          "destructive/drop-backup-collection",
 			Title:         "backup collection dropped",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -486,7 +487,7 @@ func ydbBackupCollectionDropRule() rule {
 func ydbAnalyzeRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD122",
+			Code:          "capability/analyze",
 			Title:         "ANALYZE in a migration",
 			Severity:      protocol.LintRule_WARNING,
 			AppliesToDown: true,
@@ -519,7 +520,7 @@ func ydbAnalyzeRule() rule {
 func ydbVectorIndexUnbuiltRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD130",
+			Code:          "capability/vector-index",
 			Title:         "vector index the target does not build",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,

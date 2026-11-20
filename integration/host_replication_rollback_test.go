@@ -71,7 +71,7 @@ func TestHostRollsBackReplicationChanges_HappyPath(t *testing.T) {
 		"  paused:\n    schema: " + f.directory + "\n    connection_string: " + strconv.Quote(moved) + item("s2", "r2")
 
 	migrations, up, down := hostGenerate(c, f.directory, "yaml", declared)
-	// The host rates DROP ASYNC REPLICATION ... CASCADE destructive (DS107).
+	// The host rates DROP ASYNC REPLICATION ... CASCADE destructive (destructive/drop-object).
 	upped, upErr := hostMigrate(c, f.directory, migrations, "migrations", "up", "--allow-destructive")
 	_, oldAfterUp := replicationOf(f, "old")
 	downed, downErr := hostMigrate(c, f.directory, migrations, "migrations", "down", "--target", "0", "--confirm")

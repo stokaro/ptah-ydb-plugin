@@ -39,10 +39,10 @@ a minor version), its engines and the archive and executable for each platform.
 A host starts the release when its contract has the same major version and a
 minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
-provider requires contract 25.7. It negotiates `database.context` and
+provider requires contract 26.0. It negotiates `database.context` and
 `values.context` to resolve dependency paths, and `planning.lifecycle` to order
 native replacements around common table operations. It offers
-`planning.statement-style` (contract 25.8), which ptah-compat's `migrate diff`
+`planning.statement-style`, which ptah-compat's `migrate diff`
 needs, because it plans in the exact statement style: no comment that only
 describes a statement, no guard the plan does not need and no CASCADE. The
 operations the provider plans carry none of these in either style, so an exact
@@ -66,10 +66,12 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.44.0, whose
-[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.44.0/provider-sdk/provider/contract.go)
-speak 25.45. The provider's [description](internal/backend/provider.go)
-requires only 25.7 to start; later features are negotiated with the host.
+At this revision, [`go.mod`](go.mod) pins `ptah.run/provider-sdk` v0.45.0, whose
+[contract declarations](https://github.com/stokaro/ptah/blob/provider-sdk/v0.45.0/provider-sdk/provider/contract.go)
+speak 26.0. The provider's [description](internal/backend/provider.go)
+requires 26.0 to start; later features are negotiated with the host. Lint
+rules are identified by `category/name`, and `provider.ValidLintRuleName` is
+the grammar the SDK checks.
 Check those source files when changing a dependency or capability. Builds
 require neither the Ptah application source nor a local SDK checkout.
 

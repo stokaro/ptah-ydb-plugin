@@ -15,14 +15,14 @@ import (
 // --dialect ydb --server-version` resolves the release line before it asks
 // this provider, and the provider judges the files by that line's
 // capabilities. A column added with a default needs add_column_with_default,
-// which 25.1 lacks and 26.2 has, so YD103 reports it on 25.1 alone. The run
+// which 25.1 lacks and 26.2 has, so ydb/add-column-form reports it on 25.1 alone. The run
 // connects to no database.
 func TestHostMigrationsLintJudgesByTheServerVersion_HappyPath(t *testing.T) {
 	for _, line := range []struct {
 		version string
 		want    string
 	}{
-		{version: "25.1", want: `(?s).*0000000002_v\.up\.sql:1 \[error\] YD103: ADD COLUMN v gives the column a default, which needs target capability ` +
+		{version: "25.1", want: `(?s).*0000000002_v\.up\.sql:1 \[error\] ydb/add-column-form: ADD COLUMN v gives the column a default, which needs target capability ` +
 			`add_column_with_default, unavailable on this ydb target.*1 finding\(s\)\..*`},
 		{version: "26.2", want: `(?s).*No lint findings\..*`},
 	} {
@@ -51,8 +51,8 @@ func TestHostMigrationsLintReportsYQLRules_HappyPath(t *testing.T) {
 		name, dialect, version string
 		want, absent           []string
 	}{
-		{"26.2", "ydb", "26.2.1.14", []string{"YD101", "YD104"}, []string{"YD103"}},
-		{"25.1 TLS alias", "ydbs", "25.1.4.7", []string{"YD101", "YD103", "YD104"}, nil},
+		{"26.2", "ydb", "26.2.1.14", []string{"capability/unique-index-on-existing-table", "dependency/drop-indexed-column"}, []string{"ydb/add-column-form"}},
+		{"25.1 TLS alias", "ydbs", "25.1.4.7", []string{"capability/unique-index-on-existing-table", "ydb/add-column-form", "dependency/drop-indexed-column"}, nil},
 	} {
 		t.Run(line.name, func(t *testing.T) {
 			c := testcheck.New(t)

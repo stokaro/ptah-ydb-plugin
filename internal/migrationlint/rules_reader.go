@@ -30,7 +30,7 @@ func readerRules() []rule {
 func ydbMixedQueryRule() rule {
 	return rule{
 		published: published{
-			Code:     "YD102",
+			Code:     "transaction/scheme-and-data-in-one-query",
 			Title:    "scheme and data statements in one query",
 			Severity: protocol.LintRule_ERROR,
 		},
@@ -69,7 +69,7 @@ func ydbMixedQueryRule() rule {
 func ydbSchemaSecretInClearRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD140",
+			Code:          "security/secret-value-in-migration",
 			Title:         "secret value written in the migration",
 			Severity:      protocol.LintRule_ERROR,
 			AppliesToDown: true,
@@ -102,7 +102,7 @@ func ydbSchemaSecretInClearRule() rule {
 func ydbDeprecatedSecretRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD141",
+			Code:          "security/deprecated-secret-object",
 			Title:         "external data source credential in a deprecated secret object",
 			Severity:      protocol.LintRule_WARNING,
 			AppliesToDown: true,
@@ -130,7 +130,7 @@ func ydbDeprecatedSecretRule() rule {
 func ydbStreamingCheckpointRule() rule {
 	return rule{
 		published: published{
-			Code:          "YD160",
+			Code:          "destructive/discard-streaming-query-state",
 			Title:         "streaming query checkpoint state discarded",
 			Severity:      protocol.LintRule_WARNING,
 			AppliesToDown: true,

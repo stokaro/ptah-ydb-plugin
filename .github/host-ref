@@ -1,0 +1,2 @@
+# Run the live legs against the host branch that names lint rules.
+feat/6340-lint-name-selectors

@@ -662,7 +662,7 @@ func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) 
 // `migrations up` lints the pending migrations through this provider before it
 // runs any of them. A policy whose gate section blocks on the YD family refuses
 // the unique index the second version adds to the table the first version
-// creates, in YD101's words, and no migration runs: the directory holds the
+// creates, in capability/unique-index-on-existing-table's words, and no migration runs: the directory holds the
 // revision table the host creates first, and no users. Without the gate section
 // the first version runs and the server refuses the second. The host's test
 // quotes the server's words there, and the provider's reason carries the same
@@ -691,7 +691,7 @@ func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
 
 	c.Assert(gatedErr, qt.IsNotNil)
 	c.Assert(gated, qt.Matches, `(?s).*pending migrations carry lint findings the policy's gate section blocks on.*`+
-		`0000000002_unique\.up\.sql:1 YD101 error: ADD INDEX users_email adds a unique index to `+regexp.QuoteMeta(f.table("users"))+`.*`)
+		`0000000002_unique\.up\.sql:1 capability/unique-index-on-existing-table error: ADD INDEX users_email adds a unique index to `+regexp.QuoteMeta(f.table("users"))+`.*`)
 	c.Assert(namesAfterGate, qt.Not(qt.Contains), "users")
 	c.Assert(ungatedErr, qt.IsNotNil)
 	c.Assert(ungated, qt.Matches, `(?s).*failed to apply migration 2: .*`+refusal+`.*`)

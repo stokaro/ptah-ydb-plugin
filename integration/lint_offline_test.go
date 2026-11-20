@@ -48,7 +48,7 @@ func TestMigrationLintOfflineSubprocess(t *testing.T) {
 	}
 	// The request answers no capability, so the target holds none: a unique
 	// index added to a table that exists is refused.
-	checked, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD101"}, Files: files})
+	checked, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"capability/unique-index-on-existing-table"}, Files: files})
 	c.Assert(err, qt.IsNil)
 	c.Assert(checked.Findings, qt.HasLen, 1)
 	c.Assert(checked.Findings[0].File, qt.Equals, int32(1))
@@ -56,7 +56,7 @@ func TestMigrationLintOfflineSubprocess(t *testing.T) {
 
 	// The index the earlier statement added keys v, which the history the
 	// directory's files leave says.
-	used, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD104"}, Files: files})
+	used, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"dependency/drop-indexed-column"}, Files: files})
 	c.Assert(err, qt.IsNil)
 	c.Assert(used.Findings, qt.HasLen, 1)
 	c.Assert(used.Findings[0].Statement, qt.Equals, int32(2))
@@ -71,11 +71,11 @@ func TestMigrationLintOfflineSubprocess(t *testing.T) {
 	// Lint opens no session. A canceled call does not poison the process.
 	canceled, cancel := context.WithCancel(c.Context())
 	cancel()
-	_, err = client.CheckLintMigrations(canceled, &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD101"}, Files: files})
+	_, err = client.CheckLintMigrations(canceled, &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"capability/unique-index-on-existing-table"}, Files: files})
 	c.Assert(err, qt.IsNotNil)
-	_, err = client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD999"}, Files: files})
+	_, err = client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"ydb/no-such-rule"}, Files: files})
 	c.Assert(err, qt.IsNotNil)
-	again, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD101"}, Files: files})
+	again, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"capability/unique-index-on-existing-table"}, Files: files})
 	c.Assert(err, qt.IsNil)
 	c.Assert(again.Findings, qt.HasLen, 1)
 }

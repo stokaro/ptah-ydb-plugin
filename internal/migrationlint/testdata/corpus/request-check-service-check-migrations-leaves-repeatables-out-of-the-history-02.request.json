@@ -6,7 +6,7 @@
    "capabilities": null
   },
   "codes": [
-   "YD104"
+   "dependency/drop-indexed-column"
   ],
   "files": [
    {

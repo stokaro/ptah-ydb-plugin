@@ -84,8 +84,8 @@ func TestHostAppliesViews_HappyPath(t *testing.T) {
 // that leaves out every table and view drops the views first, a view before
 // the view it reads, since YDB drops a table a view reads and keeps the view.
 // Nothing is left to plan or to read after it. The host's test also lints the
-// migration it writes for YD106; the plan here runs through the provider's
-// native table drops, and the provider's YD106 parity with the host is held
+// migration it writes for dependency/drop-table-read-by-view; the plan here runs through the provider's
+// native table drops, and the provider's dependency/drop-table-read-by-view parity with the host is held
 // offline by TestCorpus_ChecksAsTheHost.
 func TestHostDropsViewsBeforeTheirTables_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
