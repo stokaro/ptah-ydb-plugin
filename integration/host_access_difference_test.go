@@ -40,10 +40,12 @@ func newAccessDifferenceNames(c *qt.C, db *sql.DB) accessDifferenceNames {
 // accessDifferenceDeclaration declares the table orders of directory, the
 // group readers, the user app in it and in DATA-READERS, the group auditors,
 // and grants on the table, the directory and the database, as the host's
-// fixture does.
+// fixture does. readers states an empty member_of: a principal that never
+// writes member_of keeps every membership the database holds, and this one
+// owns its memberships, so the plan drops the one the test adds.
 func accessDifferenceDeclaration(directory string, names accessDifferenceNames) string {
 	return "tables:\n  orders:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
-		"roles:\n  " + names.readers + ":\n    group: true\n  " + names.app + ":\n    login: true\n    member_of: [" + names.readers + ", DATA-READERS]\n" +
+		"roles:\n  " + names.readers + ":\n    group: true\n    member_of: []\n  " + names.app + ":\n    login: true\n    member_of: [" + names.readers + ", DATA-READERS]\n" +
 		"  " + names.auditors + ":\n    group: true\n" +
 		"grants:\n  table:\n    role: " + names.readers + "\n    privileges: [SELECT ROW, ydb.generic.list]\n    on_table: " + directory + ".orders\n" +
 		"  directory:\n    role: " + names.readers + "\n    privileges: [LIST]\n    on_schema: " + directory + "\n" +
