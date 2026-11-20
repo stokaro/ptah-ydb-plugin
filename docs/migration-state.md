@@ -179,7 +179,10 @@ membership, including edges whose principals are outside the managed role list.
 The host plans the removal of a membership only for a principal that states
 `member_of`, as a list or as an empty one (`member_of: []`), and only from a
 group the declaration declares; a principal without `member_of` keeps every
-membership the database holds.
+membership the database holds. Deleting `member_of` from a principal therefore
+revokes nothing, and an empty list takes away the last membership. The host's
+`schema apply` and `schema compare` write an `UNMANAGED` line for each
+membership in a declared group they keep for a principal without `member_of`.
 
 A read leaves out of the description the users and groups the cluster made for
 itself, the database's owner, and every user and group of a dev realm, and
