@@ -176,6 +176,7 @@ ASCII letters and digits. Groups have no login or password settings. Membership
 can name a cluster-managed group, but cannot declare self-membership or make a
 principal a member of a declared user. Inspection preserves every observed
 membership, including edges whose principals are outside the managed role list.
+
 The host plans the removal of a membership only for a principal that states
 `member_of`, as a list or as an empty one (`member_of: []`), and only from a
 group the declaration declares; a principal without `member_of` keeps every
