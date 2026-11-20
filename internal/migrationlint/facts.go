@@ -127,7 +127,7 @@ func bareWord(value string) bool {
 }
 
 // schemaKind names a schema statement by its first two words, upper case, as
-// the host's SQL004 lists the statements no rule examined. It stops at the
+// the host's coverage/unanalyzed-statements lists the statements no rule examined. It stops at the
 // first token that is not a word.
 func schemaKind(sql string) string {
 	var words []string

@@ -10,25 +10,25 @@
       },
       "findings": [
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 7,
           "column": 9,
           "message": "ADD COLUMN later with a default on table first requires target capability add_column_with_default, unavailable on this target"
         },
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 11,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "DDL001",
+          "rule": "design/no-primary-key",
           "line": 11,
           "column": 55,
           "message": "table \"second\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
         },
         {
-          "rule": "SQL004",
+          "rule": "coverage/unanalyzed-statements",
           "line": 1,
           "column": 1,
           "message": "no rule examined DROP TABLE in this file"
@@ -44,25 +44,25 @@
       },
       "findings": [
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 7,
           "column": 9,
           "message": "ADD COLUMN later with a default on table first requires target capability add_column_with_default, unavailable on this target"
         },
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 11,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "DDL001",
+          "rule": "design/no-primary-key",
           "line": 11,
           "column": 55,
           "message": "table \"second\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
         },
         {
-          "rule": "SQL004",
+          "rule": "coverage/unanalyzed-statements",
           "line": 1,
           "column": 1,
           "message": "no rule examined DROP TABLE in this file"
@@ -78,19 +78,19 @@
       },
       "findings": [
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 11,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "DDL001",
+          "rule": "design/no-primary-key",
           "line": 11,
           "column": 55,
           "message": "table \"second\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
         },
         {
-          "rule": "SQL004",
+          "rule": "coverage/unanalyzed-statements",
           "line": 1,
           "column": 1,
           "message": "no rule examined DROP TABLE in this file"
