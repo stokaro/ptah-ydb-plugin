@@ -660,9 +660,10 @@ func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) 
 
 // Ported from the host's TestYDBBinary_MigrationsUpGatesOnTheYDFamily:
 // `migrations up` lints the pending migrations through this provider before it
-// runs any of them. A policy whose gate section blocks on the YD family refuses
-// the unique index the second version adds to the table the first version
-// creates, in capability/unique-index-on-existing-table's words, and no migration runs: the directory holds the
+// runs any of them. A policy whose gate section blocks on the capability
+// category refuses the unique index the second version adds to the table the
+// first version creates, in capability/unique-index-on-existing-table's words,
+// and no migration runs: the directory holds the
 // revision table the host creates first, and no users. Without the gate section
 // the first version runs and the server refuses the second. The host's test
 // quotes the server's words there, and the provider's reason carries the same
@@ -671,7 +672,7 @@ func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) 
 // that the release has no unique secondary index (gap G122). The 26.2 test
 // server starts with EnableAddUniqueIndex on, under which it builds the
 // index, so the test turns the flag off there while it runs.
-func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
+func TestHostMigrationsUpGatesOnTheCapabilityCategory_FailurePath(t *testing.T) {
 	refusals := map[string]string{
 		"26.2": `capability unique_index_on_existing_table is off on this YDB cluster, which runs with feature flag EnableAddUniqueIndex off: ` +
 			`YDB refused the statement, saying "Adding a unique index to an existing table is disabled" \(BAD_REQUEST\)`,
@@ -685,7 +686,7 @@ func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
 	c.Assert(measured, qt.IsTrue)
 
 	gated, gatedErr := hostCommand(c, append([]string{"migrations", "up"},
-		f.target(gateMigrations(c, f, "dialect: ydb\ngate:\n  families: [YD]\n"))...)...)
+		f.target(gateMigrations(c, f, "dialect: ydb\ngate:\n  rules: [capability]\n"))...)...)
 	namesAfterGate := f.names(c)
 	ungated, ungatedErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(gateMigrations(c, f, "dialect: ydb\n"))...)...)
 
