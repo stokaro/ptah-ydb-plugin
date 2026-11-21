@@ -75,33 +75,29 @@ func TestHostRendersASerialWithSettingsOffline_HappyPath(t *testing.T) {
 // and printed none.
 func TestHostRenderNamesWhatItLeavesOut_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	requireHostChange(c, "stokaro/ptah#5779, which names a render's omissions on stderr")
+	requireHostChange(c, "stokaro/ptah#6391, which warns about a render's omissions on stderr")
 	dir := writeFiles(c, filepath.Join(c.TempDir(), "entities"), map[string]string{"entities.go": omittingEntities})
 
 	out, err := hostCommand(c, "schema", "render", "--root-dir", dir, "--dialect", "ydb")
 
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
-	c.Assert(renderNotes(out), qt.DeepEquals, []string{
-		"ydb: column app.events.code: type modifier=CHAR(8): length 8 was skipped (unsupported)",
-		"ydb: column app.orders.id: identity increment=5 was skipped (unsupported)",
-		"ydb: column app.orders.id: identity start=100 was skipped (unsupported)",
-		"ydb: column app/sub.accounts.email: type modifier=VARCHAR(255): length 255 was skipped (unsupported)",
-		"ydb: column app/sub.accounts.seen: type modifier=TIMESTAMP(3): precision 3 (YDB keeps microseconds) was skipped (unsupported)",
+	c.Assert(renderWarnings(out), qt.DeepEquals, []string{
+		"warning: ydb: column app.events.code: type modifier=CHAR(8): length 8 was skipped (unsupported)",
+		"warning: ydb: column app.orders.id: identity increment=5 was skipped (unsupported)",
+		"warning: ydb: column app.orders.id: identity start=100 was skipped (unsupported)",
+		"warning: ydb: column app/sub.accounts.email: type modifier=VARCHAR(255): length 255 was skipped (unsupported)",
+		"warning: ydb: column app/sub.accounts.seen: type modifier=TIMESTAMP(3): precision 3 (YDB keeps microseconds) was skipped (unsupported)",
 	})
 }
 
-// renderNotes are the lines of a command's output that name a declaration a
-// render went on without, each without its prefix. A released host writes
-// them as "note: " lines and Ptah master as "warning: " lines, in the same
-// words, so the test reads both and compares the words.
-func renderNotes(output string) []string {
-	var notes []string
+// renderWarnings are the lines of a command's output that name a declaration
+// a render went on without.
+func renderWarnings(output string) []string {
+	var warnings []string
 	for line := range strings.SplitSeq(output, "\n") {
-		for _, prefix := range []string{"note: ", "warning: "} {
-			if rest, found := strings.CutPrefix(line, prefix); found {
-				notes = append(notes, rest)
-			}
+		if strings.HasPrefix(line, "warning: ") {
+			warnings = append(warnings, line)
 		}
 	}
-	return notes
+	return warnings
 }
