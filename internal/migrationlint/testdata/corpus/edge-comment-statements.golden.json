@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -22,7 +22,7 @@
     ],
     "findings": [
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP INDEX t_a leaves its comment on the table as the attribute ptah.comment.index.t_a, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `t_a` ON `t` IS NULL",
       "statement": 0,
@@ -34,7 +34,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "RENAME INDEX t_b TO t_b2 leaves the index's comment under the old name, as the attribute ptah.comment.index.t_b; move it with COMMENT ON INDEX `t_b2` ON `t` and COMMENT ON INDEX `t_b` ON `t` IS NULL",
       "statement": 1,
@@ -46,7 +46,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN c leaves its comment on the table as the attribute ptah.comment.column.c, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`c` IS NULL",
       "statement": 2,
@@ -58,7 +58,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN b: index t_b2 keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
       "statement": 4,
@@ -71,7 +71,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN b leaves its comment on the table as the attribute ptah.comment.column.b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`b` IS NULL",
       "statement": 4,
@@ -83,7 +83,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN a leaves its comment on the table as the attribute ptah.comment.column.a, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`a` IS NULL",
       "statement": 4,
@@ -99,13 +99,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD150", "0002_t.up.sql:2:YD150", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:3:YD150", "0002_t.up.sql:4:BC104", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:5:YD150", "0002_t.up.sql:5:YD150"],
+   "report": ["0002_t.up.sql:1:side-effect/orphaned-comment", "0002_t.up.sql:2:side-effect/orphaned-comment", "0002_t.up.sql:3:rollout/drop-column", "0002_t.up.sql:3:destructive/drop-column", "0002_t.up.sql:3:side-effect/orphaned-comment", "0002_t.up.sql:4:rollout/drop-column", "0002_t.up.sql:4:destructive/drop-column", "0002_t.up.sql:5:rollout/drop-column", "0002_t.up.sql:5:destructive/drop-column", "0002_t.up.sql:5:dependency/drop-indexed-column", "0002_t.up.sql:5:side-effect/orphaned-comment", "0002_t.up.sql:5:side-effect/orphaned-comment"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -124,7 +124,7 @@
     ],
     "findings": [
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP INDEX t_a leaves its comment on the table as the attribute ptah.comment.index.t_a, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `t_a` ON `t` IS NULL",
       "statement": 0,
@@ -136,7 +136,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "RENAME INDEX t_b TO t_b2 leaves the index's comment under the old name, as the attribute ptah.comment.index.t_b; move it with COMMENT ON INDEX `t_b2` ON `t` and COMMENT ON INDEX `t_b` ON `t` IS NULL",
       "statement": 1,
@@ -148,7 +148,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN c leaves its comment on the table as the attribute ptah.comment.column.c, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`c` IS NULL",
       "statement": 2,
@@ -160,7 +160,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN b: index t_b2 keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
       "statement": 4,
@@ -173,7 +173,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN b leaves its comment on the table as the attribute ptah.comment.column.b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`b` IS NULL",
       "statement": 4,
@@ -185,7 +185,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN a leaves its comment on the table as the attribute ptah.comment.column.a, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`a` IS NULL",
       "statement": 4,
@@ -201,13 +201,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD150", "0002_t.up.sql:2:YD150", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:3:YD150", "0002_t.up.sql:4:BC104", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:5:YD150", "0002_t.up.sql:5:YD150"],
+   "report": ["0002_t.up.sql:1:side-effect/orphaned-comment", "0002_t.up.sql:2:side-effect/orphaned-comment", "0002_t.up.sql:3:rollout/drop-column", "0002_t.up.sql:3:destructive/drop-column", "0002_t.up.sql:3:side-effect/orphaned-comment", "0002_t.up.sql:4:rollout/drop-column", "0002_t.up.sql:4:destructive/drop-column", "0002_t.up.sql:5:rollout/drop-column", "0002_t.up.sql:5:destructive/drop-column", "0002_t.up.sql:5:dependency/drop-indexed-column", "0002_t.up.sql:5:side-effect/orphaned-comment", "0002_t.up.sql:5:side-effect/orphaned-comment"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -227,7 +227,7 @@
     ],
     "findings": [
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP INDEX t_a leaves its comment on the table as the attribute ptah.comment.index.t_a, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `t_a` ON `t` IS NULL",
       "statement": 0,
@@ -239,7 +239,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "RENAME INDEX t_b TO t_b2 leaves the index's comment under the old name, as the attribute ptah.comment.index.t_b; move it with COMMENT ON INDEX `t_b2` ON `t` and COMMENT ON INDEX `t_b` ON `t` IS NULL",
       "statement": 1,
@@ -251,7 +251,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN c leaves its comment on the table as the attribute ptah.comment.column.c, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`c` IS NULL",
       "statement": 2,
@@ -263,7 +263,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN b: index t_b2 keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
       "statement": 4,
@@ -276,7 +276,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN b leaves its comment on the table as the attribute ptah.comment.column.b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`b` IS NULL",
       "statement": 4,
@@ -288,7 +288,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 1,
       "message": "DROP COLUMN a leaves its comment on the table as the attribute ptah.comment.column.a, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`a` IS NULL",
       "statement": 4,
@@ -304,7 +304,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD150", "0002_t.up.sql:2:YD150", "0002_t.up.sql:3:DS102", "0002_t.up.sql:3:YD150", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:5:YD150", "0002_t.up.sql:5:YD150"],
+   "report": ["0002_t.up.sql:1:side-effect/orphaned-comment", "0002_t.up.sql:2:side-effect/orphaned-comment", "0002_t.up.sql:3:destructive/drop-column", "0002_t.up.sql:3:side-effect/orphaned-comment", "0002_t.up.sql:4:destructive/drop-column", "0002_t.up.sql:5:destructive/drop-column", "0002_t.up.sql:5:dependency/drop-indexed-column", "0002_t.up.sql:5:side-effect/orphaned-comment", "0002_t.up.sql:5:side-effect/orphaned-comment"],
    "server_version": "",
    "split": 0
   },
@@ -407,7 +407,7 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:4:BC104", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102"],
+   "report": ["0002_t.up.sql:3:rollout/drop-column", "0002_t.up.sql:3:destructive/drop-column", "0002_t.up.sql:4:rollout/drop-column", "0002_t.up.sql:4:destructive/drop-column", "0002_t.up.sql:5:rollout/drop-column", "0002_t.up.sql:5:destructive/drop-column"],
    "server_version": "",
    "split": -1
   }

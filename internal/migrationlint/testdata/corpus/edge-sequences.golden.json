@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -22,7 +22,7 @@
     ],
     "findings": [
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 0,
@@ -35,7 +35,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 1,
@@ -48,7 +48,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 1,
@@ -61,7 +61,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 2,
@@ -74,7 +74,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 3,
@@ -87,7 +87,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 3,
@@ -104,13 +104,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD107", "0002_t.up.sql:2:YD107", "0002_t.up.sql:2:YD108", "0002_t.up.sql:3:YD107", "0002_t.up.sql:4:YD107", "0002_t.up.sql:4:YD108"],
+   "report": ["0002_t.up.sql:1:side-effect/widen-serial-sequence", "0002_t.up.sql:2:side-effect/widen-serial-sequence", "0002_t.up.sql:2:side-effect/replay-sequence-restart", "0002_t.up.sql:3:side-effect/widen-serial-sequence", "0002_t.up.sql:4:side-effect/widen-serial-sequence", "0002_t.up.sql:4:side-effect/replay-sequence-restart"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -129,7 +129,7 @@
     ],
     "findings": [
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 0,
@@ -142,7 +142,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 1,
@@ -155,7 +155,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 1,
@@ -168,7 +168,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 2,
@@ -181,7 +181,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 3,
@@ -194,7 +194,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 3,
@@ -211,13 +211,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD107", "0002_t.up.sql:2:YD107", "0002_t.up.sql:2:YD108", "0002_t.up.sql:3:YD107", "0002_t.up.sql:4:YD107", "0002_t.up.sql:4:YD108"],
+   "report": ["0002_t.up.sql:1:side-effect/widen-serial-sequence", "0002_t.up.sql:2:side-effect/widen-serial-sequence", "0002_t.up.sql:2:side-effect/replay-sequence-restart", "0002_t.up.sql:3:side-effect/widen-serial-sequence", "0002_t.up.sql:4:side-effect/widen-serial-sequence", "0002_t.up.sql:4:side-effect/replay-sequence-restart"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -237,7 +237,7 @@
     ],
     "findings": [
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 0,
@@ -250,7 +250,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 1,
@@ -263,7 +263,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 1,
@@ -276,7 +276,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 2,
@@ -289,7 +289,7 @@
       ]
      },
      {
-      "code": "YD107",
+      "code": "side-effect/widen-serial-sequence",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
       "statement": 3,
@@ -302,7 +302,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 3,
@@ -319,7 +319,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD107", "0002_t.up.sql:2:YD107", "0002_t.up.sql:2:YD108", "0002_t.up.sql:3:YD107", "0002_t.up.sql:4:YD107", "0002_t.up.sql:4:YD108"],
+   "report": ["0002_t.up.sql:1:side-effect/widen-serial-sequence", "0002_t.up.sql:2:side-effect/widen-serial-sequence", "0002_t.up.sql:2:side-effect/replay-sequence-restart", "0002_t.up.sql:3:side-effect/widen-serial-sequence", "0002_t.up.sql:4:side-effect/widen-serial-sequence", "0002_t.up.sql:4:side-effect/replay-sequence-restart"],
    "server_version": "",
    "split": 0
   },
@@ -448,7 +448,7 @@
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -467,7 +467,7 @@
     ],
     "findings": [
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 1,
@@ -480,7 +480,7 @@
       ]
      },
      {
-      "code": "YD108",
+      "code": "side-effect/replay-sequence-restart",
       "file": 1,
       "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
       "statement": 3,
@@ -503,7 +503,7 @@
    "overrides": {
     "serial_sequence_keeps_range": true
    },
-   "report": ["0002_t.up.sql:2:YD108", "0002_t.up.sql:4:YD108"],
+   "report": ["0002_t.up.sql:2:side-effect/replay-sequence-restart", "0002_t.up.sql:4:side-effect/replay-sequence-restart"],
    "server_version": "",
    "split": 0
   }

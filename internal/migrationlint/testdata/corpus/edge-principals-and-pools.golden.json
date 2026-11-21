@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -15,73 +15,73 @@
     ],
     "findings": [
      {
-      "code": "YD110",
+      "code": "side-effect/revoke-grant-option",
       "file": 0,
       "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
       "statement": 0
      },
      {
-      "code": "YD110",
+      "code": "side-effect/revoke-grant-option",
       "file": 0,
       "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
       "statement": 1
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP USER leaves the user's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 3
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 4
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 5
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 6
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 7
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 8
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 11
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 12
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 13
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 14
@@ -91,13 +91,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_p.up.sql:1:YD110", "0001_p.up.sql:2:YD110", "0001_p.up.sql:4:DS107", "0001_p.up.sql:4:YD111", "0001_p.up.sql:5:DS107", "0001_p.up.sql:5:YD111", "0001_p.up.sql:6:DS107", "0001_p.up.sql:6:YD111", "0001_p.up.sql:7:YD120", "0001_p.up.sql:8:YD120", "0001_p.up.sql:9:YD120", "0001_p.up.sql:12:YD121", "0001_p.up.sql:13:YD121", "0001_p.up.sql:14:YD122", "0001_p.up.sql:15:YD122"],
+   "report": ["0001_p.up.sql:1:side-effect/revoke-grant-option", "0001_p.up.sql:2:side-effect/revoke-grant-option", "0001_p.up.sql:4:destructive/drop-object", "0001_p.up.sql:4:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:5:destructive/drop-object", "0001_p.up.sql:5:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:6:destructive/drop-object", "0001_p.up.sql:6:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:7:destructive/drop-default-resource-pool", "0001_p.up.sql:8:destructive/drop-default-resource-pool", "0001_p.up.sql:9:destructive/drop-default-resource-pool", "0001_p.up.sql:12:destructive/drop-backup-collection", "0001_p.up.sql:13:destructive/drop-backup-collection", "0001_p.up.sql:14:capability/analyze", "0001_p.up.sql:15:capability/analyze"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -109,73 +109,73 @@
     ],
     "findings": [
      {
-      "code": "YD110",
+      "code": "side-effect/revoke-grant-option",
       "file": 0,
       "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
       "statement": 0
      },
      {
-      "code": "YD110",
+      "code": "side-effect/revoke-grant-option",
       "file": 0,
       "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
       "statement": 1
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP USER leaves the user's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 3
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 4
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 5
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 6
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 7
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 8
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 11
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 12
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 13
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 14
@@ -185,13 +185,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_p.up.sql:1:YD110", "0001_p.up.sql:2:YD110", "0001_p.up.sql:4:DS107", "0001_p.up.sql:4:YD111", "0001_p.up.sql:5:DS107", "0001_p.up.sql:5:YD111", "0001_p.up.sql:6:DS107", "0001_p.up.sql:6:YD111", "0001_p.up.sql:7:YD120", "0001_p.up.sql:8:YD120", "0001_p.up.sql:9:YD120", "0001_p.up.sql:12:YD121", "0001_p.up.sql:13:YD121", "0001_p.up.sql:14:YD122", "0001_p.up.sql:15:YD122"],
+   "report": ["0001_p.up.sql:1:side-effect/revoke-grant-option", "0001_p.up.sql:2:side-effect/revoke-grant-option", "0001_p.up.sql:4:destructive/drop-object", "0001_p.up.sql:4:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:5:destructive/drop-object", "0001_p.up.sql:5:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:6:destructive/drop-object", "0001_p.up.sql:6:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:7:destructive/drop-default-resource-pool", "0001_p.up.sql:8:destructive/drop-default-resource-pool", "0001_p.up.sql:9:destructive/drop-default-resource-pool", "0001_p.up.sql:12:destructive/drop-backup-collection", "0001_p.up.sql:13:destructive/drop-backup-collection", "0001_p.up.sql:14:capability/analyze", "0001_p.up.sql:15:capability/analyze"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -204,73 +204,73 @@
     ],
     "findings": [
      {
-      "code": "YD110",
+      "code": "side-effect/revoke-grant-option",
       "file": 0,
       "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
       "statement": 0
      },
      {
-      "code": "YD110",
+      "code": "side-effect/revoke-grant-option",
       "file": 0,
       "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
       "statement": 1
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP USER leaves the user's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 3
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 4
      },
      {
-      "code": "YD111",
+      "code": "side-effect/dropped-principal-keeps-permissions",
       "file": 0,
       "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
       "statement": 5
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 6
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 7
      },
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 8
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 11
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 12
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 13
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 14
@@ -280,7 +280,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0001_p.up.sql:1:YD110", "0001_p.up.sql:2:YD110", "0001_p.up.sql:4:DS107", "0001_p.up.sql:4:YD111", "0001_p.up.sql:5:DS107", "0001_p.up.sql:5:YD111", "0001_p.up.sql:6:DS107", "0001_p.up.sql:6:YD111", "0001_p.up.sql:7:YD120", "0001_p.up.sql:8:YD120", "0001_p.up.sql:9:YD120", "0001_p.up.sql:12:YD121", "0001_p.up.sql:13:YD121", "0001_p.up.sql:14:YD122", "0001_p.up.sql:15:YD122"],
+   "report": ["0001_p.up.sql:1:side-effect/revoke-grant-option", "0001_p.up.sql:2:side-effect/revoke-grant-option", "0001_p.up.sql:4:destructive/drop-object", "0001_p.up.sql:4:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:5:destructive/drop-object", "0001_p.up.sql:5:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:6:destructive/drop-object", "0001_p.up.sql:6:side-effect/dropped-principal-keeps-permissions", "0001_p.up.sql:7:destructive/drop-default-resource-pool", "0001_p.up.sql:8:destructive/drop-default-resource-pool", "0001_p.up.sql:9:destructive/drop-default-resource-pool", "0001_p.up.sql:12:destructive/drop-backup-collection", "0001_p.up.sql:13:destructive/drop-backup-collection", "0001_p.up.sql:14:capability/analyze", "0001_p.up.sql:15:capability/analyze"],
    "server_version": "",
    "split": 0
   },

@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -29,7 +29,7 @@
     ],
     "findings": [
      {
-      "code": "YD109",
+      "code": "dependency/rename-table-with-changefeed",
       "file": 1,
       "message": "RENAME TO moves t, which carries changefeeds feed, audit, and YDB moves no table that carries one (Cannot move table with cdc streams); drop the changefeeds first and add them again after the move, which restarts each stream",
       "statement": 0,
@@ -41,7 +41,7 @@
       ]
      },
      {
-      "code": "YD109",
+      "code": "dependency/rename-table-with-changefeed",
       "file": 2,
       "message": "RENAME TO moves u, which carries changefeed audit, and YDB moves no table that carries one (Cannot move table with cdc streams); drop the changefeeds first and add them again after the move, which restarts each stream",
       "statement": 1,
@@ -57,13 +57,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:BC101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:2:BC101", "0003_t.up.sql:2:YD109"],
+   "report": ["0002_t.up.sql:1:rollout/rename", "0002_t.up.sql:1:dependency/rename-table-with-changefeed", "0003_t.up.sql:2:rollout/rename", "0003_t.up.sql:2:dependency/rename-table-with-changefeed"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -89,7 +89,7 @@
     ],
     "findings": [
      {
-      "code": "YD109",
+      "code": "dependency/rename-table-with-changefeed",
       "file": 1,
       "message": "RENAME TO moves t, which carries changefeeds feed, audit, and YDB moves no table that carries one (Cannot move table with cdc streams); drop the changefeeds first and add them again after the move, which restarts each stream",
       "statement": 0,
@@ -101,7 +101,7 @@
       ]
      },
      {
-      "code": "YD109",
+      "code": "dependency/rename-table-with-changefeed",
       "file": 2,
       "message": "RENAME TO moves u, which carries changefeed audit, and YDB moves no table that carries one (Cannot move table with cdc streams); drop the changefeeds first and add them again after the move, which restarts each stream",
       "statement": 1,
@@ -117,13 +117,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:BC101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:2:BC101", "0003_t.up.sql:2:YD109"],
+   "report": ["0002_t.up.sql:1:rollout/rename", "0002_t.up.sql:1:dependency/rename-table-with-changefeed", "0003_t.up.sql:2:rollout/rename", "0003_t.up.sql:2:dependency/rename-table-with-changefeed"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -150,7 +150,7 @@
     ],
     "findings": [
      {
-      "code": "YD109",
+      "code": "dependency/rename-table-with-changefeed",
       "file": 1,
       "message": "RENAME TO moves t, which carries changefeeds feed, audit, and YDB moves no table that carries one (Cannot move table with cdc streams); drop the changefeeds first and add them again after the move, which restarts each stream",
       "statement": 0,
@@ -162,7 +162,7 @@
       ]
      },
      {
-      "code": "YD109",
+      "code": "dependency/rename-table-with-changefeed",
       "file": 2,
       "message": "RENAME TO moves u, which carries changefeed audit, and YDB moves no table that carries one (Cannot move table with cdc streams); drop the changefeeds first and add them again after the move, which restarts each stream",
       "statement": 1,
@@ -178,7 +178,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:DS101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:2:DS101", "0003_t.up.sql:2:YD109"],
+   "report": ["0002_t.up.sql:1:destructive/drop-table", "0002_t.up.sql:1:dependency/rename-table-with-changefeed", "0003_t.up.sql:2:destructive/drop-table", "0003_t.up.sql:2:dependency/rename-table-with-changefeed"],
    "server_version": "",
    "split": 0
   },
@@ -265,7 +265,7 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0002_t.up.sql:1:BC101", "0003_t.up.sql:2:BC101"],
+   "report": ["0002_t.up.sql:1:rollout/rename", "0003_t.up.sql:2:rollout/rename"],
    "server_version": "",
    "split": -1
   }

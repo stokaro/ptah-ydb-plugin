@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -22,7 +22,7 @@
     ],
     "findings": [
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN email: index users_email keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
       "statement": 0,
@@ -35,7 +35,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN name: index users_email covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
       "statement": 1,
@@ -48,7 +48,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN expires: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
       "statement": 2,
@@ -65,13 +65,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102", "0002_drop.up.sql:1:YD104", "0002_drop.up.sql:2:BC104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:2:YD104", "0002_drop.up.sql:3:BC104", "0002_drop.up.sql:3:DS102", "0002_drop.up.sql:3:YD104"],
+   "report": ["0002_drop.up.sql:1:rollout/drop-column", "0002_drop.up.sql:1:destructive/drop-column", "0002_drop.up.sql:1:dependency/drop-indexed-column", "0002_drop.up.sql:2:rollout/drop-column", "0002_drop.up.sql:2:destructive/drop-column", "0002_drop.up.sql:2:dependency/drop-indexed-column", "0002_drop.up.sql:3:rollout/drop-column", "0002_drop.up.sql:3:destructive/drop-column", "0002_drop.up.sql:3:dependency/drop-indexed-column"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -90,7 +90,7 @@
     ],
     "findings": [
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN email: index users_email keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
       "statement": 0,
@@ -103,7 +103,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN name: index users_email covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
       "statement": 1,
@@ -116,7 +116,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN expires: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
       "statement": 2,
@@ -133,13 +133,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102", "0002_drop.up.sql:1:YD104", "0002_drop.up.sql:2:BC104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:2:YD104", "0002_drop.up.sql:3:BC104", "0002_drop.up.sql:3:DS102", "0002_drop.up.sql:3:YD104"],
+   "report": ["0002_drop.up.sql:1:rollout/drop-column", "0002_drop.up.sql:1:destructive/drop-column", "0002_drop.up.sql:1:dependency/drop-indexed-column", "0002_drop.up.sql:2:rollout/drop-column", "0002_drop.up.sql:2:destructive/drop-column", "0002_drop.up.sql:2:dependency/drop-indexed-column", "0002_drop.up.sql:3:rollout/drop-column", "0002_drop.up.sql:3:destructive/drop-column", "0002_drop.up.sql:3:dependency/drop-indexed-column"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -159,7 +159,7 @@
     ],
     "findings": [
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN email: index users_email keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
       "statement": 0,
@@ -172,7 +172,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN name: index users_email covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
       "statement": 1,
@@ -185,7 +185,7 @@
       ]
      },
      {
-      "code": "YD104",
+      "code": "dependency/drop-indexed-column",
       "file": 1,
       "message": "DROP COLUMN expires: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
       "statement": 2,
@@ -202,7 +202,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_drop.up.sql:1:DS102", "0002_drop.up.sql:1:YD104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:2:YD104", "0002_drop.up.sql:3:DS102", "0002_drop.up.sql:3:YD104"],
+   "report": ["0002_drop.up.sql:1:destructive/drop-column", "0002_drop.up.sql:1:dependency/drop-indexed-column", "0002_drop.up.sql:2:destructive/drop-column", "0002_drop.up.sql:2:dependency/drop-indexed-column", "0002_drop.up.sql:3:destructive/drop-column", "0002_drop.up.sql:3:dependency/drop-indexed-column"],
    "server_version": "",
    "split": 0
   },
@@ -265,7 +265,7 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102", "0002_drop.up.sql:2:BC104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:3:BC104", "0002_drop.up.sql:3:DS102"],
+   "report": ["0002_drop.up.sql:1:rollout/drop-column", "0002_drop.up.sql:1:destructive/drop-column", "0002_drop.up.sql:2:rollout/drop-column", "0002_drop.up.sql:2:destructive/drop-column", "0002_drop.up.sql:3:rollout/drop-column", "0002_drop.up.sql:3:destructive/drop-column"],
    "server_version": "",
    "split": -1
   }

@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -15,19 +15,19 @@
     ],
     "findings": [
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 0
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 1
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 2
@@ -37,13 +37,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_ops.up.sql:1:YD120", "0001_ops.up.sql:2:YD121", "0001_ops.up.sql:3:YD122"],
+   "report": ["0001_ops.up.sql:1:destructive/drop-default-resource-pool", "0001_ops.up.sql:2:destructive/drop-backup-collection", "0001_ops.up.sql:3:capability/analyze"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -55,19 +55,19 @@
     ],
     "findings": [
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 0
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 1
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 2
@@ -77,13 +77,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_ops.up.sql:1:YD120", "0001_ops.up.sql:2:YD121", "0001_ops.up.sql:3:YD122"],
+   "report": ["0001_ops.up.sql:1:destructive/drop-default-resource-pool", "0001_ops.up.sql:2:destructive/drop-backup-collection", "0001_ops.up.sql:3:capability/analyze"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -96,19 +96,19 @@
     ],
     "findings": [
      {
-      "code": "YD120",
+      "code": "destructive/drop-default-resource-pool",
       "file": 0,
       "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
       "statement": 0
      },
      {
-      "code": "YD121",
+      "code": "destructive/drop-backup-collection",
       "file": 0,
       "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
       "statement": 1
      },
      {
-      "code": "YD122",
+      "code": "capability/analyze",
       "file": 0,
       "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
       "statement": 2
@@ -118,7 +118,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0001_ops.up.sql:1:YD120", "0001_ops.up.sql:2:YD121", "0001_ops.up.sql:3:YD122"],
+   "report": ["0001_ops.up.sql:1:destructive/drop-default-resource-pool", "0001_ops.up.sql:2:destructive/drop-backup-collection", "0001_ops.up.sql:3:capability/analyze"],
    "server_version": "",
    "split": 0
   },

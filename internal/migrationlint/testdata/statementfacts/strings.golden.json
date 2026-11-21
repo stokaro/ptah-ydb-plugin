@@ -10,19 +10,19 @@
       },
       "findings": [
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 2,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 3,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "DDL001",
+          "rule": "design/no-primary-key",
           "line": 5,
           "column": 1,
           "message": "table \"odd;name\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
@@ -38,19 +38,19 @@
       },
       "findings": [
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 2,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 3,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "DDL001",
+          "rule": "design/no-primary-key",
           "line": 5,
           "column": 1,
           "message": "table \"odd;name\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
@@ -66,19 +66,19 @@
       },
       "findings": [
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 2,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "SQL002",
+          "rule": "coverage/unsupported-statement",
           "line": 3,
           "column": 1,
           "message": "ptah sql lint does not lint UPSERT statements yet"
         },
         {
-          "rule": "DDL001",
+          "rule": "design/no-primary-key",
           "line": 5,
           "column": 1,
           "message": "table \"odd;name\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"

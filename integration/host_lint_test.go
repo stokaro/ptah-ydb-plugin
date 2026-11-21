@@ -66,8 +66,8 @@ func hostSQLLint(c *qt.C, file, version string) ([]string, int) {
 }
 
 var (
-	missingKeyMessage  = regexp.MustCompile(`^(\d+:\d+ DDL001) table "(.*)" has no primary key.*$`)
-	requirementMessage = regexp.MustCompile(`^(\d+:\d+ CAP001) .* requires target capability (\S+), unavailable on this target$`)
+	missingKeyMessage  = regexp.MustCompile(`^(\d+:\d+ design/no-primary-key) table "(.*)" has no primary key.*$`)
+	requirementMessage = regexp.MustCompile(`^(\d+:\d+ capability/missing) .* requires target capability (\S+), unavailable on this target$`)
 )
 
 // about reduces a finding to what both readings say alike: the position and
@@ -125,27 +125,27 @@ func TestHostWordsTheStatementFacts_HappyPath(t *testing.T) {
 		want                []string
 	}{
 		{name: "vector indexes on 25.1", file: "vectors.yql", version: "25.1.4.7", code: 1, want: []string{
-			"1:1 CAP001 INDEX d_e of table d (USING vector_kmeans_tree) requires target capability vector_indexes, unavailable on this target",
-			"3:1 CAP001 INDEX d_f of table d (ADD INDEX) requires target capability vector_indexes, unavailable on this target",
-			"5:1 CAP001 INDEX d_b of table d (ADD INDEX) requires target capability vector_indexes, unavailable on this target",
-			"5:1 CAP001 INDEX d_b of table d (ADD INDEX) requires target capability vector_bit_type, unavailable on this target",
-			`7:1 DDL001 table "bits" has no primary key`,
-			"7:1 CAP001 INDEX bits_e of table bits (USING vector_kmeans_tree) requires target capability vector_indexes, unavailable on this target",
-			"7:1 CAP001 INDEX bits_e of table bits (USING vector_kmeans_tree) requires target capability vector_bit_type, unavailable on this target",
+			"1:1 capability/missing INDEX d_e of table d (USING vector_kmeans_tree) requires target capability vector_indexes, unavailable on this target",
+			"3:1 capability/missing INDEX d_f of table d (ADD INDEX) requires target capability vector_indexes, unavailable on this target",
+			"5:1 capability/missing INDEX d_b of table d (ADD INDEX) requires target capability vector_indexes, unavailable on this target",
+			"5:1 capability/missing INDEX d_b of table d (ADD INDEX) requires target capability vector_bit_type, unavailable on this target",
+			`7:1 design/no-primary-key table "bits" has no primary key`,
+			"7:1 capability/missing INDEX bits_e of table bits (USING vector_kmeans_tree) requires target capability vector_indexes, unavailable on this target",
+			"7:1 capability/missing INDEX bits_e of table bits (USING vector_kmeans_tree) requires target capability vector_bit_type, unavailable on this target",
 		}},
 		{name: "a table named by a named expression on 25.1", file: "stricter/named-table.yql", version: "25.1.4.7", code: 1, want: []string{
-			"1:1 SQL002 ptah sql lint does not lint named expression statements yet",
-			`2:1 DDL001 table "$t" has no primary key`,
-			"3:1 CAP001 COLUMN v of table $t (ADD COLUMN) requires target capability add_column_with_default, unavailable on this target",
+			"1:1 coverage/unsupported-statement ptah sql lint does not lint named expression statements yet",
+			`2:1 design/no-primary-key table "$t" has no primary key`,
+			"3:1 capability/missing COLUMN v of table $t (ADD COLUMN) requires target capability add_column_with_default, unavailable on this target",
 		}},
 		{name: "expressions", file: "stricter/expressions.yql", version: "26.2.1.14", code: 1, want: []string{
-			"1:1 SQL002 ptah sql lint does not lint expression statements yet",
-			"2:1 SQL002 ptah sql lint does not lint 1 statements yet",
-			"3:1 SQL002 ptah sql lint does not lint expression statements yet",
+			"1:1 coverage/unsupported-statement ptah sql lint does not lint expression statements yet",
+			"2:1 coverage/unsupported-statement ptah sql lint does not lint 1 statements yet",
+			"3:1 coverage/unsupported-statement ptah sql lint does not lint expression statements yet",
 		}},
 		{name: "a byte order mark", file: "stricter/bom.yql", version: "26.2.1.14", code: 1, want: []string{
-			`1:1 DDL001 table "bom" has no primary key`,
-			"2:1 SQL002 ptah sql lint does not lint UPSERT statements yet",
+			`1:1 design/no-primary-key table "bom" has no primary key`,
+			"2:1 coverage/unsupported-statement ptah sql lint does not lint UPSERT statements yet",
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

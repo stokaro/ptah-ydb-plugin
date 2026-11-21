@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -29,13 +29,13 @@
     ],
     "findings": [
      {
-      "code": "YD101",
+      "code": "capability/unique-index-on-existing-table",
       "file": 0,
       "message": "ADD INDEX 1 adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
       "statement": 3
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 2,
       "message": "DROP INDEX i`x leaves its comment on the table as the attribute ptah.comment.index.i`x, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `i\\`x` ON `q\\`t` IS NULL",
       "statement": 0,
@@ -47,7 +47,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 2,
       "message": "DROP COLUMN a\\b leaves its comment on the table as the attribute ptah.comment.column.a\\b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS NULL",
       "statement": 1,
@@ -63,13 +63,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:4:YD101", "0001_n.up.sql:5:DS107", "0003_n.up.sql:1:YD150", "0003_n.up.sql:2:BC104", "0003_n.up.sql:2:DS102", "0003_n.up.sql:2:YD150"],
+   "report": ["0001_n.up.sql:2:destructive/drop-object", "0001_n.up.sql:3:destructive/drop-object", "0001_n.up.sql:4:capability/unique-index-on-existing-table", "0001_n.up.sql:5:destructive/drop-object", "0003_n.up.sql:1:side-effect/orphaned-comment", "0003_n.up.sql:2:rollout/drop-column", "0003_n.up.sql:2:destructive/drop-column", "0003_n.up.sql:2:side-effect/orphaned-comment"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -95,13 +95,13 @@
     ],
     "findings": [
      {
-      "code": "YD101",
+      "code": "capability/unique-index-on-existing-table",
       "file": 0,
       "message": "ADD INDEX 1 adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
       "statement": 3
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 2,
       "message": "DROP INDEX i`x leaves its comment on the table as the attribute ptah.comment.index.i`x, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `i\\`x` ON `q\\`t` IS NULL",
       "statement": 0,
@@ -113,7 +113,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 2,
       "message": "DROP COLUMN a\\b leaves its comment on the table as the attribute ptah.comment.column.a\\b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS NULL",
       "statement": 1,
@@ -129,13 +129,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:4:YD101", "0001_n.up.sql:5:DS107", "0003_n.up.sql:1:YD150", "0003_n.up.sql:2:BC104", "0003_n.up.sql:2:DS102", "0003_n.up.sql:2:YD150"],
+   "report": ["0001_n.up.sql:2:destructive/drop-object", "0001_n.up.sql:3:destructive/drop-object", "0001_n.up.sql:4:capability/unique-index-on-existing-table", "0001_n.up.sql:5:destructive/drop-object", "0003_n.up.sql:1:side-effect/orphaned-comment", "0003_n.up.sql:2:rollout/drop-column", "0003_n.up.sql:2:destructive/drop-column", "0003_n.up.sql:2:side-effect/orphaned-comment"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -162,13 +162,13 @@
     ],
     "findings": [
      {
-      "code": "YD101",
+      "code": "capability/unique-index-on-existing-table",
       "file": 0,
       "message": "ADD INDEX 1 adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
       "statement": 3
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 2,
       "message": "DROP INDEX i`x leaves its comment on the table as the attribute ptah.comment.index.i`x, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `i\\`x` ON `q\\`t` IS NULL",
       "statement": 0,
@@ -180,7 +180,7 @@
       ]
      },
      {
-      "code": "YD150",
+      "code": "side-effect/orphaned-comment",
       "file": 2,
       "message": "DROP COLUMN a\\b leaves its comment on the table as the attribute ptah.comment.column.a\\b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS NULL",
       "statement": 1,
@@ -196,7 +196,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:4:YD101", "0001_n.up.sql:5:DS107", "0003_n.up.sql:1:YD150", "0003_n.up.sql:2:DS102", "0003_n.up.sql:2:YD150"],
+   "report": ["0001_n.up.sql:2:destructive/drop-object", "0001_n.up.sql:3:destructive/drop-object", "0001_n.up.sql:4:capability/unique-index-on-existing-table", "0001_n.up.sql:5:destructive/drop-object", "0003_n.up.sql:1:side-effect/orphaned-comment", "0003_n.up.sql:2:destructive/drop-column", "0003_n.up.sql:2:side-effect/orphaned-comment"],
    "server_version": "",
    "split": 0
   },
@@ -358,7 +358,7 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:5:DS107"],
+   "report": ["0001_n.up.sql:2:destructive/drop-object", "0001_n.up.sql:3:destructive/drop-object", "0001_n.up.sql:5:destructive/drop-object"],
    "server_version": "",
    "split": -1
   }

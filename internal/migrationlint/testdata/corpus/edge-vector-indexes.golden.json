@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -24,7 +24,7 @@
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -36,13 +36,13 @@
     ],
     "findings": [
      {
-      "code": "YD130",
+      "code": "capability/vector-index",
       "file": 0,
       "message": "vector index t_emb on t needs target capability vector_indexes, unavailable on this ydb target; YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag (Vector index support is disabled), so turn the flag on for the cluster",
       "statement": 0
      },
      {
-      "code": "YD130",
+      "code": "capability/vector-index",
       "file": 0,
       "message": "vector index u_emb on u needs target capability vector_indexes, unavailable on this ydb target; YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag (Vector index support is disabled), so turn the flag on for the cluster",
       "statement": 2
@@ -52,13 +52,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_t.up.sql:1:YD130", "0001_t.up.sql:3:YD130"],
+   "report": ["0001_t.up.sql:1:capability/vector-index", "0001_t.up.sql:3:capability/vector-index"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -189,7 +189,7 @@
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -201,13 +201,13 @@
     ],
     "findings": [
      {
-      "code": "YD130",
+      "code": "capability/vector-index",
       "file": 0,
       "message": "vector index t_emb on t stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
       "statement": 0
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 3,
@@ -219,7 +219,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 4,
@@ -231,7 +231,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 5,
@@ -243,7 +243,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 6,
@@ -255,7 +255,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into t, whose vector index t_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 8,
@@ -271,13 +271,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_t.up.sql:1:YD130", "0001_t.up.sql:4:YD131", "0001_t.up.sql:5:YD131", "0001_t.up.sql:6:YD131", "0001_t.up.sql:7:YD131", "0001_t.up.sql:9:YD131"],
+   "report": ["0001_t.up.sql:1:capability/vector-index", "0001_t.up.sql:4:side-effect/vector-index-misses-writes", "0001_t.up.sql:5:side-effect/vector-index-misses-writes", "0001_t.up.sql:6:side-effect/vector-index-misses-writes", "0001_t.up.sql:7:side-effect/vector-index-misses-writes", "0001_t.up.sql:9:side-effect/vector-index-misses-writes"],
    "server_version": "25.2.1.24",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -289,7 +289,7 @@
     ],
     "findings": [
      {
-      "code": "YD130",
+      "code": "capability/vector-index",
       "file": 0,
       "message": "vector index t_emb on t stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
       "statement": 0
@@ -299,13 +299,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0001_t.up.sql:1:YD130"],
+   "report": ["0001_t.up.sql:1:capability/vector-index"],
    "server_version": "25.4.1.15",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -317,13 +317,13 @@
     ],
     "findings": [
      {
-      "code": "YD130",
+      "code": "capability/vector-index",
       "file": 0,
       "message": "vector index t_emb on t stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
       "statement": 0
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 3,
@@ -335,7 +335,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 4,
@@ -347,7 +347,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 5,
@@ -359,7 +359,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 6,
@@ -371,7 +371,7 @@
       ]
      },
      {
-      "code": "YD131",
+      "code": "side-effect/vector-index-misses-writes",
       "file": 0,
       "message": "this statement writes rows into t, whose vector index t_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
       "statement": 8,
@@ -393,7 +393,7 @@
    "overrides": {
     "vector_indexes": true
    },
-   "report": ["0001_t.up.sql:1:YD130", "0001_t.up.sql:4:YD131", "0001_t.up.sql:5:YD131", "0001_t.up.sql:6:YD131", "0001_t.up.sql:7:YD131", "0001_t.up.sql:9:YD131"],
+   "report": ["0001_t.up.sql:1:capability/vector-index", "0001_t.up.sql:4:side-effect/vector-index-misses-writes", "0001_t.up.sql:5:side-effect/vector-index-misses-writes", "0001_t.up.sql:6:side-effect/vector-index-misses-writes", "0001_t.up.sql:7:side-effect/vector-index-misses-writes", "0001_t.up.sql:9:side-effect/vector-index-misses-writes"],
    "server_version": "25.1.4.7",
    "split": 0
   }

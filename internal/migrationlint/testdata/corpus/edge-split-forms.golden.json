@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -29,7 +29,7 @@
     ],
     "findings": [
      {
-      "code": "YD115",
+      "code": "side-effect/drop-replication-without-failover",
       "file": 1,
       "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
       "statement": 6,
@@ -41,7 +41,7 @@
       ]
      },
      {
-      "code": "YD102",
+      "code": "transaction/scheme-and-data-in-one-query",
       "file": 2,
       "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
       "statement": 2
@@ -51,13 +51,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0002_s.up.sql:10:YD115", "0003_s.up.sql:6:YD102"],
+   "report": ["0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:5:destructive/drop-object", "0002_s.up.sql:7:destructive/drop-object", "0002_s.up.sql:8:destructive/drop-object", "0002_s.up.sql:9:destructive/drop-object", "0002_s.up.sql:10:side-effect/drop-replication-without-failover", "0003_s.up.sql:6:transaction/scheme-and-data-in-one-query"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -83,7 +83,7 @@
     ],
     "findings": [
      {
-      "code": "YD115",
+      "code": "side-effect/drop-replication-without-failover",
       "file": 1,
       "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
       "statement": 6,
@@ -95,7 +95,7 @@
       ]
      },
      {
-      "code": "YD102",
+      "code": "transaction/scheme-and-data-in-one-query",
       "file": 2,
       "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
       "statement": 2
@@ -105,13 +105,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0002_s.up.sql:10:YD115", "0003_s.up.sql:6:YD102"],
+   "report": ["0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:5:destructive/drop-object", "0002_s.up.sql:7:destructive/drop-object", "0002_s.up.sql:8:destructive/drop-object", "0002_s.up.sql:9:destructive/drop-object", "0002_s.up.sql:10:side-effect/drop-replication-without-failover", "0003_s.up.sql:6:transaction/scheme-and-data-in-one-query"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -138,7 +138,7 @@
     ],
     "findings": [
      {
-      "code": "YD115",
+      "code": "side-effect/drop-replication-without-failover",
       "file": 1,
       "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
       "statement": 6,
@@ -150,7 +150,7 @@
       ]
      },
      {
-      "code": "YD102",
+      "code": "transaction/scheme-and-data-in-one-query",
       "file": 2,
       "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
       "statement": 2
@@ -160,7 +160,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0002_s.up.sql:10:YD115", "0003_s.up.sql:6:YD102"],
+   "report": ["0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:5:destructive/drop-object", "0002_s.up.sql:7:destructive/drop-object", "0002_s.up.sql:8:destructive/drop-object", "0002_s.up.sql:9:destructive/drop-object", "0002_s.up.sql:10:side-effect/drop-replication-without-failover", "0003_s.up.sql:6:transaction/scheme-and-data-in-one-query"],
    "server_version": "",
    "split": 0
   },
@@ -709,7 +709,7 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0003_s.up.sql:12:BC103", "0003_s.up.sql:12:DS101"],
+   "report": ["0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:3:destructive/drop-object", "0002_s.up.sql:5:destructive/drop-object", "0002_s.up.sql:7:destructive/drop-object", "0002_s.up.sql:8:destructive/drop-object", "0002_s.up.sql:9:destructive/drop-object", "0003_s.up.sql:12:rollout/drop-table", "0003_s.up.sql:12:destructive/drop-table"],
    "server_version": "",
    "split": -1
   }

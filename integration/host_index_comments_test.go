@@ -131,7 +131,7 @@ func TestHostChangesTheCommentsOfIndexesInPlace_HappyPath(t *testing.T) {
 // plan, the first creating the commented table and the second changing every
 // kind of comment, dropping a commented column and a commented index. The
 // second removes the comments those leave on the table, so `migrations lint`
-// reports no comment left behind (YD150). `schema diff` reads only SQL, HCL,
+// reports no comment left behind (side-effect/orphaned-comment). `schema diff` reads only SQL, HCL,
 // YAML and DBML, so the models are YQL here.
 func TestHostCommentChangesPassTheLeftCommentRule_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
@@ -165,7 +165,7 @@ func TestHostCommentChangesPassTheLeftCommentRule_HappyPath(t *testing.T) {
 	lint, err := hostCommand(c, "migrations", "lint", "--dialect", "ydb", "--dir", migrations, "--fail-on", "none")
 
 	c.Assert(err, qt.IsNil, qt.Commentf("migrations lint:\n%s", lint))
-	c.Assert(lint, qt.Not(qt.Contains), "YD150", qt.Commentf("%s\n%s", planned, lint))
+	c.Assert(lint, qt.Not(qt.Contains), "side-effect/orphaned-comment", qt.Commentf("%s\n%s", planned, lint))
 	c.Assert(planned, qt.Contains, "COMMENT ON COLUMN `"+directory+"/users`.`legacy` IS NULL", qt.Commentf("%s", planned))
 	c.Assert(planned, qt.Contains, "COMMENT ON INDEX `users_by_legacy` ON `"+directory+"/users` IS NULL", qt.Commentf("%s", planned))
 }

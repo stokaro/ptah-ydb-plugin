@@ -40,16 +40,16 @@ func lintFile(c *qt.C, sql string) *protocol.LintFile {
 // in a reply the SDK accepts.
 func TestCheckLintMigrations_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	request := &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD110", "YD111"},
+	request := &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions"},
 		Files: []*protocol.LintFile{lintFile(c, "REVOKE GRANT OPTION FOR SELECT ON `t` FROM u;\nDROP USER u;\n")}}
 	result, err := backend.New().CheckLintMigrations(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateCheckedLint(backend.Description(), request, result), qt.IsNil)
 	c.Assert(result.Complete, qt.IsTrue)
 	c.Assert(result.Findings, qt.HasLen, 2)
-	c.Assert(result.Findings[0].Code, qt.Equals, "YD110")
+	c.Assert(result.Findings[0].Code, qt.Equals, "side-effect/revoke-grant-option")
 	c.Assert(result.Findings[0].Statement, qt.Equals, int32(0))
-	c.Assert(result.Findings[1].Code, qt.Equals, "YD111")
+	c.Assert(result.Findings[1].Code, qt.Equals, "side-effect/dropped-principal-keeps-permissions")
 	c.Assert(result.Findings[1].Statement, qt.Equals, int32(1))
 }
 
@@ -64,9 +64,9 @@ func TestCheckLintMigrations_FailurePath(t *testing.T) {
 		request *protocol.CheckLintRequest
 		code    codes.Code
 	}{
-		{name: "unknown code", ctx: context.Background(), request: &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD999"}}, code: codes.InvalidArgument},
-		{name: "another engine", ctx: context.Background(), request: &protocol.CheckLintRequest{Engine: "postgres", Codes: []string{"YD110"}}, code: codes.InvalidArgument},
-		{name: "canceled", ctx: canceled, request: &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD110"},
+		{name: "unknown code", ctx: context.Background(), request: &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"ydb/no-such-rule"}}, code: codes.InvalidArgument},
+		{name: "another engine", ctx: context.Background(), request: &protocol.CheckLintRequest{Engine: "postgres", Codes: []string{"side-effect/revoke-grant-option"}}, code: codes.InvalidArgument},
+		{name: "canceled", ctx: canceled, request: &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"side-effect/revoke-grant-option"},
 			Files: []*protocol.LintFile{{Name: "0001_t.up.sql", Up: true}}}, code: codes.Canceled},
 	}
 	for _, test := range tests {

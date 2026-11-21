@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -22,7 +22,7 @@
     ],
     "findings": [
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of a to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 0,
@@ -34,7 +34,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of b to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 1,
@@ -46,7 +46,7 @@
       ]
      },
      {
-      "code": "YD118",
+      "code": "side-effect/reset-partition-size",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of c to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
       "statement": 2,
@@ -58,7 +58,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of e to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 4,
@@ -70,7 +70,7 @@
       ]
      },
      {
-      "code": "YD118",
+      "code": "side-effect/reset-partition-size",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of e to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
       "statement": 4,
@@ -82,7 +82,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 5,
@@ -94,7 +94,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 10,
@@ -106,7 +106,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of unknown to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 11,
@@ -122,13 +122,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD105", "0002_t.up.sql:2:YD105", "0002_t.up.sql:3:YD118", "0002_t.up.sql:5:YD105", "0002_t.up.sql:5:YD118", "0002_t.up.sql:6:YD105", "0002_t.up.sql:11:YD105", "0002_t.up.sql:12:YD105"],
+   "report": ["0002_t.up.sql:1:side-effect/reset-min-partition-count", "0002_t.up.sql:2:side-effect/reset-min-partition-count", "0002_t.up.sql:3:side-effect/reset-partition-size", "0002_t.up.sql:5:side-effect/reset-min-partition-count", "0002_t.up.sql:5:side-effect/reset-partition-size", "0002_t.up.sql:6:side-effect/reset-min-partition-count", "0002_t.up.sql:11:side-effect/reset-min-partition-count", "0002_t.up.sql:12:side-effect/reset-min-partition-count"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "has_pair": true,
@@ -147,7 +147,7 @@
     ],
     "findings": [
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of a to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 0,
@@ -159,7 +159,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of b to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 1,
@@ -171,7 +171,7 @@
       ]
      },
      {
-      "code": "YD118",
+      "code": "side-effect/reset-partition-size",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of c to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
       "statement": 2,
@@ -183,7 +183,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of e to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 4,
@@ -195,7 +195,7 @@
       ]
      },
      {
-      "code": "YD118",
+      "code": "side-effect/reset-partition-size",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of e to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
       "statement": 4,
@@ -207,7 +207,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 5,
@@ -219,7 +219,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 10,
@@ -231,7 +231,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of unknown to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 11,
@@ -247,13 +247,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD105", "0002_t.up.sql:2:YD105", "0002_t.up.sql:3:YD118", "0002_t.up.sql:5:YD105", "0002_t.up.sql:5:YD118", "0002_t.up.sql:6:YD105", "0002_t.up.sql:11:YD105", "0002_t.up.sql:12:YD105"],
+   "report": ["0002_t.up.sql:1:side-effect/reset-min-partition-count", "0002_t.up.sql:2:side-effect/reset-min-partition-count", "0002_t.up.sql:3:side-effect/reset-partition-size", "0002_t.up.sql:5:side-effect/reset-min-partition-count", "0002_t.up.sql:5:side-effect/reset-partition-size", "0002_t.up.sql:6:side-effect/reset-min-partition-count", "0002_t.up.sql:11:side-effect/reset-min-partition-count", "0002_t.up.sql:12:side-effect/reset-min-partition-count"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -273,7 +273,7 @@
     ],
     "findings": [
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of a to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 0,
@@ -285,7 +285,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of b to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 1,
@@ -297,7 +297,7 @@
       ]
      },
      {
-      "code": "YD118",
+      "code": "side-effect/reset-partition-size",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of c to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
       "statement": 2,
@@ -309,7 +309,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of e to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 4,
@@ -321,7 +321,7 @@
       ]
      },
      {
-      "code": "YD118",
+      "code": "side-effect/reset-partition-size",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of e to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
       "statement": 4,
@@ -333,7 +333,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 5,
@@ -345,7 +345,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 10,
@@ -357,7 +357,7 @@
       ]
      },
      {
-      "code": "YD105",
+      "code": "side-effect/reset-min-partition-count",
       "file": 1,
       "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of unknown to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
       "statement": 11,
@@ -373,7 +373,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:YD105", "0002_t.up.sql:2:YD105", "0002_t.up.sql:3:YD118", "0002_t.up.sql:5:YD105", "0002_t.up.sql:5:YD118", "0002_t.up.sql:6:YD105", "0002_t.up.sql:11:YD105", "0002_t.up.sql:12:YD105"],
+   "report": ["0002_t.up.sql:1:side-effect/reset-min-partition-count", "0002_t.up.sql:2:side-effect/reset-min-partition-count", "0002_t.up.sql:3:side-effect/reset-partition-size", "0002_t.up.sql:5:side-effect/reset-min-partition-count", "0002_t.up.sql:5:side-effect/reset-partition-size", "0002_t.up.sql:6:side-effect/reset-min-partition-count", "0002_t.up.sql:11:side-effect/reset-min-partition-count", "0002_t.up.sql:12:side-effect/reset-min-partition-count"],
    "server_version": "",
    "split": 0
   },

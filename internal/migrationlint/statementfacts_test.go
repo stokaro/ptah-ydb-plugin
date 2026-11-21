@@ -119,21 +119,21 @@ func ownedFindings(c *qt.C, sql string, caps map[string]bool) []string {
 		c.Assert(kinds, qt.HasLen, 1)
 		kind := kinds[0]
 		if kind.StatementClass == protocol.LintStatementClass_LINT_STATEMENT_CLASS_OTHER {
-			findings = append(findings, at+" SQL002 ptah sql lint does not lint "+kind.Kind+" statements yet")
+			findings = append(findings, at+" coverage/unsupported-statement ptah sql lint does not lint "+kind.Kind+" statements yet")
 			continue
 		}
 		required := false
 		for _, effect := range statement.Effects {
 			switch effect.Fact {
 			case protocol.LintFact_LINT_FACT_MISSING_PRIMARY_KEY:
-				findings = append(findings, at+" DDL001 "+effect.Table)
+				findings = append(findings, at+" design/no-primary-key "+effect.Table)
 			case protocol.LintFact_LINT_FACT_REQUIRED_CAPABILITY:
 				required = true
 				held, answered := caps[effect.Capability]
 				switch {
 				case held:
 				case answered:
-					findings = append(findings, at+" CAP001 "+effect.Capability)
+					findings = append(findings, at+" capability/missing "+effect.Capability)
 				default:
 					note("the " + effect.Capability + " requirement")
 				}
@@ -144,7 +144,7 @@ func ownedFindings(c *qt.C, sql string, caps map[string]bool) []string {
 		}
 	}
 	if len(unanalyzed) > 0 {
-		findings = append(findings, "1:1 SQL004 no rule examined "+strings.Join(unanalyzed, ", ")+" in this file")
+		findings = append(findings, "1:1 coverage/unanalyzed-statements no rule examined "+strings.Join(unanalyzed, ", ")+" in this file")
 	}
 	return findings
 }
@@ -161,9 +161,9 @@ func builtinFindings(findings []hostFinding) []string {
 	for _, finding := range findings {
 		about := finding.Message
 		switch finding.Rule {
-		case "DDL001":
+		case "design/no-primary-key":
 			about = builtinMissingKey.FindStringSubmatch(finding.Message)[1]
-		case "CAP001":
+		case "capability/missing":
 			about = builtinRequirement.FindStringSubmatch(finding.Message)[1]
 		}
 		result = append(result, fmt.Sprintf("%d:%d %s %s", finding.Line, finding.Column, finding.Rule, about))
@@ -202,7 +202,7 @@ func TestStatementFactsCorpusReachesEveryRule(t *testing.T) {
 		}
 	}
 	c.Assert(commits, qt.HasLen, 1)
-	for _, rule := range []string{"DDL001", "CAP001", "SQL002", "SQL004"} {
+	for _, rule := range []string{"design/no-primary-key", "capability/missing", "coverage/unsupported-statement", "coverage/unanalyzed-statements"} {
 		c.Assert(rules[rule] > 1, qt.IsTrue, qt.Commentf("%s: %d", rule, rules[rule]))
 	}
 }
@@ -214,19 +214,19 @@ func TestStatementFactsCorpusReachesEveryRule(t *testing.T) {
 // named expression with an empty string. The statement facts lint the first
 // two and keep the name as written.
 func TestStatementFactsAreStricterOnPurpose(t *testing.T) {
-	expression := "SQL002 ptah sql lint does not lint expression statements yet"
+	expression := "coverage/unsupported-statement ptah sql lint does not lint expression statements yet"
 	for _, test := range []struct {
 		file    string
 		builtin []string
 		owned   []string
 	}{
-		{file: "expressions", builtin: []string{"2:1 SQL002 ptah sql lint does not lint 1 statements yet"},
-			owned: []string{"1:1 " + expression, "2:1 SQL002 ptah sql lint does not lint 1 statements yet", "3:1 " + expression}},
-		{file: "bom", builtin: []string{"2:1 SQL002 ptah sql lint does not lint UPSERT statements yet"},
-			owned: []string{"1:2 DDL001 bom", "2:1 SQL002 ptah sql lint does not lint UPSERT statements yet"}},
+		{file: "expressions", builtin: []string{"2:1 coverage/unsupported-statement ptah sql lint does not lint 1 statements yet"},
+			owned: []string{"1:1 " + expression, "2:1 coverage/unsupported-statement ptah sql lint does not lint 1 statements yet", "3:1 " + expression}},
+		{file: "bom", builtin: []string{"2:1 coverage/unsupported-statement ptah sql lint does not lint UPSERT statements yet"},
+			owned: []string{"1:2 design/no-primary-key bom", "2:1 coverage/unsupported-statement ptah sql lint does not lint UPSERT statements yet"}},
 		{file: "named-table",
-			builtin: []string{"1:1 SQL002 ptah sql lint does not lint named expression statements yet", "2:1 DDL001 ", "3:1 CAP001 add_column_with_default"},
-			owned:   []string{"1:1 SQL002 ptah sql lint does not lint named expression statements yet", "2:1 DDL001 $t", "3:1 CAP001 add_column_with_default"}},
+			builtin: []string{"1:1 coverage/unsupported-statement ptah sql lint does not lint named expression statements yet", "2:1 design/no-primary-key ", "3:1 capability/missing add_column_with_default"},
+			owned:   []string{"1:1 coverage/unsupported-statement ptah sql lint does not lint named expression statements yet", "2:1 design/no-primary-key $t", "3:1 capability/missing add_column_with_default"}},
 	} {
 		t.Run(test.file, func(t *testing.T) {
 			c := testcheck.New(t)
