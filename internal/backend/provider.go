@@ -526,11 +526,12 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection, ver
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
-// minContractMinor requires durable database context, dependency readiness, and
-// assessment of unchanged native objects.
-// Native replacements share physical paths with common objects, so their
+// minContractMinor is the minor version of contract 26 the provider needs to
+// start. Contract 26.0 carries durable database context, dependency readiness
+// and assessment of unchanged native objects, and identifies lint rules by
+// name. Native replacements share physical paths with common objects, so their
 // ordering requires the complete sequence under planning.lifecycle.
-const minContractMinor = 7
+const minContractMinor = 0
 
 // Description advertises native runtime services, offline coordination models,
 // captured row-table creation, column family alteration of existing tables,

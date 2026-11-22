@@ -3,7 +3,7 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "down": true,
@@ -36,7 +36,7 @@
     ],
     "findings": [
      {
-      "code": "YD103",
+      "code": "ydb/add-column-form",
       "file": 3,
       "message": "ADD COLUMN zz is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
       "statement": 0
@@ -46,13 +46,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0000000002_change.up.sql:1:YD103"],
+   "report": ["0000000002_change.up.sql:1:ydb/add-column-form"],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "down": true,
@@ -85,7 +85,7 @@
     ],
     "findings": [
      {
-      "code": "YD103",
+      "code": "ydb/add-column-form",
       "file": 3,
       "message": "ADD COLUMN zz is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value), and a default needs target capability add_column_with_default, unavailable on this ydb target; add the column as nullable",
       "statement": 0
@@ -95,13 +95,13 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0000000002_change.up.sql:1:YD103"],
+   "report": ["0000000002_change.up.sql:1:ydb/add-column-form"],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "compatibility": "atlas",
     "files": [
      {
@@ -135,7 +135,7 @@
     ],
     "findings": [
      {
-      "code": "YD103",
+      "code": "ydb/add-column-form",
       "file": 3,
       "message": "ADD COLUMN zz is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
       "statement": 0
@@ -145,7 +145,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0000000002_change.up.sql:1:YD103"],
+   "report": ["0000000002_change.up.sql:1:ydb/add-column-form"],
    "server_version": "",
    "split": 0
   },
@@ -204,13 +204,13 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0000000002_change.up.sql:1:DD101", "0000000002_change.up.sql:1:MY101"],
+   "report": ["0000000002_change.up.sql:1:data-dependent/add-not-null-column", "0000000002_change.up.sql:1:locking/blocking-alter-table"],
    "server_version": "",
    "split": -1
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": ["capability/unique-index-on-existing-table", "transaction/scheme-and-data-in-one-query", "ydb/add-column-form", "dependency/drop-indexed-column", "side-effect/reset-min-partition-count", "dependency/drop-table-read-by-view", "side-effect/widen-serial-sequence", "side-effect/replay-sequence-restart", "dependency/rename-table-with-changefeed", "side-effect/revoke-grant-option", "side-effect/dropped-principal-keeps-permissions", "side-effect/reset-topic-setting", "side-effect/ignored-topic-setting", "side-effect/drop-replication-without-failover", "security/secret-in-clear", "side-effect/reset-partition-size", "side-effect/implicit-column-family", "destructive/drop-default-resource-pool", "destructive/drop-backup-collection", "capability/analyze", "capability/vector-index", "side-effect/vector-index-misses-writes", "security/secret-value-in-migration", "security/deprecated-secret-object", "side-effect/orphaned-comment", "destructive/discard-streaming-query-state"],
     "files": [
      {
       "down": true,
@@ -243,7 +243,7 @@
     ],
     "findings": [
      {
-      "code": "YD103",
+      "code": "ydb/add-column-form",
       "file": 3,
       "message": "ADD COLUMN zz is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
       "statement": 0
@@ -254,7 +254,7 @@
    "compatibility": "",
    "dialect": "ydb",
    "dir_format": "ptah",
-   "report": ["0000000002_change.up.sql:1:YD103"],
+   "report": ["0000000002_change.up.sql:1:ydb/add-column-form"],
    "server_version": "",
    "split": 0
   }

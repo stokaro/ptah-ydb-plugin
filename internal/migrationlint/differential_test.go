@@ -365,9 +365,7 @@ func pluginFindings(c *qt.C, request *protocol.CheckLintRequest) []finding {
 		}
 		findings = append(findings, value)
 	}
-	slices.SortStableFunc(findings, func(a, b finding) int {
-		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Statement, b.Statement), cmp.Compare(a.Code, b.Code))
-	})
+	slices.SortStableFunc(findings, compareFindings)
 	return findings
 }
 
@@ -376,9 +374,16 @@ func servedCodes(codes []string) []string {
 	return slices.DeleteFunc(slices.Clone(codes), func(code string) bool { return !slices.Contains(publishedCodes(), code) })
 }
 
-// servedFindings are the findings of the codes the provider publishes.
+// servedFindings are the findings of the codes the provider publishes, in the
+// order pluginFindings returns them: by file, statement and rule name.
 func servedFindings(findings []finding) []finding {
-	return slices.DeleteFunc(slices.Clone(findings), func(f finding) bool { return !slices.Contains(publishedCodes(), f.Code) })
+	served := slices.DeleteFunc(slices.Clone(findings), func(f finding) bool { return !slices.Contains(publishedCodes(), f.Code) })
+	slices.SortStableFunc(served, compareFindings)
+	return served
+}
+
+func compareFindings(a, b finding) int {
+	return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Statement, b.Statement), cmp.Compare(a.Code, b.Code))
 }
 
 // checkedRuns are the runs of a case that sent the owner a check.

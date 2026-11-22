@@ -1,7 +1,6 @@
 package backend_test
 
 import (
-	"fmt"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -42,21 +41,24 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
 }
 
-// Database context and dependency binding require their declared contract
-// minor. Later compatible minors retain both contracts.
-func TestDescriptionRequiresDatabaseContextContract(t *testing.T) {
+// The provider needs contract 26.0, which carries database context, dependency
+// binding and rule names. Later compatible minors keep them, and a host of the
+// previous major cannot name rules, so it is refused whatever its minor.
+func TestDescriptionRequiresContract26(t *testing.T) {
 	for _, test := range []struct {
 		name  string
+		major uint32
 		minor uint32
 		want  error
 	}{
-		{"earlier minor", 6, provider.ErrProtocol},
-		{"database context minor", 7, nil},
-		{"later minor", 8, nil},
+		{"first minor", provider.Revision, 0, nil},
+		{"later minor", provider.Revision, 1, nil},
+		{"previous major, early minor", provider.Revision - 1, 7, provider.ErrProtocol},
+		{"previous major, late minor", provider.Revision - 1, 45, provider.ErrProtocol},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			host := &protocol.ContractVersion{Major: provider.Revision, Minor: test.minor}
+			host := &protocol.ContractVersion{Major: test.major, Minor: test.minor}
 			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, test.want)
 		})
 	}
@@ -71,16 +73,6 @@ func TestDescriptionRefusesAnotherMajor_FailurePath(t *testing.T) {
 	err := provider.CheckContract(host, provider.MinimumContract(backend.Description()))
 
 	c.Assert(err, qt.ErrorIs, provider.ErrProtocol)
-}
-
-func TestDescriptionRefusesHostsWithoutDatabaseContextContract(t *testing.T) {
-	for minor := range uint32(7) {
-		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
-			c := testcheck.New(t)
-			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}
-			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, provider.ErrProtocol)
-		})
-	}
 }
 
 // Negotiating a recent contract alone does not opt a host into complete

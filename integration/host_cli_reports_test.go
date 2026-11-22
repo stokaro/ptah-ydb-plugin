@@ -136,7 +136,7 @@ func TestHostReportsAGrantOnTheDatabaseByItsPath_HappyPath(t *testing.T) {
 
 // A migration directory linted for YDB with no dev database names the rule
 // that reads a baseline schema as one that ran thinner, rather than passing it
-// quietly: DS110P is the one rule whose YDB verdict needs a dev database.
+// quietly: dependency/drop-column-in-use is the one rule whose YDB verdict needs a dev database.
 // Ported from the host's TestYDBVerdicts_RulesThatNeedADevDatabaseAreNamedUnmet.
 func TestHostMigrationsLintNamesTheRuleThatNeedsADevDatabase_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
@@ -150,7 +150,7 @@ func TestHostMigrationsLintNamesTheRuleThatNeedsADevDatabase_HappyPath(t *testin
 	out, err := hostCommand(c, "migrations", "lint", "--dir", dir, "--fail-on", "none")
 
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
-	c.Assert(out, qt.Contains, "warning: DS110P ran without the baseline schema it reads, so this analysis is thinner than the same directory "+
+	c.Assert(out, qt.Contains, "warning: dependency/drop-column-in-use ran without the baseline schema it reads, so this analysis is thinner than the same directory "+
 		"would get against a dev database the run can read")
 }
 

@@ -150,13 +150,13 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			name:      "a unique index added to an existing table",
 			setup:     []string{"CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))"},
 			statement: "ALTER TABLE `{dir}/t` ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v)",
-			rule:      "YD101",
+			rule:      "capability/unique-index-on-existing-table",
 			refusals:  map[string]string{"26.2": "", "25.1": "Unknown index type: syncGlobalUnique"},
 		},
 		{
 			name:      "a unique index declared with its table",
 			statement: "CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX t_v GLOBAL UNIQUE SYNC ON (v))",
-			rule:      "YD101",
+			rule:      "capability/unique-index-on-existing-table",
 			refusals:  map[string]string{"26.2": "", "25.1": ""},
 		},
 		{
@@ -164,7 +164,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			setup: []string{"CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, PRIMARY KEY (id))"},
 			statement: "DO BEGIN UPSERT INTO `{dir}/t` (id) VALUES (1ul); " +
 				"CREATE TABLE `{dir}/m` (id Uint64 NOT NULL, PRIMARY KEY (id)); END DO",
-			rule: "YD102",
+			rule: "transaction/scheme-and-data-in-one-query",
 			refusals: map[string]string{
 				"26.2": "Queries with mixed data and scheme operations are not supported",
 				"25.1": "Queries with mixed data and scheme operations are not supported",
@@ -173,14 +173,14 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 		{
 			name:      "a block whose SELECT reads no table",
 			statement: "DO BEGIN SELECT 1; CREATE TABLE `{dir}/m` (id Uint64 NOT NULL, PRIMARY KEY (id)); END DO",
-			rule:      "YD102",
+			rule:      "transaction/scheme-and-data-in-one-query",
 			refusals:  map[string]string{"26.2": "", "25.1": ""},
 		},
 		{
 			name:      "a NOT NULL column without a default",
 			setup:     []string{"CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, PRIMARY KEY (id))"},
 			statement: "ALTER TABLE `{dir}/t` ADD COLUMN a Int64 NOT NULL",
-			rule:      "YD103",
+			rule:      "ydb/add-column-form",
 			refusals: map[string]string{
 				"26.2": "Cannot add not null column without default value",
 				"25.1": "Cannot add not null column without default value",
@@ -190,21 +190,21 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			name:      "a column with a default",
 			setup:     []string{"CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, PRIMARY KEY (id))"},
 			statement: "ALTER TABLE `{dir}/t` ADD COLUMN a Int64 NOT NULL DEFAULT 7",
-			rule:      "YD103",
+			rule:      "ydb/add-column-form",
 			refusals:  map[string]string{"26.2": "", "25.1": "Column addition with default value is not supported now"},
 		},
 		{
 			name:      "a nullable column",
 			setup:     []string{"CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, PRIMARY KEY (id))"},
 			statement: "ALTER TABLE `{dir}/t` ADD COLUMN a Int64",
-			rule:      "YD103",
+			rule:      "ydb/add-column-form",
 			refusals:  map[string]string{"26.2": "", "25.1": ""},
 		},
 		{
 			name:      "the key column of an index, dropped",
 			setup:     []string{usedColumnsTable},
 			statement: "ALTER TABLE `{dir}/t` DROP COLUMN k",
-			rule:      "YD104",
+			rule:      "dependency/drop-indexed-column",
 			refusals: map[string]string{
 				"26.2": "Impossible drop column because table has an index with that column",
 				"25.1": "Impossible drop column because table has an index with that column",
@@ -214,7 +214,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			name:      "a covered column, dropped",
 			setup:     []string{usedColumnsTable},
 			statement: "ALTER TABLE `{dir}/t` DROP COLUMN c",
-			rule:      "YD104",
+			rule:      "dependency/drop-indexed-column",
 			refusals: map[string]string{
 				"26.2": "Impossible drop column because table index covers that column",
 				"25.1": "Impossible drop column because table index covers that column",
@@ -224,7 +224,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			name:      "the TTL column, dropped",
 			setup:     []string{usedColumnsTable},
 			statement: "ALTER TABLE `{dir}/t` DROP COLUMN ts",
-			rule:      "YD104",
+			rule:      "dependency/drop-indexed-column",
 			refusals: map[string]string{
 				"26.2": "Can't drop TTL column: 'ts', disable TTL first",
 				"25.1": "Can't drop TTL column: 'ts', disable TTL first",
@@ -234,14 +234,14 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			name:      "the TTL column, dropped after RESET (TTL)",
 			setup:     []string{usedColumnsTable, "ALTER TABLE `{dir}/t` RESET (TTL)"},
 			statement: "ALTER TABLE `{dir}/t` DROP COLUMN ts",
-			rule:      "YD104",
+			rule:      "dependency/drop-indexed-column",
 			refusals:  map[string]string{"26.2": "", "25.1": ""},
 		},
 		{
 			name:      "a column no index or TTL uses, dropped",
 			setup:     []string{usedColumnsTable},
 			statement: "ALTER TABLE `{dir}/t` DROP COLUMN free",
-			rule:      "YD104",
+			rule:      "dependency/drop-indexed-column",
 			refusals:  map[string]string{"26.2": "", "25.1": ""},
 		},
 		{
@@ -249,7 +249,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 			setup: []string{"CREATE TABLE `{dir}/t` (id Uint64 NOT NULL, PRIMARY KEY (id))",
 				"ALTER TABLE `{dir}/t` ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')"},
 			statement: "ALTER TABLE `{dir}/t` RENAME TO `{dir}/u`",
-			rule:      "YD109",
+			rule:      "dependency/rename-table-with-changefeed",
 			refusals: map[string]string{
 				"26.2": "Cannot move table with cdc streams",
 				"25.1": "Cannot move table with cdc streams",
@@ -261,7 +261,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 				"ALTER TABLE `{dir}/t` ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
 				"ALTER TABLE `{dir}/t` DROP CHANGEFEED feed"},
 			statement: "ALTER TABLE `{dir}/t` RENAME TO `{dir}/u`",
-			rule:      "YD109",
+			rule:      "dependency/rename-table-with-changefeed",
 			refusals:  map[string]string{"26.2": "", "25.1": ""},
 		},
 	}
@@ -294,7 +294,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 // Ported from the 26.2 row of the host's
 // TestYDBLint_RulesReportWhatTheServerRefuses for a unique index added to an
 // existing table, which the host measured with EnableAddUniqueIndex off. With
-// the flag off, a new session lacks unique_index_on_existing_table, YD101
+// the flag off, a new session lacks unique_index_on_existing_table, capability/unique-index-on-existing-table
 // reports the index, and the server refuses it in the words the rule's
 // documentation quotes. A line whose session lacks the capability with the
 // flags the server started with is a row of
@@ -315,14 +315,14 @@ func TestLintUniqueIndexRuleFollowsTheFlag(t *testing.T) {
 	err := execFixtureSchema(c.Context(), opened.DB, statement)
 
 	c.Assert(lint.session.Capabilities[tablecreate.UniqueIndexOnExistingTableCapability], qt.IsFalse)
-	c.Assert(reported, qt.Contains, "YD101")
+	c.Assert(reported, qt.Contains, "capability/unique-index-on-existing-table")
 	c.Assert(err, qt.ErrorMatches, `(?s).*Adding a unique index to an existing table is disabled.*`)
 }
 
 // Ported from the host's TestYDBLint_DroppedOrRenamedTableLeavesItsViewFailing:
 // YDB runs a DROP TABLE of a table a view reads, and an ALTER TABLE ... RENAME
 // TO of it, and keeps the view, which reads its table by path and then fails
-// on every read. YD106 reports both, and the server shows what it reports: the
+// on every read. dependency/drop-table-read-by-view reports both, and the server shows what it reports: the
 // statement runs, and the read through the view fails, naming the table's old
 // path.
 func TestLintDroppedOrRenamedTableLeavesItsViewFailing(t *testing.T) {
@@ -354,7 +354,7 @@ func TestLintDroppedOrRenamedTableLeavesItsViewFailing(t *testing.T) {
 			var count uint64
 			readErr := opened.DB.QueryRowContext(c.Context(), "SELECT COUNT(*) FROM `"+dir+"/v`").Scan(&count)
 
-			c.Assert(reported, qt.Contains, "YD106")
+			c.Assert(reported, qt.Contains, "dependency/drop-table-read-by-view")
 			c.Assert(runErr, qt.IsNil)
 			c.Assert(readErr, qt.ErrorMatches, `(?s).*Cannot find table 'db\.\[`+regexp.QuoteMeta(dir)+`/base\]'.*`)
 		})
@@ -375,7 +375,7 @@ func describedPartitioning(c *qt.C, opened *connection.Connection, absolute stri
 	return settings
 }
 
-// Ported from the host's TestYDBLint_PartitioningChangeResetsTheMinimum: YD105
+// Ported from the host's TestYDBLint_PartitioningChangeResetsTheMinimum: side-effect/reset-min-partition-count
 // reports the ALTER TABLE that resets a table's minimum partition count, and
 // the count the server keeps afterwards, read back through DescribeTable, is
 // what the rule says it is. A table whose minimum the directory left at 1
@@ -419,13 +419,13 @@ func TestLintPartitioningChangeResetsTheMinimum(t *testing.T) {
 			reported := lint.reported(c, []string{create}, statement)
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil)
 
-			c.Assert(slices.Contains(reported, "YD105"), qt.Equals, test.reported, qt.Commentf("lint reported %v", reported))
+			c.Assert(slices.Contains(reported, "side-effect/reset-min-partition-count"), qt.Equals, test.reported, qt.Commentf("lint reported %v", reported))
 			c.Assert(describedPartitioning(c, opened, name).MinPartitionsCount, qt.Equals, test.minimum)
 		})
 	}
 }
 
-// Ported from the host's TestYDBLint_PartitioningChangeResetsTheSize: YD118
+// Ported from the host's TestYDBLint_PartitioningChangeResetsTheSize: side-effect/reset-partition-size
 // reports the ALTER TABLE that resets a table's partition size, and the size
 // the server keeps afterwards, read back through DescribeTable, is what the
 // rule says it is.
@@ -458,7 +458,7 @@ func TestLintPartitioningChangeResetsTheSize(t *testing.T) {
 			reported := lint.reported(c, []string{create}, statement)
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil)
 
-			c.Assert(slices.Contains(reported, "YD118"), qt.Equals, test.reported, qt.Commentf("lint reported %v", reported))
+			c.Assert(slices.Contains(reported, "side-effect/reset-partition-size"), qt.Equals, test.reported, qt.Commentf("lint reported %v", reported))
 			c.Assert(describedPartitioning(c, opened, name).PartitionSizeMb, qt.Equals, test.size)
 		})
 	}
@@ -477,7 +477,7 @@ func familyNames(c *qt.C, opened *connection.Connection, absolute string) []stri
 
 // Ported from the host's TestYDBLint_UndeclaredColumnFamilyIsCreated: YDB does
 // not refuse an ALTER TABLE that names a column family the table does not
-// have; it creates the family with its own settings. YD119 reports each such
+// have; it creates the family with its own settings. side-effect/implicit-column-family reports each such
 // statement, and the server shows what it reports: the family exists after
 // the statement. A statement naming a family the table has is the control.
 func TestLintUndeclaredColumnFamilyIsCreated(t *testing.T) {
@@ -508,7 +508,7 @@ func TestLintUndeclaredColumnFamilyIsCreated(t *testing.T) {
 			reported := lint.reported(c, steps, statement)
 			runErr := execFixtureSchema(c.Context(), opened.DB, statement)
 
-			c.Assert(slices.Contains(reported, "YD119"), qt.Equals, test.reported, qt.Commentf("lint reported %v", reported))
+			c.Assert(slices.Contains(reported, "side-effect/implicit-column-family"), qt.Equals, test.reported, qt.Commentf("lint reported %v", reported))
 			c.Assert(runErr, qt.IsNil)
 			c.Assert(familyNames(c, opened, dir+"/t"), qt.Contains, test.family)
 		})

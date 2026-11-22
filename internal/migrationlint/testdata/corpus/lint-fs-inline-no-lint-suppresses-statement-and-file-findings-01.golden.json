@@ -3,7 +3,34 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": [
+     "capability/unique-index-on-existing-table",
+     "transaction/scheme-and-data-in-one-query",
+     "ydb/add-column-form",
+     "dependency/drop-indexed-column",
+     "side-effect/reset-min-partition-count",
+     "dependency/drop-table-read-by-view",
+     "side-effect/widen-serial-sequence",
+     "side-effect/replay-sequence-restart",
+     "dependency/rename-table-with-changefeed",
+     "side-effect/revoke-grant-option",
+     "side-effect/dropped-principal-keeps-permissions",
+     "side-effect/reset-topic-setting",
+     "side-effect/ignored-topic-setting",
+     "side-effect/drop-replication-without-failover",
+     "security/secret-in-clear",
+     "side-effect/reset-partition-size",
+     "side-effect/implicit-column-family",
+     "destructive/drop-default-resource-pool",
+     "destructive/drop-backup-collection",
+     "capability/analyze",
+     "capability/vector-index",
+     "side-effect/vector-index-misses-writes",
+     "security/secret-value-in-migration",
+     "security/deprecated-secret-object",
+     "side-effect/orphaned-comment",
+     "destructive/discard-streaming-query-state"
+    ],
     "files": [
      {
       "down": true,
@@ -25,13 +52,45 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0000000001_suppress.up.sql:2:BC104", "0000000001_suppress.up.sql:4:BC104", "0000000001_suppress.up.sql:6:BC103", "0000000001_suppress.up.sql:7:DS103"],
+   "report": [
+    "0000000001_suppress.up.sql:2:rollout/drop-column",
+    "0000000001_suppress.up.sql:4:rollout/drop-column",
+    "0000000001_suppress.up.sql:6:rollout/drop-table",
+    "0000000001_suppress.up.sql:7:data-dependent/alter-column-type"
+   ],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": [
+     "capability/unique-index-on-existing-table",
+     "transaction/scheme-and-data-in-one-query",
+     "ydb/add-column-form",
+     "dependency/drop-indexed-column",
+     "side-effect/reset-min-partition-count",
+     "dependency/drop-table-read-by-view",
+     "side-effect/widen-serial-sequence",
+     "side-effect/replay-sequence-restart",
+     "dependency/rename-table-with-changefeed",
+     "side-effect/revoke-grant-option",
+     "side-effect/dropped-principal-keeps-permissions",
+     "side-effect/reset-topic-setting",
+     "side-effect/ignored-topic-setting",
+     "side-effect/drop-replication-without-failover",
+     "security/secret-in-clear",
+     "side-effect/reset-partition-size",
+     "side-effect/implicit-column-family",
+     "destructive/drop-default-resource-pool",
+     "destructive/drop-backup-collection",
+     "capability/analyze",
+     "capability/vector-index",
+     "side-effect/vector-index-misses-writes",
+     "security/secret-value-in-migration",
+     "security/deprecated-secret-object",
+     "side-effect/orphaned-comment",
+     "destructive/discard-streaming-query-state"
+    ],
     "files": [
      {
       "down": true,
@@ -53,13 +112,45 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0000000001_suppress.up.sql:2:BC104", "0000000001_suppress.up.sql:4:BC104", "0000000001_suppress.up.sql:6:BC103", "0000000001_suppress.up.sql:7:DS103"],
+   "report": [
+    "0000000001_suppress.up.sql:2:rollout/drop-column",
+    "0000000001_suppress.up.sql:4:rollout/drop-column",
+    "0000000001_suppress.up.sql:6:rollout/drop-table",
+    "0000000001_suppress.up.sql:7:data-dependent/alter-column-type"
+   ],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": [
+     "capability/unique-index-on-existing-table",
+     "transaction/scheme-and-data-in-one-query",
+     "ydb/add-column-form",
+     "dependency/drop-indexed-column",
+     "side-effect/reset-min-partition-count",
+     "dependency/drop-table-read-by-view",
+     "side-effect/widen-serial-sequence",
+     "side-effect/replay-sequence-restart",
+     "dependency/rename-table-with-changefeed",
+     "side-effect/revoke-grant-option",
+     "side-effect/dropped-principal-keeps-permissions",
+     "side-effect/reset-topic-setting",
+     "side-effect/ignored-topic-setting",
+     "side-effect/drop-replication-without-failover",
+     "security/secret-in-clear",
+     "side-effect/reset-partition-size",
+     "side-effect/implicit-column-family",
+     "destructive/drop-default-resource-pool",
+     "destructive/drop-backup-collection",
+     "capability/analyze",
+     "capability/vector-index",
+     "side-effect/vector-index-misses-writes",
+     "security/secret-value-in-migration",
+     "security/deprecated-secret-object",
+     "side-effect/orphaned-comment",
+     "destructive/discard-streaming-query-state"
+    ],
     "compatibility": "atlas",
     "files": [
      {
@@ -82,7 +173,10 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0000000001_suppress.up.sql:4:DS102", "0000000001_suppress.up.sql:7:DS103"],
+   "report": [
+    "0000000001_suppress.up.sql:4:destructive/drop-column",
+    "0000000001_suppress.up.sql:7:data-dependent/alter-column-type"
+   ],
    "server_version": "",
    "split": 0
   },
@@ -97,48 +191,110 @@
       {}
      ]
     ],
-    "facts": ["stateful-drop"],
+    "facts": [
+     "stateful-drop"
+    ],
     "files": [
      null,
      [
       {
        "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY",
-       "comments": ["-- ptah:nolint DS102"],
+       "comments": [
+        "-- ptah:nolint destructive/drop-column"
+       ],
        "end": 57,
        "line": 2,
-       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy"],
+       "source_words": [
+        "ALTER",
+        "TABLE",
+        "users",
+        "DROP",
+        "COLUMN",
+        "legacy"
+       ],
        "sql": "ALTER TABLE users DROP COLUMN legacy",
        "start": 21,
-       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY"]
+       "words": [
+        "ALTER",
+        "TABLE",
+        "USERS",
+        "DROP",
+        "COLUMN",
+        "LEGACY"
+       ]
       },
       {
        "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY_TWO",
-       "comments": ["-- atlas:nolint DS102"],
+       "comments": [
+        "-- atlas:nolint destructive/drop-column"
+       ],
        "end": 121,
        "line": 4,
-       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy_two"],
+       "source_words": [
+        "ALTER",
+        "TABLE",
+        "users",
+        "DROP",
+        "COLUMN",
+        "legacy_two"
+       ],
        "sql": "ALTER TABLE users DROP COLUMN legacy_two",
        "start": 81,
-       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY_TWO"]
+       "words": [
+        "ALTER",
+        "TABLE",
+        "USERS",
+        "DROP",
+        "COLUMN",
+        "LEGACY_TWO"
+       ]
       },
       {
        "canonical": "DROP TABLE AUDIT_LOG",
-       "comments": ["-- ptah:nolint DS101"],
+       "comments": [
+        "-- ptah:nolint destructive/drop-table"
+       ],
        "end": 164,
        "line": 6,
-       "source_words": ["DROP", "TABLE", "audit_log"],
+       "source_words": [
+        "DROP",
+        "TABLE",
+        "audit_log"
+       ],
        "sql": "DROP TABLE audit_log",
        "start": 144,
-       "words": ["DROP", "TABLE", "AUDIT_LOG"]
+       "words": [
+        "DROP",
+        "TABLE",
+        "AUDIT_LOG"
+       ]
       },
       {
        "canonical": "ALTER TABLE USERS ALTER COLUMN EMAIL TYPE TEXT",
        "end": 212,
        "line": 7,
-       "source_words": ["ALTER", "TABLE", "users", "ALTER", "COLUMN", "email", "TYPE", "TEXT"],
+       "source_words": [
+        "ALTER",
+        "TABLE",
+        "users",
+        "ALTER",
+        "COLUMN",
+        "email",
+        "TYPE",
+        "TEXT"
+       ],
        "sql": "ALTER TABLE users ALTER COLUMN email TYPE TEXT",
        "start": 166,
-       "words": ["ALTER", "TABLE", "USERS", "ALTER", "COLUMN", "EMAIL", "TYPE", "TEXT"]
+       "words": [
+        "ALTER",
+        "TABLE",
+        "USERS",
+        "ALTER",
+        "COLUMN",
+        "EMAIL",
+        "TYPE",
+        "TEXT"
+       ]
       }
      ]
     ],
@@ -146,7 +302,12 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0000000001_suppress.up.sql:2:BC104", "0000000001_suppress.up.sql:4:BC104", "0000000001_suppress.up.sql:6:BC103", "0000000001_suppress.up.sql:7:DS103"],
+   "report": [
+    "0000000001_suppress.up.sql:2:rollout/drop-column",
+    "0000000001_suppress.up.sql:4:rollout/drop-column",
+    "0000000001_suppress.up.sql:6:rollout/drop-table",
+    "0000000001_suppress.up.sql:7:data-dependent/alter-column-type"
+   ],
    "server_version": "",
    "split": -1
   }
@@ -158,46 +319,112 @@
     [
      {
       "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY",
-      "comments": ["-- ptah:nolint DS102"],
-      "end": 57,
+      "comments": [
+       "-- ptah:nolint destructive/drop-column"
+      ],
+      "end": 75,
       "line": 2,
-      "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy"],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "users",
+       "DROP",
+       "COLUMN",
+       "legacy"
+      ],
       "sql": "ALTER TABLE users DROP COLUMN legacy",
-      "start": 21,
-      "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY"]
+      "start": 39,
+      "words": [
+       "ALTER",
+       "TABLE",
+       "USERS",
+       "DROP",
+       "COLUMN",
+       "LEGACY"
+      ]
      },
      {
       "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY_TWO",
-      "comments": ["-- atlas:nolint DS102"],
-      "end": 121,
+      "comments": [
+       "-- atlas:nolint destructive/drop-column"
+      ],
+      "end": 157,
       "line": 4,
-      "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy_two"],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "users",
+       "DROP",
+       "COLUMN",
+       "legacy_two"
+      ],
       "sql": "ALTER TABLE users DROP COLUMN legacy_two",
-      "start": 81,
-      "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY_TWO"]
+      "start": 117,
+      "words": [
+       "ALTER",
+       "TABLE",
+       "USERS",
+       "DROP",
+       "COLUMN",
+       "LEGACY_TWO"
+      ]
      },
      {
       "canonical": "DROP TABLE AUDIT_LOG",
-      "comments": ["-- ptah:nolint DS101"],
-      "end": 164,
+      "comments": [
+       "-- ptah:nolint destructive/drop-table"
+      ],
+      "end": 217,
       "line": 6,
-      "source_words": ["DROP", "TABLE", "audit_log"],
+      "source_words": [
+       "DROP",
+       "TABLE",
+       "audit_log"
+      ],
       "sql": "DROP TABLE audit_log",
-      "start": 144,
-      "words": ["DROP", "TABLE", "AUDIT_LOG"]
+      "start": 197,
+      "words": [
+       "DROP",
+       "TABLE",
+       "AUDIT_LOG"
+      ]
      },
      {
       "canonical": "ALTER TABLE USERS ALTER COLUMN EMAIL TYPE TEXT",
-      "end": 212,
+      "end": 265,
       "line": 7,
-      "source_words": ["ALTER", "TABLE", "users", "ALTER", "COLUMN", "email", "TYPE", "TEXT"],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "users",
+       "ALTER",
+       "COLUMN",
+       "email",
+       "TYPE",
+       "TEXT"
+      ],
       "sql": "ALTER TABLE users ALTER COLUMN email TYPE TEXT",
-      "start": 166,
-      "words": ["ALTER", "TABLE", "USERS", "ALTER", "COLUMN", "EMAIL", "TYPE", "TEXT"]
+      "start": 219,
+      "words": [
+       "ALTER",
+       "TABLE",
+       "USERS",
+       "ALTER",
+       "COLUMN",
+       "EMAIL",
+       "TYPE",
+       "TEXT"
+      ]
      }
     ]
    ],
-   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "judged": [
+    "stateful-drop",
+    "unique-index",
+    "rebuild-drop",
+    "rebuild-rename",
+    "safety-effect"
+   ],
    "sources": [
     {
      "down": true,
@@ -207,7 +434,7 @@
     },
     {
      "name": "0000000001_suppress.up.sql",
-     "sql": "-- ptah:nolint DS102\nALTER TABLE users DROP COLUMN legacy;\n-- atlas:nolint DS102\nALTER TABLE users DROP COLUMN legacy_two;\n-- ptah:nolint DS101\nDROP TABLE audit_log;\nALTER TABLE users ALTER COLUMN email TYPE TEXT;\n",
+     "sql": "-- ptah:nolint destructive/drop-column\nALTER TABLE users DROP COLUMN legacy;\n-- atlas:nolint destructive/drop-column\nALTER TABLE users DROP COLUMN legacy_two;\n-- ptah:nolint destructive/drop-table\nDROP TABLE audit_log;\nALTER TABLE users ALTER COLUMN email TYPE TEXT;\n",
      "up": true,
      "version": 1
     }

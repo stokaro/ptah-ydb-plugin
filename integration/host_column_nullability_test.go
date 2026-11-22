@@ -58,7 +58,7 @@ func TestHostDropsNotNullThroughAMigration_HappyPath(t *testing.T) {
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (id, n) VALUES (1ul, 7)"), qt.IsNil)
 
 	migrations, up, down := hostGenerate(c, directory, "yaml", nullableItems(directory), "--allow-table-rebuild")
-	// The host rates DROP NOT NULL destructive (DS104), whichever engine
+	// The host rates DROP NOT NULL destructive (integrity/drop-not-null), whichever engine
 	// plans it.
 	applied, upErr := hostMigrate(c, directory, migrations, "migrations", "up", "--allow-destructive")
 	settled := hostPlanned(c, directory, "yaml", nullableItems(directory))

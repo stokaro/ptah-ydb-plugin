@@ -5,7 +5,7 @@
   "complete": true,
   "findings": [
    {
-    "code": "YD104",
+    "code": "dependency/drop-indexed-column",
     "file": 1,
     "message": "DROP COLUMN v: index t_v keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
     "statement": 0,

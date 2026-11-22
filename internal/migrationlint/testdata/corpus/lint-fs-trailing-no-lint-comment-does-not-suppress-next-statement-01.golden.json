@@ -3,7 +3,34 @@
  "runs": [
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": [
+     "capability/unique-index-on-existing-table",
+     "transaction/scheme-and-data-in-one-query",
+     "ydb/add-column-form",
+     "dependency/drop-indexed-column",
+     "side-effect/reset-min-partition-count",
+     "dependency/drop-table-read-by-view",
+     "side-effect/widen-serial-sequence",
+     "side-effect/replay-sequence-restart",
+     "dependency/rename-table-with-changefeed",
+     "side-effect/revoke-grant-option",
+     "side-effect/dropped-principal-keeps-permissions",
+     "side-effect/reset-topic-setting",
+     "side-effect/ignored-topic-setting",
+     "side-effect/drop-replication-without-failover",
+     "security/secret-in-clear",
+     "side-effect/reset-partition-size",
+     "side-effect/implicit-column-family",
+     "destructive/drop-default-resource-pool",
+     "destructive/drop-backup-collection",
+     "capability/analyze",
+     "capability/vector-index",
+     "side-effect/vector-index-misses-writes",
+     "security/secret-value-in-migration",
+     "security/deprecated-secret-object",
+     "side-effect/orphaned-comment",
+     "destructive/discard-streaming-query-state"
+    ],
     "files": [
      {
       "down": true,
@@ -25,13 +52,44 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0000000001_trailing.up.sql:1:DS103", "0000000001_trailing.up.sql:2:BC104", "0000000001_trailing.up.sql:2:DS102"],
+   "report": [
+    "0000000001_trailing.up.sql:1:data-dependent/alter-column-type",
+    "0000000001_trailing.up.sql:2:rollout/drop-column",
+    "0000000001_trailing.up.sql:2:destructive/drop-column"
+   ],
    "server_version": "",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": [
+     "capability/unique-index-on-existing-table",
+     "transaction/scheme-and-data-in-one-query",
+     "ydb/add-column-form",
+     "dependency/drop-indexed-column",
+     "side-effect/reset-min-partition-count",
+     "dependency/drop-table-read-by-view",
+     "side-effect/widen-serial-sequence",
+     "side-effect/replay-sequence-restart",
+     "dependency/rename-table-with-changefeed",
+     "side-effect/revoke-grant-option",
+     "side-effect/dropped-principal-keeps-permissions",
+     "side-effect/reset-topic-setting",
+     "side-effect/ignored-topic-setting",
+     "side-effect/drop-replication-without-failover",
+     "security/secret-in-clear",
+     "side-effect/reset-partition-size",
+     "side-effect/implicit-column-family",
+     "destructive/drop-default-resource-pool",
+     "destructive/drop-backup-collection",
+     "capability/analyze",
+     "capability/vector-index",
+     "side-effect/vector-index-misses-writes",
+     "security/secret-value-in-migration",
+     "security/deprecated-secret-object",
+     "side-effect/orphaned-comment",
+     "destructive/discard-streaming-query-state"
+    ],
     "files": [
      {
       "down": true,
@@ -53,13 +111,44 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0000000001_trailing.up.sql:1:DS103", "0000000001_trailing.up.sql:2:BC104", "0000000001_trailing.up.sql:2:DS102"],
+   "report": [
+    "0000000001_trailing.up.sql:1:data-dependent/alter-column-type",
+    "0000000001_trailing.up.sql:2:rollout/drop-column",
+    "0000000001_trailing.up.sql:2:destructive/drop-column"
+   ],
    "server_version": "25.1.4.7",
    "split": 0
   },
   {
    "check": {
-    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "codes": [
+     "capability/unique-index-on-existing-table",
+     "transaction/scheme-and-data-in-one-query",
+     "ydb/add-column-form",
+     "dependency/drop-indexed-column",
+     "side-effect/reset-min-partition-count",
+     "dependency/drop-table-read-by-view",
+     "side-effect/widen-serial-sequence",
+     "side-effect/replay-sequence-restart",
+     "dependency/rename-table-with-changefeed",
+     "side-effect/revoke-grant-option",
+     "side-effect/dropped-principal-keeps-permissions",
+     "side-effect/reset-topic-setting",
+     "side-effect/ignored-topic-setting",
+     "side-effect/drop-replication-without-failover",
+     "security/secret-in-clear",
+     "side-effect/reset-partition-size",
+     "side-effect/implicit-column-family",
+     "destructive/drop-default-resource-pool",
+     "destructive/drop-backup-collection",
+     "capability/analyze",
+     "capability/vector-index",
+     "side-effect/vector-index-misses-writes",
+     "security/secret-value-in-migration",
+     "security/deprecated-secret-object",
+     "side-effect/orphaned-comment",
+     "destructive/discard-streaming-query-state"
+    ],
     "compatibility": "atlas",
     "files": [
      {
@@ -82,7 +171,10 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0000000001_trailing.up.sql:1:DS103", "0000000001_trailing.up.sql:2:DS102"],
+   "report": [
+    "0000000001_trailing.up.sql:1:data-dependent/alter-column-type",
+    "0000000001_trailing.up.sql:2:destructive/drop-column"
+   ],
    "server_version": "",
    "split": 0
   },
@@ -95,7 +187,9 @@
       {}
      ]
     ],
-    "facts": ["stateful-drop"],
+    "facts": [
+     "stateful-drop"
+    ],
     "files": [
      null,
      [
@@ -103,19 +197,51 @@
        "canonical": "ALTER TABLE USERS ALTER COLUMN EMAIL TYPE TEXT",
        "end": 46,
        "line": 1,
-       "source_words": ["ALTER", "TABLE", "users", "ALTER", "COLUMN", "email", "TYPE", "TEXT"],
+       "source_words": [
+        "ALTER",
+        "TABLE",
+        "users",
+        "ALTER",
+        "COLUMN",
+        "email",
+        "TYPE",
+        "TEXT"
+       ],
        "sql": "ALTER TABLE users ALTER COLUMN email TYPE TEXT",
        "start": 0,
-       "words": ["ALTER", "TABLE", "USERS", "ALTER", "COLUMN", "EMAIL", "TYPE", "TEXT"]
+       "words": [
+        "ALTER",
+        "TABLE",
+        "USERS",
+        "ALTER",
+        "COLUMN",
+        "EMAIL",
+        "TYPE",
+        "TEXT"
+       ]
       },
       {
        "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY",
        "end": 105,
        "line": 2,
-       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy"],
+       "source_words": [
+        "ALTER",
+        "TABLE",
+        "users",
+        "DROP",
+        "COLUMN",
+        "legacy"
+       ],
        "sql": "ALTER TABLE users DROP COLUMN legacy",
        "start": 69,
-       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY"]
+       "words": [
+        "ALTER",
+        "TABLE",
+        "USERS",
+        "DROP",
+        "COLUMN",
+        "LEGACY"
+       ]
       }
      ]
     ],
@@ -123,7 +249,11 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0000000001_trailing.up.sql:1:DS103", "0000000001_trailing.up.sql:2:BC104", "0000000001_trailing.up.sql:2:DS102"],
+   "report": [
+    "0000000001_trailing.up.sql:1:data-dependent/alter-column-type",
+    "0000000001_trailing.up.sql:2:rollout/drop-column",
+    "0000000001_trailing.up.sql:2:destructive/drop-column"
+   ],
    "server_version": "",
    "split": -1
   }
@@ -137,23 +267,61 @@
       "canonical": "ALTER TABLE USERS ALTER COLUMN EMAIL TYPE TEXT",
       "end": 46,
       "line": 1,
-      "source_words": ["ALTER", "TABLE", "users", "ALTER", "COLUMN", "email", "TYPE", "TEXT"],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "users",
+       "ALTER",
+       "COLUMN",
+       "email",
+       "TYPE",
+       "TEXT"
+      ],
       "sql": "ALTER TABLE users ALTER COLUMN email TYPE TEXT",
       "start": 0,
-      "words": ["ALTER", "TABLE", "USERS", "ALTER", "COLUMN", "EMAIL", "TYPE", "TEXT"]
+      "words": [
+       "ALTER",
+       "TABLE",
+       "USERS",
+       "ALTER",
+       "COLUMN",
+       "EMAIL",
+       "TYPE",
+       "TEXT"
+      ]
      },
      {
       "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY",
-      "end": 105,
+      "end": 123,
       "line": 2,
-      "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy"],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "users",
+       "DROP",
+       "COLUMN",
+       "legacy"
+      ],
       "sql": "ALTER TABLE users DROP COLUMN legacy",
-      "start": 69,
-      "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY"]
+      "start": 87,
+      "words": [
+       "ALTER",
+       "TABLE",
+       "USERS",
+       "DROP",
+       "COLUMN",
+       "LEGACY"
+      ]
      }
     ]
    ],
-   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "judged": [
+    "stateful-drop",
+    "unique-index",
+    "rebuild-drop",
+    "rebuild-rename",
+    "safety-effect"
+   ],
    "sources": [
     {
      "down": true,
@@ -163,7 +331,7 @@
     },
     {
      "name": "0000000001_trailing.up.sql",
-     "sql": "ALTER TABLE users ALTER COLUMN email TYPE TEXT; -- ptah:nolint DS102\nALTER TABLE users DROP COLUMN legacy;\n",
+     "sql": "ALTER TABLE users ALTER COLUMN email TYPE TEXT; -- ptah:nolint destructive/drop-column\nALTER TABLE users DROP COLUMN legacy;\n",
      "up": true,
      "version": 1
     }

@@ -255,10 +255,12 @@ YQL by its shared rules.
 ## Migration lint
 
 The provider serves the SDK's `lint.migrations` service for the `ydb` engine
-without a database session. It publishes its rules as data, with the codes,
-titles and severities of the host's built-in YDB owner, whether a rule also
-reads the down half of a migration, and the shared rules a finding replaces on
-the same statement.
+without a database session. It publishes its rules as data. Each rule has a name of the form `category/name`,
+a title and a severity, says whether it also reads the down half of a
+migration, and lists the shared rules a finding replaces on the same
+statement. The provider's descriptions are held to the SDK's name grammar
+(`provider.ValidLintRuleName`), so a host on contract 26 accepts every one.
+The wire fields still carry the name in `code` and `codes`.
 
 A split reads each migration file as YQL, with the lexer the SQL analysis uses.
 It returns every statement's byte range, line, words and the comments directly
@@ -326,7 +328,7 @@ annotation request that asks for them is refused.
 The host owns output formats, severity overrides, suppression and the rules
 every dialect shares. The host's built-in owner reports nothing from these rules
 on a run that names no dialect; the provider is only asked about its own engine,
-so a host does not send it the codes of such a run.
+so a host does not send it the rules of such a run.
 
 ## Offline schema rendering
 

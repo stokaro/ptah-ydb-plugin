@@ -32,7 +32,7 @@ const (
 // A topic holds every message written to it and every consumer's position in
 // it. Dropping a transfer stops it and drops the topic consumer YDB created for
 // it, with its position; an async replication dropped with CASCADE drops its
-// replica tables, and one dropped without it is YD115's question. Measured on
+// replica tables, and one dropped without it is side-effect/drop-replication-without-failover's question. Measured on
 // 26.2.1.14 and 25.1.4.7: DropNode succeeds while a session holds a semaphore
 // on a coordination node, and a node created again under the same path holds
 // none of the persistent semaphores the dropped one held. A streaming query

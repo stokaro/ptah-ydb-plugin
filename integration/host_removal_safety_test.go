@@ -49,7 +49,7 @@ func removalFixture(c *qt.C) (directory, declaration string) {
 		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil, qt.Commentf("%s", statement))
 	}
 	return directory, "tables:\n  orders:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
-		"roles:\n  " + group + ":\n    group: true\n  " + user + ":\n    login: true\n"
+		"roles:\n  " + group + ":\n    group: true\n  " + user + ":\n    login: true\n    member_of: []\n"
 }
 
 // Ported from the YDB rows of the host's
@@ -58,7 +58,9 @@ func removalFixture(c *qt.C) (directory, declaration string) {
 // member out of a group rates the DROP VIEW destructive and the other two
 // warnings, with the host's reasons, in the safety report it writes beside
 // the files. --check-destructive refuses that generation, whose one
-// destructive statement is the DROP VIEW.
+// destructive statement is the DROP VIEW. The user states an empty member_of,
+// which is what makes the declaration own its memberships: a role that states
+// none keeps every membership the server holds, and nothing is revoked.
 func TestHostRatesYDBRemovals_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	directory, declaration := removalFixture(c)

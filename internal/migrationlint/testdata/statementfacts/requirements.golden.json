@@ -10,25 +10,25 @@
       },
       "findings": [
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 2,
           "column": 1,
           "message": "ADD INDEX t_v, a unique index added to the existing table t, requires target capability unique_index_on_existing_table, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 3,
           "column": 1,
           "message": "ADD COLUMN a with a default on table t requires target capability add_column_with_default, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 4,
           "column": 1,
           "message": "ADD COLUMN b with a default on table t requires target capability add_column_with_default, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 4,
           "column": 1,
           "message": "ADD INDEX t_b, a unique index added to the existing table t, requires target capability unique_index_on_existing_table, unavailable on this target"
@@ -44,25 +44,25 @@
       },
       "findings": [
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 2,
           "column": 1,
           "message": "ADD INDEX t_v, a unique index added to the existing table t, requires target capability unique_index_on_existing_table, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 3,
           "column": 1,
           "message": "ADD COLUMN a with a default on table t requires target capability add_column_with_default, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 4,
           "column": 1,
           "message": "ADD COLUMN b with a default on table t requires target capability add_column_with_default, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 4,
           "column": 1,
           "message": "ADD INDEX t_b, a unique index added to the existing table t, requires target capability unique_index_on_existing_table, unavailable on this target"
@@ -78,13 +78,13 @@
       },
       "findings": [
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 2,
           "column": 1,
           "message": "ADD INDEX t_v, a unique index added to the existing table t, requires target capability unique_index_on_existing_table, unavailable on this target"
         },
         {
-          "rule": "CAP001",
+          "rule": "capability/missing",
           "line": 4,
           "column": 1,
           "message": "ADD INDEX t_b, a unique index added to the existing table t, requires target capability unique_index_on_existing_table, unavailable on this target"
